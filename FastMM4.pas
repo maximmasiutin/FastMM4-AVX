@@ -1023,6 +1023,13 @@ interface
 
 {$Include FastMM4Options.inc}
 
+{$RANGECHECKS OFF}
+{$BOOLEVAL OFF}
+{$OVERFLOWCHECKS OFF}
+{$OPTIMIZATION ON}
+{$TYPEDADDRESS OFF}
+{$LONGSTRINGS ON}
+
 {Compiler version defines}
 {$ifndef fpc}
   {$ifndef BCB}
