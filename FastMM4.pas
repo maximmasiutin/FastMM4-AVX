@@ -15075,10 +15075,10 @@ begin
   begin
     AMemoryManagerState.SmallBlockTypeStates[LInd].InternalBlockSize :=
       SmallBlockTypes[LInd].BlockSize;
-    AMemoryManagerState.SmallBlockTypeStates[LInd].UseableBlockSize :=
-      SmallBlockTypes[LInd].BlockSize - BlockHeaderSize{$ifdef FullDebugMode} - FullDebugBlockOverhead{$endif};
-    if NativeInt(AMemoryManagerState.SmallBlockTypeStates[LInd].UseableBlockSize) < 0 then
-      AMemoryManagerState.SmallBlockTypeStates[LInd].UseableBlockSize := 0;
+    if (NativeInt(SmallBlockTypes[LInd].BlockSize - BlockHeaderSize){$ifdef FullDebugMode}
+        - FullDebugBlockOverhead{$endif}) > 0 then
+      AMemoryManagerState.SmallBlockTypeStates[LInd].UseableBlockSize :=
+        SmallBlockTypes[LInd].BlockSize - BlockHeaderSize{$ifdef FullDebugMode} - FullDebugBlockOverhead{$endif};
   end;
   if IsMultithread then
   begin
