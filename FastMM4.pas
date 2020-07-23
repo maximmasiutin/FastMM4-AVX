@@ -3033,10 +3033,17 @@ asm
   xor edx, edx
   cpuid
   {Save registers}
+  {$ifdef unix} //fix crash
+  mov result.RegEAX, eax
+  mov result.RegEBX, ebx
+  mov result.RegECX, ecx
+  mov result.RegEDX, edx
+  {$else}
   mov TCpuIdRegisters[r10].RegEAX, eax
   mov TCpuIdRegisters[r10].RegEBX, ebx
   mov TCpuIdRegisters[r10].RegECX, ecx
   mov TCpuIdRegisters[r10].RegEDX, edx
+  {$endif}
   mov rbx, r9
 end;
 {$endif}
@@ -3205,17 +3212,10 @@ begin
   sched_yield;
 end;
 {$else}
-type
-  TSwitchToThread = function: BOOL; stdcall;
-var
-  FSwitchToThread: TSwitchToThread;
 
 procedure SwitchToThreadIfSupported;
 begin
-  if Assigned(FSwitchToThread) then
-  begin
-    FSwitchToThread;
-  end;
+ system.ThreadSwitch; //uses default proc
 end;
 
 {$endif}
@@ -15668,6 +15668,20 @@ begin
   Result := PSmallBlockPoolHeader(ASmallBlockTypePtr);
 end;
 
+{$ifdef fpc}
+function FastGetFPCHeapStatus:TFPCHeapStatus; //support get TFPCHeapStatus
+Var
+ HS:THeapStatus;
+begin
+ HS:=FastGetHeapStatus;
+ Result.MaxHeapSize :=0;
+ Result.MaxHeapUsed :=0;
+ Result.CurrHeapSize:=HS.TotalAddrSpace;
+ Result.CurrHeapUsed:=HS.TotalAllocated;
+ Result.CurrHeapFree:=HS.TotalFree;
+end;
+{$endif}
+
 {Returns summarised information about the state of the memory manager. (For
  backward compatibility.)}
 function FastGetHeapStatus: THeapStatus;
@@ -16418,8 +16432,6 @@ var
 {$endif}
 begin
 
-  FSwitchToThread := GetProcAddress(GetModuleHandle(Kernel32), 'SwitchToThread');
-
 {$ifdef FullDebugMode}
   {$ifdef LoadDebugDLLDynamically}
   {Attempt to load the FullDebugMode DLL dynamically.}
@@ -16527,10 +16539,7 @@ This is because the operating system would not save the registers and the states
         instruction supported, we don't have to check for XState/CR0 for PAUSE,
         because PAUSE and other instructions like PREFETCHh, MOVNTI, etc.
         work regardless of the CR0 values}
-        if Assigned(FSwitchToThread) then
-        begin
           FastMMCpuFeatures := FastMMCpuFeatures or FastMMCpuFeaturePauseAndSwitch;
-        end;
       end;
 
 {$ifdef EnableMMX}
@@ -16626,7 +16635,7 @@ ENDQUOTE}
   begin
     for LInd := Low(SmallBlockCriticalSections) to High(SmallBlockCriticalSections) do
     begin
-      InitializeCriticalSection(SmallBlockCriticalSections[LInd]);
+      InitCriticalSection(SmallBlockCriticalSections[LInd]); //use system Critical Sections
     end;
   end;
   {$endif}
@@ -16831,7 +16840,7 @@ ENDQUOTE}
 
   MediumBlocksLocked := CLockByteAvailable;
   {$ifdef MediumBlocksLockedCriticalSection}
-  InitializeCriticalSection(MediumBlocksLockedCS);
+  InitCriticalSection(MediumBlocksLockedCS); //use system Critical Sections
   {$endif}
 
 {$ifdef CheckHeapForCorruption}
@@ -16860,7 +16869,7 @@ ENDQUOTE}
   {------------------Set up the large blocks---------------------}
   LargeBlocksLocked := CLockByteAvailable;
   {$ifdef LargeBlocksLockedCriticalSection}
-  InitializeCriticalSection(LargeBlocksLockedCS);
+  InitCriticalSection(LargeBlocksLockedCS); //use system Critical Sections
   {$endif}
   LargeBlocksCircularList.PreviousLargeBlockHeader := @LargeBlocksCircularList;
   LargeBlocksCircularList.NextLargeBlockHeader := @LargeBlocksCircularList;
@@ -16916,6 +16925,7 @@ var
 begin
   if not FastMMIsInstalled then
   begin
+   FillChar(NewMemoryManager,SizeOf(NewMemoryManager),0); //prevents undefined behavior
 {$ifdef FullDebugMode}
   {$ifdef 32Bit}
     {Try to reserve the 64K block covering address $80808080 so pointers with DebugFillPattern will A/V}
@@ -16996,6 +17006,9 @@ begin
       NewMemoryManager.GetMem := DebugGetMem;
       NewMemoryManager.FreeMem := DebugFreeMem;
       NewMemoryManager.ReallocMem := DebugReallocMem;
+{$endif}
+{$ifdef fpc}
+      NewMemoryManager.GetFPCHeapStatus := {$ifdef fpc64bit}@{$endif}FastGetFPCHeapStatus; //support get TFPCHeapStatus
 {$endif}
 {$ifdef BDS2006AndUp}
   {$ifndef FullDebugMode}
@@ -17325,12 +17338,12 @@ begin
 
   {$ifdef MediumBlocksLockedCriticalSection}
   LargeBlocksLocked := CLockByteFinished;
-  DeleteCriticalSection(MediumBlocksLockedCS);
+  DoneCriticalSection(MediumBlocksLockedCS); //use system Critical Sections
   {$endif MediumBlocksLockedCriticalSection}
 
   {$ifdef LargeBlocksLockedCriticalSection}
   LargeBlocksLocked := CLockByteFinished;
-  DeleteCriticalSection(LargeBlocksLockedCS);
+  DoneCriticalSection(LargeBlocksLockedCS); //use system Critical Sections
   {$endif LargeBlocksLockedCriticalSection}
 
   {$ifdef SmallBlocksLockedCriticalSection}
@@ -17338,7 +17351,7 @@ begin
   begin
     for LInd := Low(SmallBlockCriticalSections) to High(SmallBlockCriticalSections) do
     begin
-      DeleteCriticalSection(SmallBlockCriticalSections[LInd]);
+      DoneCriticalSection(SmallBlockCriticalSections[LInd]); //use system Critical Sections
     end;
   end;
 
