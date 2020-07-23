@@ -3423,6 +3423,12 @@ const
   CUnknown = 'unknown'#0;
 var
   LUnknown: array[0..Length(CUnknown)-1] of AnsiChar = CUnknown;
+  {$ifdef unix}
+  function Min(L,R:Integer):Integer; inline;
+  begin
+   if (L>R) then Result:=R else Result:=L;
+  end;
+  {$endif}
 begin
   Result := Min(BufLen, Length(CUnknown));
   StrLCopy(Buffer, @LUnknown, Result);
