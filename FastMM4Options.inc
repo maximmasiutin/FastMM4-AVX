@@ -351,7 +351,32 @@ be able to use efficient locking without inline assembly.}
    care.}
 
   {.$define LoadDebugDLLDynamically}
-
+	
+  {.$define MemoryLoadLibrarySupport}
+  {Uses MemoryLoadLibrary to allow loading FastMM_FullDebugMode.dll from 
+  Ressource if no DLL is found.}
+ 
+  {.$define IncludeResource}
+  (*Include Platform depending FullDebugMode.dll in JCLDebug-Mode.
+	This has no effect without LoadDebugDLLDynamically or MemoryLoadLibrarySupport.
+  If not defined linking can be done from Project-File:
+  {$IFDEF Win64}
+    {$R FastMM_FullDebugMode64.res}
+  {$ELSE}
+    {$R FastMM_FullDebugMode.res}
+  {$ENDIF}	
+  *)
+	
+  {.$define IncludeResource_madExcept}
+  (*Include Platform depending FullDebugMode.dll in madExcept-Mode.
+	This has no effect without LoadDebugDLLDynamically or MemoryLoadLibrarySupport.
+  If not defined linking can be done from Project-File:
+  {$IFDEF Win64}
+    {$R FastMM_FullDebugMode_madExcept64.res}
+  {$ELSE}
+    {$R FastMM_FullDebugMode_madExcept.res}
+  {$ENDIF}
+  *)		
 
     {.$define DoNotInstallIfDLLMissing}
     {If the FastMM_FullDebugMode.dll file is not available then FastMM will not

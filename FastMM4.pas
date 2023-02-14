@@ -1162,12 +1162,14 @@ Change log:
   - Added the FastMM_GetInstallationState function:  Allows determination of
     whether FastMM is installed or not, and if not whether the default memory
     manager is in use or a different third party memory manager.
-
 *)
 
 unit FastMM4;
 
 interface
+
+{$WARN UNSAFE_CODE OFF}
+{$WARN UNSAFE_TYPE OFF}
 
 {$Include FastMM4Options.inc}
 
@@ -1742,11 +1744,11 @@ const
 {$ifdef Align32Bytes}
   AlignmentMask = 31;
 {$else}
-  {$ifdef Align16Bytes}
+{$ifdef Align16Bytes}
   AlignmentMask = 15;
-  {$else}
+{$else}
   AlignmentMask = 7;
-  {$endif}
+{$endif}
 {$endif Align32Bytes}
 {$endif DEBUG}
 
@@ -2180,6 +2182,12 @@ var
   OnDebugReallocMemStart: TOnDebugReallocMemStart = nil;
   OnDebugReallocMemFinish: TOnDebugReallocMemFinish = nil;
 {$endif}
+
+{$IFDEF LoadDebugDLLDynamically}
+function FastMM_IsDebugSupportLibraryLoaded: boolean;
+function FastMM_LoadDebugSupportLibrary : boolean;
+function FastMM_FreeDebugSupportLibrary : boolean;
+{$ENDIF}
 {$endif}
 
 {$ifdef USE_CPUID}
@@ -2197,9 +2205,9 @@ uses
   ShlObj,
     {$else}
       {$ifndef FPC}
-      SHFolder,
-      {$endif}
+  SHFolder,
     {$endif}
+  {$endif}
   {$endif}
 {$else}
   {$ifdef MACOS}
@@ -2230,7 +2238,26 @@ uses
 {$ifdef UseReleaseStack}
   FastMM4LockFreeStack,
 {$endif}
+{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+  FastMMMemoryModule,
+{$IFEND}
   FastMM4Messages;
+
+{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+{$IF Defined( IncludeResource_madExcept )}
+  {$IFDEF Win64}
+    {$R FastMM_FullDebugMode_madExcept64.res}
+  {$ELSE}
+    {$R FastMM_FullDebugMode_madExcept.res}
+  {$ENDIF}
+{$ELSEIF Defined( IncludeResource )}
+  {$IFDEF Win64}
+    {$R FastMM_FullDebugMode64.res}
+  {$ELSE}
+    {$R FastMM_FullDebugMode.res}
+  {$ENDIF}
+{$IFEND Defined( IncludeResource_madExcept )}
+{$IFEND}
 
 const
   MaxFileNameLength                  = 1024;
@@ -7009,6 +7036,9 @@ var
 
   {Handle to the FullDebugMode DLL}
   FullDebugModeDLL: HMODULE;
+  {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+  FullDebugModeRDLL: PMemoryModule;
+  {$IFEND}
 
   GetStackTrace: procedure (AReturnAddresses: PNativeUInt;
     AMaxDepth, ASkipFrames: Cardinal) = NoOpGetStackTrace;
@@ -14516,16 +14546,16 @@ begin
    Try to redirect logging to a file in the user's "My Documents" folder.}
   if (LFileHandle = INVALID_HANDLE_VALUE)
 {$ifndef FPC}
-{$ifndef MACOS}
+   {$ifndef MACOS}
 {$ifdef Delphi4or5}
     and SHGetSpecialFolderPathA(0, @(LAlternateLogFileName[0]), CSIDL_PERSONAL, True) then
 {$else}
     and (SHGetFolderPathA(0, CSIDL_PERSONAL or CSIDL_FLAG_CREATE, 0,
       SHGFP_TYPE_CURRENT, @(LAlternateLogFileName[0])) = S_OK) then
 {$endif}
-{$else}
-then
-{$endif}
+  {$else}
+  then
+  {$endif}
 {$else}
 then
 {$endif}
@@ -15355,7 +15385,7 @@ begin
 {$ifdef LogErrorsToFile}
   {Log the error}
   AppendEventLog(@LErrorMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LErrorMessage[0]));
-{$endif}
+  {$endif}
 {$ifdef UseOutputDebugString}
   OutputDebugStringA(LErrorMessage);
 {$endif}
@@ -16202,7 +16232,7 @@ begin
 {$ifdef LogErrorsToFile}
   {Log the error}
   AppendEventLog(@LErrorMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LErrorMessage[0]));
-{$endif}
+  {$endif}
 {$ifdef UseOutputDebugString}
   OutputDebugStringA(LErrorMessage);
 {$endif}
@@ -16246,7 +16276,7 @@ begin
 {$ifdef LogErrorsToFile}
   {Log the error}
   AppendEventLog(@LErrorMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LErrorMessage[0]));
-{$endif}
+  {$endif}
 {$ifdef UseOutputDebugString}
   OutputDebugStringA(LErrorMessage);
 {$endif}
@@ -17748,10 +17778,10 @@ begin
         end;
       end;
   {$ifdef LogErrorsToFile}
-     {Set the message footer}
-      LMsgPtr := AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
-      {Append the message to the memory errors file}
-      AppendEventLog(@LLeakMessage[0], UIntPtr(LMsgPtr) - UIntPtr(@LLeakMessage[1]));
+       {Set the message footer}
+        LMsgPtr := AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+        {Append the message to the memory errors file}
+        AppendEventLog(@LLeakMessage[0], UIntPtr(LMsgPtr) - UIntPtr(@LLeakMessage[1]));
   {$else}
       {Set the message footer}
       AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
@@ -18411,25 +18441,25 @@ begin
     AppendStringToModuleName(LockingReportTitle, LMessageTitleBuffer, Length(LockingReportTitle), (SizeOf(LMessageTitleBuffer) div SizeOf(LMessageTitleBuffer[0]))-1);
     ShowMessageBox(LErrorMessage, LMessageTitleBuffer);
 {$endif}
-    for i := 4 to 10 do
-    begin
-      if i > mergedCount then
-        break; //for i
+      for i := 4 to 10 do
+      begin
+        if i > mergedCount then
+          break; //for i
+        LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
+        LMsgPtr := NativeUIntToStrBuf(mergedData[i].Count, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
+        if LInitialSize-NativeUInt(LMsgPtr-LInitialPtr) < 5 then Break;
+        LMsgPtr^ := ' ';
+        Inc(LMsgPtr);
+        LMsgPtr^ := 'x';
+        Inc(LMsgPtr);
+        LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
+        LMsgPtr := LogStackTrace(PNativeUInt(@(mergedData[i].Data.Pointers[1])), mergedData[i].Data.Count, LMsgPtr);
+        LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
+      end;
       LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
-      LMsgPtr := NativeUIntToStrBuf(mergedData[i].Count, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
-      if LInitialSize-NativeUInt(LMsgPtr-LInitialPtr) < 5 then Break;
-      LMsgPtr^ := ' ';
-      Inc(LMsgPtr);
-      LMsgPtr^ := 'x';
-      Inc(LMsgPtr);
-      LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
-      LMsgPtr := LogStackTrace(PNativeUInt(@(mergedData[i].Data.Pointers[1])), mergedData[i].Data.Count, LMsgPtr);
-      LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
-    end;
-    LMsgPtr := AppendStringToBuffer(CRLF, LMsgPtr, Length(CRLF), LInitialSize-NativeUInt(LMsgPtr-LInitialPtr));
-    AppendEventLog(@LErrorMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LErrorMessage[0]));
+      AppendEventLog(@LErrorMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LErrorMessage[0]));
+      end;
   end;
-end;
 {$endif}
 
 {$ifdef UseReleaseStack}
@@ -18650,7 +18680,7 @@ begin
   {Trailing #0}
   LMsgPtr^ := #0;
 
-  AppendEventLog(@LMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LMessage[0]));
+    AppendEventLog(@LMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LMessage[0]));
 end;
 {$endif}
 {$endif}
@@ -18764,7 +18794,10 @@ begin
     {$ifdef DoNotInstallIfDLLMissing}
   {Should FastMM be installed only if the FastMM_FullDebugMode.dll file is
    available?}
-  if FullDebugModeDLL = 0 then
+  if ( FullDebugModeDLL = 0 )
+      {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+      AND ( MemoryResourceExists( 'FastMM_FullDebugMode' ) = 0 ) 
+      {$IFEND} then
     Exit;
     {$endif}
   {$endif}
@@ -18948,41 +18981,7 @@ begin
 {$ifdef FullDebugMode}
   {$ifdef LoadDebugDLLDynamically}
   {Attempt to load the FullDebugMode DLL dynamically.}
-
-{$ifdef RestrictDebugDLLLoadPath}
-  FullDebugModeDLL := 0;
-  LModuleHandle := 0;
-{$ifndef borlndmmdll}
-  if IsLibrary then
-    LModuleHandle := HInstance;
-{$endif}
-
-  LSizeInd := GetModuleFileName(LModuleHandle, LFullFileName, Sizeof(LFullFileName) div SizeOf(Char));
-  while LSizeInd > 0 do
-  begin
-    Dec(LSizeInd);
-    if LFullFileName[LSizeInd] = '\' then
-      Break;
-  end;
-  if (LSizeInd > 0) and (LSizeInd + Cardinal(Length(FullDebugModeLibraryName)) + 1 < Sizeof(LFullFileName) div SizeOf(Char)) then
-  begin
-    LInd := 1;
-    repeat
-      LFullFileName[LSizeInd + LInd] := FullDebugModeLibraryName[LInd];
-      Inc(LInd);
-    until LInd > Cardinal(Length(FullDebugModeLibraryName));
-    LFullFileName[LSizeInd + LInd] := #0;
-    FullDebugModeDLL := LoadLibrary(LFullFileName);
-  end;
-{$else}
-  FullDebugModeDLL := LoadLibrary(FullDebugModeLibraryName);
-{$endif}
-  if FullDebugModeDLL <> 0 then
-  begin
-    GetStackTrace := GetProcAddress(FullDebugModeDLL,
-      {$ifdef RawStackTraces}'GetRawStackTrace'{$else}'GetFrameBasedStackTrace'{$endif});
-    LogStackTrace := GetProcAddress(FullDebugModeDLL, 'LogStackTrace');
-  end;
+  FastMM_LoadDebugSupportLibrary;
   {$endif}
 {$endif}
 
@@ -19588,7 +19587,7 @@ ENDQUOTE}
 {$endif}
 {$endif}
 {$ifdef _EventLog}
-{Set up the default log file name}
+  {Set up the default log file name}
   SetDefaultMMLogFileName;
 {$endif}
   {Initialize lock contention loggers for medium and large blocks}
@@ -20029,6 +20028,10 @@ begin
       ReportLockContention;
 {$endif}
 {$ifndef NeverUninstall}
+      {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically )}
+      FullDebugModeUnload;
+      {$IFEND}
+
       {Clean up: Free all memory. If this is a .DLL that owns its own MM, then
        it is necessary to prevent the main application from running out of
        address space.}
@@ -20233,7 +20236,6 @@ begin
   {Only run this code once during startup.}
   if InitializationCodeHasRun then
     Exit;
-  InitializationCodeHasRun := True;
 {$ifndef BCB}
 {$ifdef DEBUG}
   SelfTest;
@@ -20258,12 +20260,118 @@ begin
     {Release stack mechanism needs a cleanup thread}
     CreateCleanupThread;
     {$endif}
+
+    InitializationCodeHasRun := True;    
+    {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+    FastMM_LoadDebugSupportLibrary;
+    {$IFEND}
   end;
+{$ELSE}
+  InitializationCodeHasRun := True;
 {$endif}
 end;
 
+{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically )}
+function FastMM_IsDebugSupportLibraryLoaded: boolean;
+begin
+  Result := ( FullDebugModeDLL <> 0 ) {$IFDEF MemoryLoadLibrarySupport}OR Assigned( FullDebugModeRDLL ){$ENDIF};
+end;
+
+function FastMM_LoadDebugSupportLibrary : boolean;
+{$ifdef RestrictDebugDLLLoadPath}
+var
+  LModuleHandle: HModule;
+  LFullFileName: array[0..MaxFileNameLengthDouble-1] of Char;
+{$endif}
+begin
+  result := False;
+  if ( FullDebugModeDLL <> 0 ) {$IFDEF MemoryLoadLibrarySupport}OR Assigned( FullDebugModeRDLL ){$ENDIF} then
+    Exit;
+
+  {$ifdef RestrictDebugDLLLoadPath}
+  FullDebugModeDLL := 0;
+  LModuleHandle := 0;
+  {$ifndef borlndmmdll}
+  if IsLibrary then
+    LModuleHandle := HInstance;
+  {$endif}
+
+  LSizeInd := GetModuleFileName(LModuleHandle, LFullFileName, Sizeof(LFullFileName) div SizeOf(Char));
+  while LSizeInd > 0 do
+  begin
+    Dec(LSizeInd);
+    if LFullFileName[LSizeInd] = '\' then
+      Break;
+  end;
+  if (LSizeInd > 0) and (LSizeInd + Cardinal(Length(FullDebugModeLibraryName)) + 1 < Sizeof(LFullFileName) div SizeOf(Char)) then
+  begin
+    LInd := 1;
+    repeat
+      LFullFileName[LSizeInd + LInd] := FullDebugModeLibraryName[LInd];
+      Inc(LInd);
+    until LInd > Cardinal(Length(FullDebugModeLibraryName));
+    LFullFileName[LSizeInd + LInd] := #0;
+    FullDebugModeDLL := LoadLibrary(LFullFileName);
+  end;
+  {$else}
+  FullDebugModeDLL := LoadLibrary(FullDebugModeLibraryName);
+  {$endif RestrictDebugDLLLoadPath}
+  if ( FullDebugModeDLL <> 0 ) then
+  begin
+    GetStackTrace := GetProcAddress(FullDebugModeDLL,
+      {$ifdef RawStackTraces}'GetRawStackTrace'{$else}'GetFrameBasedStackTrace'{$endif});
+    LogStackTrace := GetProcAddress(FullDebugModeDLL, 'LogStackTrace');
+  end;
+
+  {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+  if NOT InitializationCodeHasRun then // Resource is loaded after FastMM since we allocate Memory here .. 
+    Exit;
+
+  if ( FullDebugModeDLL = 0 ) then
+    begin
+    MemoryLoadLibrary( FullDebugModeLibraryName, FullDebugModeRDLL );
+    if Assigned( FullDebugModeRDLL ) then
+      begin
+      GetStackTrace := MemoryGetProcAddress(FullDebugModeRDLL,
+        {$ifdef RawStackTraces}'GetRawStackTrace'{$else}'GetFrameBasedStackTrace'{$endif});
+      LogStackTrace := MemoryGetProcAddress(FullDebugModeRDLL, 'LogStackTrace');
+      end;
+    end;
+  {$IFEND}
+  Result := ( FullDebugModeDLL <> 0 ) {$IFDEF MemoryLoadLibrarySupport}OR Assigned( FullDebugModeRDLL ){$ENDIF};
+end;
+
+function FastMM_FreeDebugSupportLibrary : boolean;
+begin
+  result := False;
+  if ( FullDebugModeDLL = 0 ) {$IFDEF MemoryLoadLibrarySupport}AND NOT Assigned( FullDebugModeRDLL ){$ENDIF} then
+    Exit;
+
+  GetStackTrace := NoOpGetStackTrace;
+  LogStackTrace := NoOpLogStackTrace;
+
+  if ( FullDebugModeDLL <> 0 ) then
+    begin
+    FreeLibrary( FullDebugModeDLL );
+    FullDebugModeDLL := 0;
+    end
+  {$IFDEF MemoryLoadLibrarySupport}
+  else if Assigned( FullDebugModeRDLL ) then
+    begin
+    MemoryFreeLibrary( FullDebugModeRDLL );
+    FullDebugModeRDLL := nil;
+    end
+  {$ENDIF}
+  else
+    Exit;
+
+  Result := True;
+end;
+{$IFEND}
+
 initialization
   RunInitializationCode;
+
 finalization
 {$ifndef PatchBCBTerminate}
   FinalizeMemoryManager;
