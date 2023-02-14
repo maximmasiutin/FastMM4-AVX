@@ -47,6 +47,7 @@ interface
 
 {$DEFINE FastMM4} // FastMM4 Version
 {.$DEFINE FastMM5} // FastMM5 Version
+{.$DEFINE LZMA}
 
 {$DEFINE MANIFEST} // WinSxS Support
 {$DEFINE ALLOW_LOAD_FILES}
@@ -149,14 +150,6 @@ function MemoryEnumerateImportsFile( FileName : string; var Modules : string; De
 function MemoryEnumerateImports( ResourceName : string; var Modules : string; DelimiterString : String = ';'{$IFDEF USE_STREAMS}; Password : string = ''{$ENDIF} ): ShortInt; stdcall; overload;
 {$ENDIF}
 
-function ListMissingModules( ModuleData : Pointer; FileName : String; var Modules : String; const MaxRecurseDepth : Word = 255 ) : Int64; overload;
-{$IFDEF ALLOW_LOAD_FILES}
-function ListMissingModules( FileName : String; Modules : String; const MaxRecurseDepth : Word = 255{$IFDEF USE_STREAMS}; Password : string = ''{$ENDIF} ) : Int64; overload;
-{$ENDIF}
-{$IFDEF LOAD_FROM_RESOURCE}
-function ListMissingModules( ResourceName : string; FileName : String; Modules : String; const MaxRecurseDepth : Word = 255{$IFDEF USE_STREAMS}; Password : string = ''{$ENDIF} ) : Int64; overload;
-{$ENDIF}
-
 implementation
 
 uses
@@ -166,6 +159,7 @@ uses
   {$ELSE}
   ZLib
   {$IFEND}
+  {$IFDEF lzma},LZMA, LZMA2{$ENDIF}
   {$IF ( Defined( GetModuleHandle ) AND Defined( GetModuleHandleCriticalSection ) )},SyncObjs{$IFEND}
   {$IFDEF USE_STREAMS},Classes, JclCompression{$ENDIF}
   ;
@@ -184,7 +178,7 @@ type
   PULONGLONG = ^UINT64;
   {$IFEND}
 
-  {$IFDEF FastMM4} 
+  {$IFDEF FastMM4}
   PByte = System.PByte;
   {$ENDIF FastMM4}
 
@@ -1267,7 +1261,11 @@ begin
   {$ENDIF GetModuleHandleCriticalSection}
 
   {$IF Defined( FastMM4 ) OR Defined( FastMM5 )}
+  {$if Declared( FastMM_RegisterExpectedMemoryLeak )}
+  FastMM_RegisterExpectedMemoryLeak( Self );
+  {$ELSE}
   RegisterExpectedMemoryLeak( Self );
+  {$IFEND}
   {$IFEND}
 end;
 
@@ -1417,7 +1415,7 @@ begin
     {$IFDEF UnloadAllOnFinalize}
     if NOT fItems[ i ].DontUnload then
     {$ENDIF UnloadAllOnFinalize}
-      MemoryFreeLibrary( fItems[ i ].Handle );
+    MemoryFreeLibrary( fItems[ i ].Handle );
     end;
   SetLength( fItems, 0 );    
   {$IFDEF GetModuleHandleCriticalSection}
@@ -1701,7 +1699,9 @@ var
   ActivateActCtx   : function( hActCtx: THandle; lpCookie: PULONG_PTR ): BOOL; stdcall;
   DeactivateActCtx : function( dwFlags: DWORD; ulCookie: THandle ): BOOL; stdcall;
 {$IFEND}
-function LoadManifest( Module : THandle; var hActCtx : THandle; Cookie : PULONG_PTR ) : boolean;
+// Loading from HMODULE only works for FULLY initialized Modules
+// LOAD_LIBRARY_AS_DATAFILE isnt sufficient
+function LoadManifest( Module : THandle; var hActCtx : THandle; Cookie : PULONG_PTR; TempFile : boolean = True ) : boolean;
   {$IF NOT DECLARED(tagACTCTXA)}
   const
     ACTCTX_FLAG_RESOURCE_NAME_VALID           = $00000008;
@@ -1733,55 +1733,97 @@ function LoadManifest( Module : THandle; var hActCtx : THandle; Cookie : PULONG_
     PActCtx = {$IFDEF UNICODE}^tagACTCTXW{$ELSE}^tagACTCTXA{$ENDIF};
   {$IFEND}
 
-  function SetPrivilege( Privilege: PChar; EnablePrivilege: Boolean; out PreviousState: Boolean ): DWORD;
-  var
-    Token: THandle;
-    NewState: TTokenPrivileges;
-    Luid: TLargeInteger;
-    PrevState: TTokenPrivileges;
-    Return: DWORD;
-  begin
-    PreviousState := True;
-    if ( GetVersion( ) > $80000000 ) then // Win9x 
-      Result := ERROR_SUCCESS
-    else
-    begin // WinNT
-      if not OpenProcessToken( GetCurrentProcess( ), MAXIMUM_ALLOWED, Token ) then
-        Result := GetLastError( )
+  function ExtractManifest( Module : HMODULE; FileName : string ) : boolean;
+    function SetPrivilege( Privilege: PChar; EnablePrivilege: Boolean; out PreviousState: Boolean ): DWORD;
+    var
+      Token: THandle;
+      NewState: TTokenPrivileges;
+      Luid: TLargeInteger;
+      PrevState: TTokenPrivileges;
+      Return: DWORD;
+    begin
+      PreviousState := True;
+      if ( GetVersion( ) > $80000000 ) then // Win9x 
+        Result := ERROR_SUCCESS
       else
-      try
-        if not LookupPrivilegeValue( nil, Privilege, Luid ) then
+      begin // WinNT
+        if not OpenProcessToken( GetCurrentProcess( ), MAXIMUM_ALLOWED, Token ) then
           Result := GetLastError( )
         else
-        begin
-          NewState.PrivilegeCount := 1;
-          NewState.Privileges[0].Luid := Luid;
-          if EnablePrivilege then
-            NewState.Privileges[0].Attributes := SE_PRIVILEGE_ENABLED
-          else
-            NewState.Privileges[0].Attributes := 0;
-          if not AdjustTokenPrivileges( Token, False, NewState,
-            SizeOf( TTokenPrivileges ), PrevState, Return ) then
+        try
+          if not LookupPrivilegeValue( nil, Privilege, Luid ) then
             Result := GetLastError( )
           else
           begin
-            Result := ERROR_SUCCESS;
-            PreviousState := ( PrevState.Privileges[0].Attributes and SE_PRIVILEGE_ENABLED <> 0 );
+            NewState.PrivilegeCount := 1;
+            NewState.Privileges[0].Luid := Luid;
+            if EnablePrivilege then
+              NewState.Privileges[0].Attributes := SE_PRIVILEGE_ENABLED
+            else
+              NewState.Privileges[0].Attributes := 0;
+            if not AdjustTokenPrivileges( Token, False, NewState,
+              SizeOf( TTokenPrivileges ), PrevState, Return ) then
+              Result := GetLastError( )
+            else
+            begin
+              Result := ERROR_SUCCESS;
+              PreviousState := ( PrevState.Privileges[0].Attributes and SE_PRIVILEGE_ENABLED <> 0 );
+            end;
           end;
+        finally
+          CloseHandle( Token );
         end;
-      finally
-        CloseHandle( Token );
       end;
     end;
+  var
+    HRes : HRSRC;
+    HG   : HGlobal;
+  f      : Textfile;
+    S    : String;
+    B    : Boolean;
+  begin
+    result := False;
+    if ( Module = 0 ) OR ( Module = INVALID_HANDLE_VALUE ) then
+      Exit;
+    if ( FileName = '' ) then
+      Exit;
+
+    SetPrivilege( 'SeDebugPrivilege', True, B );
+//    if IsExe( Module ) then
+//      HRes := FindResource( Module, PChar( 1 ), PChar( 24 ){RT_MANIFEST} )
+//    else
+  HRes := FindResource( Module, PChar( 2 ), PChar( 24 ){RT_MANIFEST} );
+  if ( HRes <> 0 ) then
+    begin
+      HG := LoadResource( Module, HRes );
+    if HG = 0 then
+      begin
+        SetPrivilege( 'SeDebugPrivilege', B, B );
+        Exit;
+        end;
+      try
+        SetString( S, PAnsiChar( LockResource( HG ) ), SizeOfResource( Module, HRes ) );
+      finally
+        UnlockResource( HG );
+        FreeResource( HG );
+      end;
+
+      try
+        AssignFile( f, FileName );
+      ReWrite( f );
+      WriteLn( f, S );
+      Flush( f );
+        result := True;
+    finally
+      CloseFile( f );
+    end;
+      end;
+    SetPrivilege( 'SeDebugPrivilege', B, B );
   end;
 const
   TMP_MANIFEST = 'tmp.manifest';
 var
   ActCtx : TActCtx;
-  HRes   : HRSRC;
-  HG     : HGlobal;
-  S      : String;
-  f      : Textfile;
 {$IFDEF ActCtx_NeedsInit}
   tModule: THandle;
 {$ENDIF ActCtx_NeedsInit}
@@ -1807,59 +1849,41 @@ begin
     end;
   {$ENDIF}
 
-  SetPrivilege( 'SeDebugPrivilege', True, result );
-  HRes := FindResource( Module, PChar( 2 ), PChar( 24 ){RT_MANIFEST} );
-  if ( HRes <> 0 ) then
+  FillChar( ActCtx, SizeOf( ActCtx ), 0 );
+  ActCtx.cbSize := SizeOf( ActCtx );
+  if TempFile then
     begin
-    HG := LoadResource( Module, HRes );
-    if ( HG = 0 ) then
-      begin
-      SetPrivilege( 'SeDebugPrivilege', result, result );
-      result := false;
+    if NOT ExtractManifest( Module, TMP_MANIFEST ) then
       Exit;
-      end;
-    try
-      SetString( S, PAnsiChar( LockResource( HG ) ), SizeOfResource( Module, HRes ) );
-    finally
-      UnlockResource( HG );
-      FreeResource( HG );
-    end;
-
-    try
-      AssignFile( f, TMP_MANIFEST );
-      ReWrite( f );
-      WriteLn( f, S );
-      Flush( f );
-    finally
-      CloseFile( f );
-    end;
+    ActCtx.dwFlags  := 0;
+    actCtx.lpSource := TMP_MANIFEST;
     end
   else
     begin
-    SetPrivilege( 'SeDebugPrivilege', result, result );
-    result := false;
-    Exit;
+    ActCtx.dwFlags        := ACTCTX_FLAG_RESOURCE_NAME_VALID or ACTCTX_FLAG_HMODULE_VALID;
+    if ( Module = 0 ) OR ( Module = INVALID_HANDLE_VALUE ) then
+      ActCtx.hModule      := HInstance
+    else
+      ActCtx.hModule      := Module;
+//    if IsExe( Module ) then
+//      ActCtx.lpResourceName := MakeIntResource( 1 )
+//    else
+      ActCtx.lpResourceName := MakeIntResource( 2 );
     end;
-  SetPrivilege( 'SeDebugPrivilege', result, result );
-  
-  FillChar( ActCtx, SizeOf( ActCtx ), 0 );
-  ActCtx.cbSize := SizeOf( ActCtx );
-  actCtx.lpSource := TMP_MANIFEST;
-  ActCtx.dwFlags := 0;
-  hActCtx := CreateActCtx( @ActCtx );
 
+  SetLastError( ERROR_SUCCESS );
+  hActCtx := CreateActCtx( @ActCtx );
   result := ( hActCtx <> INVALID_HANDLE_VALUE ) AND ActivateActCtx( hActCtx, Cookie );
+
+  if TempFile then
+    DeleteFile( TMP_MANIFEST );
 end;
 
-procedure UnloadManifest( hActCtx : THandle; Cookie : THandle );
-const
-  TMP_MANIFEST = 'tmp.manifest';
+function UnloadManifest( hActCtx : THandle; Cookie : THandle ) : boolean;
 begin
-  if FileExists( TMP_MANIFEST ) then
-    DeleteFile( TMP_MANIFEST );
-    
+  result := ( Cookie = 0 ) AND ( ( hActCtx <> 0 ) OR ( hActCtx <> INVALID_HANDLE_VALUE ) );
   if ( Cookie <> 0 ) then
-    DeactivateActCtx( 0, Cookie );
+    result := DeactivateActCtx( 0, Cookie );
 
   if ( hActCtx <> INVALID_HANDLE_VALUE ) then
     ReleaseActCtx( hActCtx );
@@ -1897,6 +1921,12 @@ begin
     if not BuildImportTable( module ) then
       begin
       result := -17;
+  {$IFDEF MANIFEST}
+  try
+    UnloadManifest( hActCtx, Cookie );
+  except
+  end;
+  {$ENDIF}
       SetLastError( ERROR_SUCCESS );
       MemoryFreeLibrary( module );
       Exit;
@@ -1992,7 +2022,7 @@ begin
 end;
 
 {$IFDEF ALLOW_LOAD_FILES}
-function FileToPointer( lpFileStr: String; var Data : PByte ) : Cardinal; 
+function FileToPointer( lpFileStr: String; var Data : PByte ) : Cardinal;
 var
   H   : THandle;
   Cnt : Cardinal;
@@ -2365,7 +2395,7 @@ function ExtractPointer( Source : Pointer; Len : Cardinal; var Decompressed : Po
   end;
   {$IFEND}
 const
-  PREFIX_ : Array [ 0..3 ] of AnsiString = ( 'mz', '7z', 'zlib', 'gzip' );
+  PREFIX_ : Array [ 0..3{$IFDEF LZMA}+2{$ENDIF} ] of AnsiString = ( 'mz', '7z', 'zlib', 'gzip'{$IFDEF LZMA}, 'lzma', 'lzm2'{$ENDIF} );
 {$IF Declared( Classes )}
 var
   S : TStream;
@@ -2407,6 +2437,12 @@ begin
     end
   else if ( CompareStringA( LOCALE_USER_DEFAULT, NORM_IGNORECASE, Source, Length( PREFIX_[ 2 ] ), PAnsiChar( PREFIX_[ 2 ] ), Length( PREFIX_[ 2 ] ) ) = 2 ) then // ZLib
     result := ExtractZLIB( {$IF CompilerVersion < 23}PByte( PAnsiChar( Source )+Length( PREFIX_[ 2 ] ) ){$ELSE}PByte( Source )+Length( PREFIX_[ 2 ] ){$IFEND}, Len-Length( PREFIX_[ 2 ] ), Decompressed )
+  {$IFDEF lzma}
+  else if ( CompareStringA( LOCALE_USER_DEFAULT, NORM_IGNORECASE, Source, Length( PREFIX_[ 4 ] ), PAnsiChar( PREFIX_[ 4 ] ), Length( PREFIX_[ 4 ] ) ) = 2 ) then // LZMA
+    result := ExtractLZMA( {$IF CompilerVersion < 23}PByte( PAnsiChar( Source )+Length( PREFIX_[ 4 ] ) ){$ELSE}PByte( Source )+Length( PREFIX_[ 4 ] ){$IFEND}, Len-Length( PREFIX_[ 4 ] ), Decompressed )
+  else if ( CompareStringA( LOCALE_USER_DEFAULT, NORM_IGNORECASE, Source, Length( PREFIX_[ 5 ] ), PAnsiChar( PREFIX_[ 5 ] ), Length( PREFIX_[ 5 ] ) ) = 2 ) then // LZMA2
+    result := ExtractLZMA2( {$IF CompilerVersion < 23}PByte( PAnsiChar( Source )+Length( PREFIX_[ 5 ] ) ){$ELSE}PByte( Source )+Length( PREFIX_[ 5 ] ){$IFEND}, Len-Length( PREFIX_[ 5 ] ), Decompressed )
+  {$ENDIF lzma}
   else if ( CompareStringA( LOCALE_USER_DEFAULT, NORM_IGNORECASE, Source, Length( PREFIX_[ 3 ] ), PAnsiChar( PREFIX_[ 3 ] ), Length( PREFIX_[ 3 ] ) ) = 2 ) then // Gzip
     {$IF Declared( ExtractGZIP )}
     result := ExtractGZIP( {$IF CompilerVersion < 23}PByte( PAnsiChar( Source )+Length( PREFIX_[ 3 ] ) ){$ELSE}PByte( Source )+Length( PREFIX_[ 3 ] ){$IFEND}, Len-Length( PREFIX_[ 3 ] ), Decompressed );
@@ -2808,201 +2844,6 @@ begin
     result := -31
   else if ( res > 0 ) then
     result := MemoryEnumerateImports( Extract, Modules, DelimiterString )
-  else
-    result := res;
-  UnlockResource( HG );
-  FreeResource( HG );
-  if ( Extract <> Data ) then
-    ReallocMem( Extract, 0 );
-end;
-{$ENDIF}
-
-function ListMissingModules( ModuleData : Pointer; FileName : String; var Modules : String; const MaxRecurseDepth : Word = 255 ) : Int64;
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-const
-  DELIMITER_STRING_ = ';';
-  PREFIX_ : Array [ 0..1 ] of String = ( 'api-ms-win-', 'ext-ms-' );
-var
-  sChecked : String;
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  function Recurse( ModuleData : Pointer; FileName : string; RecursePath : String = ''; Level : Word = 0 ) : Cardinal;
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    function ExtractFileName(const FileName: string): string;
-      function StrScan(const Str: PChar; Chr: Char): PChar;
-      begin
-        Result := Str;
-        while Result^ <> Chr do
-        begin
-          if Result^ = #0 then
-          begin
-            Result := nil;
-            Exit;
-          end;
-          Inc(Result);
-        end;
-      end;
-    const
-      Delimiters = '\' + ':'; // PathDelim + DriveDelim
-    var
-      I: Integer;
-      P: PChar;
-    begin
-      i := Length( FileName );
-      P := PChar( Delimiters );
-      while i > 1 do
-        begin
-        if ( FileName[ i-1 ] <> #0 ) and ( StrScan( P, FileName[ i-1 ] ) <> nil ) then
-          break;
-        Dec(i);
-        end;
-      if ( i > 1 ) then
-        Result := Copy(FileName, I, Length( FileName )-I+1)
-      else
-        result := FileName;
-    end;
-    //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    function AddToList( var List : String; Item : String; DelimiterString : String = DELIMITER_STRING_ ) : boolean; overload;
-    begin
-      result := false;
-      if ( Pos( Item + DELIMITER_STRING_, List ) > 0 ) then
-        Exit;
-      result := True;
-      List := List + Item + DELIMITER_STRING_;
-    end;
-   //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  var
-    Path    : string;
-    i       : Integer;
-    s       : string;
-    Data2   : Pointer;
-    Cnt     : Cardinal;
-    PathStr : PChar;
-  begin
-    result := 0;
-    if NOT Assigned( ModuleData ) then
-      begin
-      if FileExists( FileName ) then
-//      if ( FileName = '' ) then
-        Exit;
-      if ( MemoryEnumerateImportsFile( FileName, s, DELIMITER_STRING_ ) <> 0 ) then
-        Exit;
-      end
-    else if ( MemoryEnumerateImports( ModuleData, s, DELIMITER_STRING_ ) <> 0 ) then
-      Exit;
-
-    if ( Level > 0 ) then
-      begin
-      if ( RecursePath <> '' ) then
-        RecursePath := RecursePath + '>' + ExtractFileName( FileName )
-      else
-        RecursePath := ExtractFileName( FileName );
-      end;
-
-    while ( S <> '' ) do
-      begin
-      i := Pos( DELIMITER_STRING_, s );
-      if ( i > 0 ) then
-        begin
-        FileName := Copy( S, 1, i-1 );
-        S        := Copy( S, i+Length( DELIMITER_STRING_ ), Length( S )-( i - Length( DELIMITER_STRING_ ) ) );
-        end
-      else
-        begin
-        FileName := S;
-        S        := '';
-        end;
-
-      if ( CompareString( LOCALE_USER_DEFAULT, NORM_IGNORECASE, PChar( Copy( FileName, 1, 11 ) ), Length( PREFIX_[ 0 ] ), PChar( PREFIX_[ 0 ] ), Length( PREFIX_[ 0 ] ) ) = 2 ) OR
-         ( CompareString( LOCALE_USER_DEFAULT, NORM_IGNORECASE, PChar( Copy( FileName, 1, 7 ) ), Length( PREFIX_[ 1 ] ), PChar( PREFIX_[ 1 ] ), Length( PREFIX_[ 1 ] ) ) = 2 ) then
-        Continue;
-
-      // EnvironmentPath
-      Cnt := SearchPath( nil, PChar( Filename ), nil, 0, nil, PathStr );
-      if ( Cnt > 0 ) then
-        begin
-        SetLength( Path, Cnt-1 );
-        if ( SearchPath( nil, PChar( Filename ), nil, Cnt, PChar( Path ), PathStr ) <= 0 ) then
-          Path := FileName;
-        end
-      else
-        Path := FileName;
-
-      if NOT FileExists( Path ) then
-        begin
-        if ( RecursePath = '' ) then
-          AddToList( Modules, FileName, #13#10 )
-        else
-          AddToList( Modules, RecursePath + '->' + FileName, #13#10 );
-        Inc( result );
-        end
-      else
-        begin
-        if ( Level+1 < MaxRecurseDepth ) AND AddToList( sChecked, FileName, DELIMITER_STRING_ ) then
-          begin
-          Data2 := nil;
-          FileToPointer( Path, PByte( Data2 ) );
-          if Assigned( Data2 ) then
-            begin
-            Inc( Result, Recurse( Data2, FileName, RecursePath, Level+1 ) );
-            FreeMem( Data2 );
-            end;
-//          else
-//            Exit;
-          end;
-        end;
-      end;
-  end;
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-begin
-  Modules  := '';
-  sChecked := '';
-  result := Recurse( ModuleData, FileName );
-end;
-
-{$IFDEF ALLOW_LOAD_FILES}
-function ListMissingModules( FileName : String; Modules : String; const MaxRecurseDepth : Word = 255{$IFDEF USE_STREAMS}; Password : string = ''{$ENDIF} ) : Int64;
-var
-  Data : Pointer;
-begin
-  Data := nil;
-  FileToPointer( FileName, PByte( Data ) );
-  if Assigned( Data ) then
-    begin
-    result := ListMissingModules( Data, FileName, Modules, MaxRecurseDepth );
-    FreeMem( Data );
-    end
-  else
-    result := -31;
-end;
-{$ENDIF}
-
-{$IFDEF LOAD_FROM_RESOURCE}
-function ListMissingModules( ResourceName : string; FileName : String; Modules : String; const MaxRecurseDepth : Word = 255{$IFDEF USE_STREAMS}; Password : string = ''{$ENDIF} ) : Int64;
-const
-  RES_TYPE_ = 'DLL'; // RT_RCDATA{10};
-var
-  HRes   : HRSRC;
-  HG     : HGlobal;
-  Data   : Pointer;
-  Extract: Pointer;
-  res    : Int64;
-begin
-  result := -32;
-  HRes := MemoryResourceExists( ResourceName );
-  if ( HRes = 0 ) then
-    Exit;
-
-  HG := LoadResource( hInstance, HRes );
-  if ( HG = 0 ) then
-    Exit;
-  Data := LockResource( HG );
-  
-  Extract := nil;
-  res := ExtractPointer( Data, SizeOfResource( hInstance, HRes ), Extract{$IFDEF USE_STREAMS}, Password{$ENDIF} );
-  if ( res = 0 ) then
-    result := -31
-  else if ( res > 0 ) then
-    result := ListMissingModules( Extract, FileName, Modules, MaxRecurseDepth )
   else
     result := res;
   UnlockResource( HG );
