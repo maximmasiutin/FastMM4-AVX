@@ -678,7 +678,11 @@ Combine it with the two options below for further fine-tuning.}
 
 {.$define LogLockContention}
 
+{If a block cannot be released immediately during a FreeMem call the block will
+ added to a list of blocks that will be freed later, either in the background cleanup
+ thread or during the next call to FreeMem.}
 
+{.$define UseReleaseStack}
 
 {--------------------------------Option Grouping------------------------------}
 
