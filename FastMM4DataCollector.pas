@@ -4,7 +4,49 @@ unit FastMM4DataCollector;
 
 interface
 
+{$IFNDEF UNICODE}
+const
+  CDefaultPromoteGen1_sec  = 1; // promote every second
+  CDefaultPromoteGen1Count = 1; // promote allocations with Count > 1
+  CGeneration1Size = 1024;
+  CGeneration2Size = 256;
+  CCollectedDataSize = CGeneration2Size;
+  CMaxPointers = 11; // same as in FastMM4
+
 type
+  TPointers = record
+    Pointers: array [1..CMaxPointers] of Pointer;
+    Count   : integer;
+  end;
+  TDataInfo = record
+    Data : TPointers;
+    Count: integer;
+  end;
+  TCollectedData = array [1..CCollectedDataSize] of TDataInfo;
+  TGenerationOverflowCount = record
+    Generation1: integer;
+    Generation2: integer;
+  end;
+
+  PDataInfo = ^TDataInfo;
+  TGenerationPlaceholder = array [1..1] of TDataInfo;
+  PGenerationPlaceholder = ^TGenerationPlaceholder;
+  TGenerationInfo = record
+    Data            : PGenerationPlaceholder;
+    Size            : integer;
+    Last            : integer;
+    NextGeneration  : integer;
+    PromoteEvery_sec: integer;
+    PromoteCountOver: integer;
+    OverflowCount   : integer;
+    LastCheck_ms    : int64;
+  end;
+{$ENDIF UNICODE}
+
+type
+  {$IFNDEF UNICODE}
+  TStaticCollector = object
+  {$ELSE}
   TStaticCollector = record
   strict private const
     CDefaultPromoteGen1_sec  = 1; // promote every second
@@ -43,6 +85,7 @@ type
       LastCheck_ms    : int64;
     end;
   var
+  {$ENDIF UNICODE}
     FGeneration1   : array [1..CGeneration1Size] of TDataInfo;
     FGeneration2   : array [1..CGeneration2Size] of TDataInfo;
     FGenerationInfo: array [0..2] of TGenerationInfo; //gen0 is used for merging
@@ -52,15 +95,15 @@ type
     function GetGen1_PromoteEvery_sec: integer;
     function GetOverflowCount: TGenerationOverflowCount;
     procedure Lock;
-    function Now_ms: int64; inline;
+    function Now_ms: int64; {$IF CompilerVersion >= 23}inline;{$IFEND}
     procedure SetGen1_PromoteCountOver(const value: integer);
     procedure SetGen1_PromoteEvery_sec(const value: integer);
   private
     procedure AddToGeneration(generation: integer; const aData: TPointers;
       count: integer = 1);
-    procedure CheckPromoteGeneration(generation: integer); inline;
-    function FindInGeneration(generation: integer; const aData: TPointers): integer; inline;
-    function FindInsertionPoint(generation, count: integer): integer; inline;
+    procedure CheckPromoteGeneration(generation: integer); {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function FindInGeneration(generation: integer; const aData: TPointers): integer; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function FindInsertionPoint(generation, count: integer): integer; {$IF CompilerVersion >= 23}inline;{$IFEND}
     procedure FlushAllGenerations;
     function InsertIntoGeneration(generation: integer; const dataInfo: TDataInfo): boolean;
     procedure PromoteGeneration(oldGen, newGen: integer);
@@ -82,7 +125,7 @@ type
 implementation
 
 uses
-  Winapi.Windows; //used in Now_ms
+  Windows; //used in Now_ms
 
 {$RANGECHECKS OFF}
 
@@ -115,17 +158,25 @@ asm
 end;
 
 { TStaticCollector.TPointers }
-
+{$IFDEF UNICODE}
 class operator TStaticCollector.TPointers.Equal(const a, b: TPointers): boolean;
 var
   i: integer;
 begin
   Result := a.Count = b.Count;
   if Result then
+    begin
     for i := 1 to a.Count do
+      begin
       if a.Pointers[i] <> b.Pointers[i] then
-        Exit(false);
+        begin
+        result := False;
+        Exit;
+        end;
+      end;
+    end;
 end;
+{$ENDIF UNICODE}
 
 { TStaticCollector }
 
@@ -178,14 +229,32 @@ begin
   end;
 end;
 
-function TStaticCollector.FindInGeneration(generation: integer; const aData: TPointers):
-  integer;
+function TStaticCollector.FindInGeneration(generation: integer; const aData: TPointers): integer;
+var
+  i : integer;
+  b : Boolean;
 begin
-  with FGenerationInfo[generation] do begin
+  with FGenerationInfo[generation] do
+    begin
     for Result := 1 to Last do
-      if Data^[Result].Data = aData then
+      begin
+      b := Data^[Result].Data.Count = aData.Count;
+      if b then
+        begin
+        for i := 1 to Data^[Result].Data.Count do
+          begin
+          if Data^[Result].Data.Pointers[i] <> aData.Pointers[i] then
+            begin
+            b := False;
+            break;
+            end;
+          end;
+        end;
+
+      if b then
         Exit;
-  end;
+      end;
+    end;
   Result := 0;
 end;
 
@@ -196,7 +265,10 @@ begin
   with FGenerationInfo[generation] do begin
     for insert := Last downto 1 do begin
       if Data^[insert].Count > count then
-        Exit(insert+1);
+        begin
+        result := insert+1;
+        Exit;
+        end;
     end;
     Result := 1;
   end;

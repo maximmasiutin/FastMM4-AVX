@@ -5,6 +5,14 @@ unit FastMM4LockFreeStack;
 
 interface
 
+{$IF CompilerVersion <= 20}
+{$IFNDEF CPUX64}
+type
+  NativeInt = integer;
+  NativeUInt = cardinal;
+{$ENDIF}
+{$IFEND}
+
 type
   PReferencedPtr = ^TReferencedPtr;
   TReferencedPtr = record
@@ -18,6 +26,16 @@ type
     Data: record end;           //user data, variable size
   end;
 
+  {$IFNDEF UNICODE}
+  TLFStack = object
+  private
+    FDataBuffer   : pointer;
+    FElementSize  : integer;
+    FNumElements  : integer;
+    FPublicChainP : PReferencedPtr;
+    FRecycleChainP: PReferencedPtr;
+  public
+  {$ELSE}
   TLFStack = record
   strict private
     FDataBuffer   : pointer;
@@ -29,36 +47,36 @@ type
     class var obsIsInitialized: boolean;                //default is false
     class var obsTaskPopLoops : NativeInt;
     class var obsTaskPushLoops: NativeInt;
-    class function  PopLink(var chain: TReferencedPtr): PLinkedData; static;
-    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); static;
+    class function  PopLink(var chain: TReferencedPtr): PLinkedData; {$IF CompilerVersion >= 23}static;{$IFEND}
+    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); {$IF CompilerVersion >= 23}static;{$IFEND}
+  {$ENDIF UNICODE}
     procedure MeasureExecutionTimes;
   public
     procedure Empty;
-    procedure Initialize(numElements, elementSize: integer);
+    procedure Initialize(ANumElements, AElementSize: integer);
     procedure Finalize;
-    function  IsEmpty: boolean; inline;
-    function  IsFull: boolean; inline;
+    function  IsEmpty: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function  IsFull: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
     function  Pop(var value): boolean;
     function  Push(const value): boolean;
     property  ElementSize: integer read FElementSize;
     property  NumElements: integer read FNumElements;
   end;
 
+{$IFNDEF UNICODE}
+var
+  obsIsInitialized: boolean = False;                //default is false
+  obsTaskPopLoops : NativeInt = 0;
+  obsTaskPushLoops: NativeInt = 0;
+
+function  PopLink(var chain: TReferencedPtr): PLinkedData;
+procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr);
+{$ENDIF}
+
 implementation
 
 uses
   Windows;
-
-{$IF CompilerVersion < 23}
-{$IFNDEF CPUX64}
-type
-  NativeInt = integer;
-  NativeUInt = cardinal;
-{$ENDIF}
-{$IFEND}
-
-var
-  CASAlignment: integer; //required alignment for the CAS function - 8 or 16, depending on the platform
 
 function RoundUpTo(value: pointer; granularity: integer): pointer;
 begin
@@ -148,7 +166,12 @@ begin
   HeapFree(GetProcessHeap, 0, FDataBuffer);
 end;
 
-procedure TLFStack.Initialize(numElements, elementSize: integer);
+procedure TLFStack.Initialize(ANumElements, AElementSize: integer);
+const
+  CASAlignment: integer = {$IFDEF CPUX64}16{$ELSE}8{$ENDIF}; //required alignment for the CAS function - 8 or 16, depending on the platform
+{$IF NOT Declared( HEAP_GENERATE_EXCEPTIONS )}
+  HEAP_GENERATE_EXCEPTIONS = $00000004;
+{$IFEND}
 var
   bufferElementSize : integer;
   currElement       : PLinkedData;
@@ -158,16 +181,16 @@ var
   roundedElementSize: integer;
 begin
   Assert(SizeOf(NativeInt) = SizeOf(pointer));
-  Assert(numElements > 0);
-  Assert(elementSize > 0);
-  FNumElements := numElements;
-  FElementSize := elementSize;
+  Assert(ANumElements > 0);
+  Assert(AElementSize > 0);
+  FNumElements := ANumElements;
+  FElementSize := AElementSize;
   //calculate element size, round up to next aligned value
-  roundedElementSize := (elementSize + SizeOf(pointer) - 1) AND NOT (SizeOf(pointer) - 1);
+  roundedElementSize := (AElementSize + SizeOf(pointer) - 1) AND NOT (SizeOf(pointer) - 1);
   //calculate buffer element size, round up to next aligned value
   bufferElementSize := ((SizeOf(TLinkedData) + roundedElementSize) + SizeOf(pointer) - 1) AND NOT (SizeOf(pointer) - 1);
   //calculate DataBuffer
-  FDataBuffer := HeapAlloc(GetProcessHeap, HEAP_GENERATE_EXCEPTIONS, bufferElementSize * numElements + 2 * SizeOf(TReferencedPtr) + CASAlignment);
+  FDataBuffer := HeapAlloc(GetProcessHeap, HEAP_GENERATE_EXCEPTIONS, bufferElementSize * ANumElements + 2 * SizeOf(TReferencedPtr) + CASAlignment);
   dataBuffer := RoundUpTo(FDataBuffer, CASAlignment);
   if NativeInt(dataBuffer) AND (SizeOf(pointer) - 1) <> 0 then
     // TODO 1 raise exception - how?
@@ -246,9 +269,9 @@ begin
         PushLink(currElement, FRecycleChainP^);
         TimeTestField[1, n] := GetCPUTimeStamp - TimeTestField[1, n];
       end;
-      //Calculate first 4 minimum average for RemoveLink rutine
+      //Calculate first 4 minimum average for RemoveLink routine
       obsTaskPopLoops := GetMinAndClear(0, 4) div 4;
-      //Calculate first 4 minimum average for InsertLink rutine
+      //Calculate first 4 minimum average for InsertLink routine
       obsTaskPushLoops := GetMinAndClear(1, 4) div 4;
 
       //This gives better performance (determined experimentally)
@@ -272,7 +295,11 @@ begin
   PushLink(linkedData, FRecycleChainP^);
 end;
 
+{$IFNDEF UNICODE}
+function PopLink(var chain: TReferencedPtr): PLinkedData;
+{$ELSE}
 class function TLFStack.PopLink(var chain: TReferencedPtr): PLinkedData;
+{$ENDIF UNICODE}
 //nil << Link.Next << Link.Next << ... << Link.Next
 //                                            ^------ < chainHead
 var
@@ -318,7 +345,11 @@ begin
   PushLink(linkedData, FPublicChainP^);
 end;
 
+{$IFNDEF UNICODE}
+procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr);
+{$ELSE}
 class procedure TLFStack.PushLink(const link: PLinkedData; var chain: TReferencedPtr);
+{$ENDIF UNICODE}
 var
   PMemData   : pointer;
   TaskCounter: NativeInt;
@@ -343,10 +374,6 @@ begin
 end;
 
 initialization
-  {$IFDEF CPUX64}
-  CASAlignment := 16;
-  {$ELSE}
-  CASAlignment := 8;
-  {$ENDIF CPUX64}
   InitializeTimingInfo;
+
 end.
