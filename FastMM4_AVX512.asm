@@ -77,7 +77,7 @@ Move56AVX512:
 	mov		r8, [rcx+30h]
 	vmovdqa64	[rdx+00h], EVEXR256N0
 	vmovdqa64	[rdx+20h], EVEXR128N1
-	mov		[rdx + 48], r8
+	mov		[rdx+30h], r8
 	vpxord		EVEXR256N0, EVEXR256N0, EVEXR256N0
 	vpxord		EVEXR128N1, EVEXR128N1, EVEXR128N1
 	ret
@@ -254,7 +254,7 @@ Move344AVX512:
 	align		16	
 MoveX32LpAvx512WithErms:
 
-; Make the counter negative based: The last 24 bytes are moved separately
+; Make the counter negative based: The last 8 bytes are moved separately
 
 	mov		eax, 8
 	sub		r8, rax

@@ -1,6 +1,7 @@
 .github/workflows/main.yml text eol=lf
+.github/workflows/trivy-analysis.yaml text eol=lf
 .github/workflows/build-windows.yml.bak text eol=lf
 .github/CODEOWNERS text eol=lf
 .gitattributes text eol=lf
 .gitignore text eol=lf
-Compile_FastMM4_AVX512.cmd text eof=crlf
+Compile_FastMM4_AVX512.cmd text eol=crlf

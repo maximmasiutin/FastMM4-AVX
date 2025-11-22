@@ -118,7 +118,7 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      even compile the code with "integer overflow checking" and
      "range checking", as well as with "typed @ operator" - for safer
      code. Also added round bracket in the places where the typed @ operator
-     was used, to better emphasize on who's address is taken;
+     was used, to better emphasize on whose address is taken;
    - the compiler environment is more flexible now: you can now compile FastMM4
      with, for example, typed "@" operator or any other option. Almost all
      externally-set compiler directives are honored by FastMM except a few
@@ -278,7 +278,7 @@ FastMM4-AVX Version History:
     instead of 1024-byte blocks there were 1056-byte blocks,
     and instead of 2048-byte blocks were 2176-byte blocks;
     fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64 
-    versions compiled under Delphi and FreePascal passed the all the FastCode 
+    versions compiled under Delphi and FreePascal passed all the FastCode 
     validation suites.
 
 - 1.05 (20 May 2021) - improved speed of releasing memory blocks on higher thread
@@ -287,14 +287,14 @@ FastMM4-AVX Version History:
     Rewritten some comments to be meaningful. Made it compile under FreePascal
     for Linux 64-bit and 32-bit. Also made it compile under FreePascal for
     Windows 32-bit and 64-bit. Memory move functions for 152, 184 and 216 bytes
-    were incorrect Linux. Move216AVX1 and Move216AVX2 Linux implementation had
+    were incorrect under Linux. Move216AVX1 and Move216AVX2 Linux implementation had
     invalid opcodes. Added support for the GetFPCHeapStatus(). Optimizations on
     single-threaded performance. If you define DisablePauseAndSwitchToThread,
     it will use EnterCriticalSection/LeaveCriticalSectin. An attempt to free a
     memory block twice was not caught under 32-bit Delphi. Added SSE fixed block
     copy routines for 32-bit targets. Added support for the "Fast Short REP MOVSB"
     CPU feature. Removed redundant SSE code from 64-bit targets.
-- 1.04 (O6 October 2020) - improved use of AVX-512 instructions to avoid turbo
+- 1.04 (06 October 2020) - improved use of AVX-512 instructions to avoid turbo
     clock reduction and SSE/AVX transition penalty; made explicit order of
     parameters for GetCPUID to avoid calling convention ambiguity that could
     lead to incorrect use of registers and finally crashes, i.e., under Linux;
@@ -1154,7 +1154,7 @@ Change log:
     before the first time an EOutOfMemory exception is raised, allowing some
     GetMem calls following the initial EOutOfMemory to succeed. This allows
     the application to perform any error logging and other shutdown operations
-    successfully that would have failed it the address space was actually
+    successfully that would have failed if the address space was actually
     completely exhausted. (Under FullDebugMode address space is never released
     back to the operating system so once the address space has been exhausted
     there is very little room to manoeuvre.)
@@ -1306,7 +1306,7 @@ interface
 {$ENDIF}
 
 { The assembly implementation of FastGetmem and FastFreemem will check whether
- "pause" and SwitchToThread() are available, otherwisw will jump to pascal versions
+ "pause" and SwitchToThread() are available, otherwise will jump to pascal versions
  of FastGetmem and FastFreemem. However, if we assume that "pause" and SwitchToThread()
  are available (AssumePauseAndSwitchToThreadAvailable), we would not do any check,
  i.e., undefine CheckPauseAndSwitchToThreadFor
@@ -1598,9 +1598,9 @@ of just one option: "Boolean short-circuit evaluation".}
 
 {$IFDEF FullDebugMode}
 
-        {The stack framce force copmiler option should be ON for
+        {The stack frame force compiler option should be ON for
         the FullDebugMode, otherwise the stack unmangling may not work
-        properly for the call stack debug reports geneated
+        properly for the call stack debug reports generated
         by FastMM4.}
 
   {$STACKFRAMES ON}
@@ -2914,7 +2914,7 @@ const
   processors, VPXOR is faster is VXORPS. For example, on Sandybridge, VPXOR can
   run on any of the 3 ALU execution ports, p0/p1/p5.  VXORPS can only run on p5.
   Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. Newer CPU
-  doesn't have such a huge transition penaly, and VZEROUPPER is not needed,
+  doesn't have such a huge transition penalty, and VZEROUPPER is not needed,
   moreover, it can make subsequent SSE code slower}
   {On ERMSB, see p. 3.7.6 of the
   Intel 64 and IA-32 Architectures Optimization Reference Manual}
@@ -3415,7 +3415,7 @@ asm
 
   mov  esi, ecx // now the address of the TCpuIdRegisters structure is in esi register
   mov  ecx, edx // now the value of the second argument is in the ecx register
-  {Clear the registers, not really needed, justs for sure/safe}
+  {Clear the registers, not really needed, just for sure/safe}
   xor  ebx, ebx
   xor  edx, edx
   {cpuid instruction}
@@ -3477,7 +3477,7 @@ For Unix (Linux), we use "System V AMD64 ABI" calling convention. }
 {$ENDIF}
 
 
-  {Clear the register justs for sure, 32-bit operands in 64-bit mode also clear
+  {Clear the register just for sure, 32-bit operands in 64-bit mode also clear
   bits 63-32; moreover, CPUID only operates with 32-bit parts of the registers
   even in the 64-bit mode}
 
@@ -4482,7 +4482,7 @@ asm
   {$IFNDEF unix}
 
 {We are using that many ymm registers (not just two of them in a sequence),
-because our routines allow overlapped moves (although it is not neede for
+because our routines allow overlapped moves (although it is not needed for
 FastMM4 realloc). However, there is no speed increase in using more than
 two registers, because we have just two load units and just one store unit
 on most CPUs}
@@ -4506,7 +4506,7 @@ on most CPUs}
   db $C5, $FD, $7F, $06      // vmovdqa ymmword ptr [rsi], ymm0
   db $C5, $FD, $7F, $4E, $20 // vmovdqa ymmword ptr [rsi+20h], ymm1
   db $C5, $FD, $7F, $56, $40 // vmovdqa ymmword ptr [rsi+40h], ymm2
-  db $C5, $F9, $7F, $5E, $60 // vmovdqa ymmword ptr [rsi+60h], xmm3
+  db $C5, $F9, $7F, $5E, $60 // vmovdqa xmmword ptr [rsi+60h], xmm3
                                 mov [rsi + 70h], rdi
   {$ENDIF}
   db $C5, $FC, $57, $C0      // vxorps ymm0,ymm0,ymm0
@@ -4811,7 +4811,7 @@ asm
   db $C5, $FD, $7F, $06      // vmovdqa ymmword ptr [rsi], ymm0
   db $C5, $FD, $7F, $4E, $20 // vmovdqa ymmword ptr [rsi+20h], ymm1
   db $C5, $FD, $7F, $56, $40 // vmovdqa ymmword ptr [rsi+40h], ymm2
-  db $C5, $F9, $7F, $5E, $60 // vmovdqa ymmword ptr [rsi+60h], xmm3
+  db $C5, $F9, $7F, $5E, $60 // vmovdqa xmmword ptr [rsi+60h], xmm3
   mov [rsi + 70h], rdi
   {$ENDIF}
   db $C5, $FD, $EF, $C0      // vpxor ymm0,ymm0,ymm0
@@ -6646,7 +6646,7 @@ const
 procedure MoveWithErmsNoAVX(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-// Under 32-bit Windows or Unix, the call passes first parametr in EAX, second in EDX, third in ECX
+// Under 32-bit Windows or Unix, the call passes first parameter in EAX, second in EDX, third in ECX
 
   push    ebx
   push    esi
@@ -17353,7 +17353,7 @@ var
   M, I, J: Integer;
   LPivot,
   LTempItem: TMemoryLogNode;
-  PMemLogNode: PMemoryLogNode; {This variable is just neede to simplify the accomodation
+  PMemLogNode: PMemoryLogNode; {This variable is just needed to simplify the accommodation
                                 to "typed @ operator" - stores an intermediary value}
 begin
   LPLeftItem := APLeftItem;
@@ -18490,7 +18490,7 @@ begin
 end;
 {$ENDIF}
 
-{This function is a helper function neede when using the "typed @ operator"
+{This function is a helper function needed when using the "typed @ operator"
 to have lowest possible number of typecats - just in this function. It is defined ad
 "inline", so, when optimization compiler directive is turned on, this function will
 be implemented in such a way that no actual code will be needed and no call/return.}
