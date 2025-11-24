@@ -4992,29 +4992,17 @@ end;
 { Linux System V AMD64 ABI uses different calling convention (rdi, rsi, rdx)
   than Windows x64 (rcx, rdx, r8). These functions use Linux naming convention.
   Compile FastMM4_AVX512_Linux.asm with: nasm -Ox -f elf64 FastMM4_AVX512_Linux.asm }
-procedure Move24AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move24AVX512Linux';
-procedure Move56AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move56AVX512Linux';
-procedure Move88AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move88AVX512Linux';
-procedure Move120AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move120AVX512Linux';
-procedure Move152AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move152AVX512Linux';
-procedure Move184AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move184AVX512Linux';
-procedure Move216AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move216AVX512Linux';
-procedure Move248AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move248AVX512Linux';
-procedure Move280AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move280AVX512Linux';
-procedure Move312AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move312AVX512Linux';
-procedure Move344AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move344AVX512Linux';
-{ Wrapper functions to match Windows function names for common code }
-procedure Move24AVX512(const ASource; var ADest; ACount: NativeInt); begin Move24AVX512Linux(ASource, ADest, ACount); end;
-procedure Move56AVX512(const ASource; var ADest; ACount: NativeInt); begin Move56AVX512Linux(ASource, ADest, ACount); end;
-procedure Move88AVX512(const ASource; var ADest; ACount: NativeInt); begin Move88AVX512Linux(ASource, ADest, ACount); end;
-procedure Move120AVX512(const ASource; var ADest; ACount: NativeInt); begin Move120AVX512Linux(ASource, ADest, ACount); end;
-procedure Move152AVX512(const ASource; var ADest; ACount: NativeInt); begin Move152AVX512Linux(ASource, ADest, ACount); end;
-procedure Move184AVX512(const ASource; var ADest; ACount: NativeInt); begin Move184AVX512Linux(ASource, ADest, ACount); end;
-procedure Move216AVX512(const ASource; var ADest; ACount: NativeInt); begin Move216AVX512Linux(ASource, ADest, ACount); end;
-procedure Move248AVX512(const ASource; var ADest; ACount: NativeInt); begin Move248AVX512Linux(ASource, ADest, ACount); end;
-procedure Move280AVX512(const ASource; var ADest; ACount: NativeInt); begin Move280AVX512Linux(ASource, ADest, ACount); end;
-procedure Move312AVX512(const ASource; var ADest; ACount: NativeInt); begin Move312AVX512Linux(ASource, ADest, ACount); end;
-procedure Move344AVX512(const ASource; var ADest; ACount: NativeInt); begin Move344AVX512Linux(ASource, ADest, ACount); end;
+procedure Move24AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move24AVX512';
+procedure Move56AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move56AVX512';
+procedure Move88AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move88AVX512';
+procedure Move120AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move120AVX512';
+procedure Move152AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move152AVX512';
+procedure Move184AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move184AVX512';
+procedure Move216AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move216AVX512';
+procedure Move248AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move248AVX512';
+procedure Move280AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move280AVX512';
+procedure Move312AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move312AVX512';
+procedure Move344AVX512(const ASource; var ADest; ACount: NativeInt); external name 'Move344AVX512';
 {$ELSE unix}
 procedure Move24AVX512(const ASource; var ADest; ACount: NativeInt); external;
 procedure Move56AVX512(const ASource; var ADest; ACount: NativeInt); external;
@@ -6941,11 +6929,7 @@ end;
 {$IFNDEF DisableMoveX32LpAvx512}
 {$IFDEF unix}
 { Linux System V AMD64 ABI version of MoveX32LpAvx512WithErms }
-procedure MoveX32LpAvx512WithErmsLinux(const ASource; var ADest; ACount: NativeInt); external name 'MoveX32LpAvx512WithErmsLinux';
-procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt);
-begin
-  MoveX32LpAvx512WithErmsLinux(ASource, ADest, ACount);
-end;
+procedure MoveX32LpAvx512WithErm(const ASource; var ADest; ACount: NativeInt); external name 'MoveX32LpAvx512WithErms';
 {$ELSE unix}
 procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); external;
 {$ENDIF unix}
