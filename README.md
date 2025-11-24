@@ -11,13 +11,13 @@ Version 1.0.7
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
 
-What was added to FastMM4-AVX in comparison to the original FastMM4:
+Changes in FastMM4-AVX compared to original FastMM4:
 
  - Efficient synchronization
-   - improved synchronization between the threads; proper synchronization
-     techniques are used depending on context and availability, i.e., pause-
-     based spin-wait loops, umonitor/umwait (WaitPKG), SwitchToThread,
-     critical sections, etc.;
+   - improved synchronization between the threads. Proper synchronization
+     techniques are used depending on context and availability, including
+     pause-based spin-wait loops, umonitor/umwait (WaitPKG), SwitchToThread,
+     critical sections, etc.
    - used the "test, test-and-set" technique for the spin-wait loops; this
      technique is recommended by Intel (see Section 11.4.3 "Optimization with
      Spin-Locks" of the Intel 64 and IA-32 Architectures Optimization Reference
@@ -43,7 +43,7 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      variable (LockByte) to "release a lock" on a data structure,
      see https://stackoverflow.com/a/44959764
      for discussion on releasing a lock;
-     you man define "InterlockedRelease" to get the old behavior of the original
+     you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
    - implemented dedicated lock and unlock procedures that operate with
      synchronization variables (LockByte);
@@ -119,15 +119,15 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      even compile the code with "integer overflow checking" and
      "range checking", as well as with "typed @ operator" - for safer
      code. Also added round bracket in the places where the typed @ operator
-     was used, to better emphasize on who's address is taken;
-   - the compiler environment is more flexible now: you can now compile FastMM4
-     with, for example, typed "@" operator or any other option. Almost all
-     externally-set compiler directives are honored by FastMM except a few
-     (currently just one) - look for the "Compiler options for FastMM4" section
-     below to see what options cannot be externally set and are always
-     redefined by FastMM4 for itself - even if you set up these compiler options
-     differently outside FastMM4, they will be silently
-     redefined, and the new values will be used for FastMM4 only;
+     was used, to better emphasize on whose address is taken;
+   - the compiler environment is more flexible now: you can compile FastMM4
+     with, for example, a typed "@" operator or any other option. Almost all
+     externally-set compiler directives are honored by FastMM4, except for a few
+     (currently just one). Refer to the "Compiler options for FastMM4" section
+     below to see which options cannot be externally set and are always
+     redefined by FastMM4 for itself. Even if you set up these compiler options
+     differently outside FastMM4, they will be silently redefined, and the new
+     values will be used for FastMM4 only;
    - the type of one-byte synchronization variables (accessed via "lock cmpxchg"
      or "lock xchg") replaced from Boolean to Byte for stricter type checking;
    - those fixed-block-size memory move procedures that are not needed
@@ -136,12 +136,12 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      that is supposed to remove these function after compilation;
    - added length parameter to what were the dangerous null-terminated string
      operations via PAnsiChar, to prevent potential stack buffer overruns
-     (or maybe even stack-based exploitation?), and there some Pascal functions
+     (or maybe even stack-based exploitation?), and there are some Pascal functions
      also left, the argument is not yet checked. See the "todo" comments
      to figure out where the length is not yet checked. Anyway, since these
      memory functions are only used in Debug mode, i.e., in development
      environment, not in Release (production), the impact of this
-     "vulnerability" is minimal (albeit this is a questionable statement);
+     "vulnerability" is minimal (albeit this is a questionable statement)
    - removed all non-US-ASCII characters, to avoid using UTF-8 BOM, for
      better compatibility with very early versions of Delphi (e.g., Delphi 5),
      thanks to Valts Silaputnins;
@@ -215,12 +215,12 @@ The above tests (on Xeon E5-2667v4 and i9) have been done on 03-May-2018.
 
 Here is the single-threading performance comparison in some selected
 scenarios between FastMM v5.03 dated May 12, 2021 and FastMM4-AVX v1.05
-dated May 20, 2021. FastMM4-AVX is compiled with default optinos. This 
+dated May 20, 2021. FastMM4-AVX is compiled with default options. This 
 test is run on May 20, 2021, under Intel Core i7-1065G7 CPU, Ice Lake
-microarchitecture, base frequency: 1.3 GHz, max turbo frequencey: 3.90 GHz, 
+microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz, 
 4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target. 
 Please note that these are the selected scenarios where FastMM4-AVX is 
-faster then FastMM5. In other scenarios, especially in multi-threaded 
+faster than FastMM5. In other scenarios, especially in multi-threaded 
 with heavy contention, FastMM5 is faster.
 
                                              FastMM5  AVX-br.   Ratio
@@ -282,7 +282,7 @@ FastMM4-AVX Version History:
     instead of 1024-byte blocks there were 1056-byte blocks,
     and instead of 2048-byte blocks were 2176-byte blocks;
     fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64 
-    versions compiled under Delphi and FreePascal passed the all the FastCode 
+    versions compiled under Delphi and FreePascal passed all the FastCode 
     validation suites.
 
 - 1.05 (20 May 2021) - improved speed of releasing memory blocks on higher thread
@@ -294,11 +294,11 @@ FastMM4-AVX Version History:
     were incorrect Linux. Move216AVX1 and Move216AVX2 Linux implementation had
     invalid opcodes. Added support for the GetFPCHeapStatus(). Optimizations on
     single-threaded performance. If you define DisablePauseAndSwitchToThread,
-    it will use EnterCriticalSection/LeaveCriticalSectin. An attempt to free a
+    it will use EnterCriticalSection/LeaveCriticalSection. An attempt to free a
     memory block twice was not caught under 32-bit Delphi. Added SSE fixed block
     copy routines for 32-bit targets. Added support for the "Fast Short REP MOVSB"
     CPU feature. Removed redundant SSE code from 64-bit targets.
-- 1.04 (O6 October 2020) - improved use of AVX-512 instructions to avoid turbo
+- 1.04 (06 October 2020) - improved use of AVX-512 instructions to avoid turbo
     clock reduction and SSE/AVX transition penalty; made explicit order of
     parameters for GetCPUID to avoid calling convention ambiguity that could
     lead to incorrect use of registers and finally crashes, i.e., under Linux;
@@ -338,7 +338,7 @@ Advantages:
    alignment.
  - Good scaling under multi-threaded applications
  - Intelligent reallocations. Avoids slow memory move operations through
-   not performing unneccesary downsizes and by having a minimum percentage
+   not performing unnecessary downsizes and by having a minimum percentage
    block size growth factor when an in-place block upsize is not possible.
  - Resistant to address space fragmentation
  - No external DLL required when sharing memory between the application and
@@ -391,7 +391,7 @@ Fast Memory Manager
    alignment.
 * Good scaling under multi-threaded applications
 * Intelligent reallocations. Avoids slow memory move operations through
-   not performing unneccesary downsizes and by having a minimum percentage
+   not performing unnecessary downsizes and by having a minimum percentage
    block size growth factor when an in-place block upsize is not possible.
 * Resistant to address space fragmentation
 * No external DLL required when sharing memory between the application and

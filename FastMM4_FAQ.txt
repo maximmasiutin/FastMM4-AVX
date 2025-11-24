@@ -10,7 +10,7 @@ A: The FastMM_FullDebugMode.dll library is required for FullDebugMode. Please ma
 Q: When a memory error pops up in "FullDebugMode" there is no debug info in the stack traces, only addresses. Why?
 A: For the FastMM_FullDebugMode.dll library to determine unit/line number information for stack traces any one of the following has to be available: TD32 debug info, a .map file, a .jdbg file or embedded JCL debug info. If none of these are available you will only get addresses in stack traces. For line numbers to be shown you also need to enable "Debug Information", "Reference Info" and "Use Debug DCUs". Also, if the addresses are inside a dynamically loaded DLL that was unloaded before shutdown then FastMM will not be able to determine unit/line number info for them.
 
-Q: I have enable FullDebugMode and get a log file containing stack traces of memory leaks, but no line numbers. Why?
+Q: I have enabled FullDebugMode and get a log file containing stack traces of memory leaks, but no line numbers. Why?
 A: To get line numbers you also need to enable "Debug Information", "Reference Info" and "Use Debug DCUs" on the "Compiler" tab of the "Project Options" dialog.
 
 Q: My program used to work fine with the Borland memory manager, but I get an "Invalid Pointer Operation" or "Access Violation" with FastMM. Is there a bug in FastMM?
@@ -25,7 +25,7 @@ A: If your program does not spend much time allocating and freeing memory, then 
 Q: I have added FastMM4.pas as the very first unit in my project's .dpr file, but when I try to run my program it still complains that it is not the first unit. Why?
 A: If you are using an exception handler that modifies the unit initialization order (like MadExcept or EurekaLog), you have to change its configuration so that FastMM is initialized first.
 
-Q: Delphi 2005 crashes with an error message "Class 'TApplication', already if class map" (sic) when I replace the default borlndmm.dll with the FastMM DLL. Why?
+Q: Delphi 2005 crashes with an error message "Class 'TApplication', already in class map" when I replace the default borlndmm.dll with the FastMM DLL. Why?
 A: It is due to a bug in Delphi 2005 (QC#14007). There is an unofficial patch available that fixes this. Refer to FastMM4_Readme.txt for details.
 
 Q: I am using the replacement borlndmm.dll together with the Delphi IDE. When I open up two copies of Delphi and then close one down I get a memory leak report. Why?

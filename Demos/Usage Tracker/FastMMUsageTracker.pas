@@ -25,11 +25,11 @@ Description:
 Usage:
   - Add the FastMMUsageTracker unit
   - Add the ShowFastMMUsageTracker procedure to an event
-  - FastMMUsageTracker form should not be autocreated
+  - FastMMUsageTracker form should not be auto-created
 
 Notes:
-  - Consider setting the base adress of your BPLs & DLLs or use Microsoft's
-    ReBase.exe to set third party BPLs and DLLs. Libraries that do not have to
+  - Consider setting the base address of your BPLs & DLLs or use Microsoft's
+    ReBase.exe to set third-party BPLs and DLLs. Libraries that do not have to
     be relocated can be shared across processes, thus conserving system
     resources.
   - The first of the "Largest contiguous free VM memory spaces" gives you an
@@ -39,7 +39,7 @@ Change log:
 
   Version 2.10 (22 September 2009):
   - New usage tracker implemented by Hanspeter Widmer with many new features.
-    (Thanks Hanspeter!);
+    (Thanks Hanspeter!)
   - Colour coding of changes in the allocation map added by Murray McGowan
     (red for an increase in usage, green for a decrease). (Thanks Murray!)
 
@@ -287,7 +287,7 @@ begin
     AddressSpacePageCount := 32768
   else
     AddressSpacePageCount := 65536;
-  {Update the graph metricx}
+  {Update the graph metrics}
   UpdateGraphMetrics;
   {Set up the StringGrid columns}
   with sgBlockStatistics do
@@ -505,7 +505,7 @@ var
       {If the chunk is not allocated by this MM, what is its status?}
       if AMemoryMap[LInd] = csExSysAllocated then
       begin
-        {Get all the reserved memory blocks and windows allocated memory blocks, etc.}
+        {Get all the reserved memory blocks and Windows allocated memory blocks, etc.}
         VirtualQuery(Pointer(LInd * 65536), LMBI, SizeOf(LMBI));
         if LMBI.State = MEM_COMMIT then
         begin

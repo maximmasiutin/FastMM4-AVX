@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+
+# IDE files
+*.dcu
+*.ppu
+*.exe
+*.dll
+*.so
+
+# Exclude compiled object files
+*.obj
+*.o
+
+# Build outputs
+*.exe
+*.dll
+
+# Documentation
+*.md
+*.txt
+*.html
+
+# Demos (not needed for tests)
+Demos/
+
+# Other test files (we only need Advanced)
+Tests/Simple/
+Tests/Benchmark/
+
+# IDE project files
+*.dproj
+*.dpr.local
+*.identcache
+
+# Audit files
+AUDIT_*.md
+SECURITY_*.md
+GEMINI.md
+
+# Other
+.github/
+*.a
+libimpFastMM4.a

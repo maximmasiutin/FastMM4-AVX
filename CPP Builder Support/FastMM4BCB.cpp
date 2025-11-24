@@ -7,17 +7,16 @@ Description:
  C++ Builder application or DLL.
 
 Usage:
- 1) Copy FastMM4BCB.cpp, FastMM4.pas, FastMM4Message.pas, FastMM4Options.inc,
+ 1) Copy FastMM4BCB.cpp, FastMM4.pas, FastMM4Messages.pas, FastMM4Options.inc,
     and FastMM_FullDebugMode.lib to your source folder.
  2) Copy FastMM_FullDebugMode.dll to your application's .exe directory (if you
     intend to use FullDebugMode).
  3) To your project, add FastMM4Messages.pas first, then FastMM4.pas, then
     FastMM4BCB.cpp. On compiling the .pas files, .hpp files are created and
     imported by the subsequent files.
- 4) Add USEOBJ("FastMM4BCB.cpp") to your project file, BEFORE any other
-    USEFORM directives.
+ 4) Add USEOBJ("FastMM4BCB.cpp") to your project file, USEFORM directives.
  5) Under the Project -> Options -> Linker menu uncheck "Use Dynamic RTL"
-    (sorry, won't work with the RTL DLL).
+    (sorry, it won't work with the RTL DLL).
  FastMM will now install itself on startup and replace the RTL memory manager.
 
 Acknowledgements:
@@ -25,14 +24,14 @@ Acknowledgements:
    implementing the initial BCB support.
  - JiYuan Xie for doing an entire rewrite of this unit to allow leak reporting,
    etc. under BCB.
- - Remy Lebeau for some bugfixes.
+ - Remy Lebeau for some bug fixes.
  - James Nachbar and Albert Wiersch for improved usage instructions and
-   bugfixes.
+   bug fixes.
 
 Change log:
  Version 1.00 (15 June 2005):
   - Initial release. Due to limitations of BCB it cannot be uninstalled (thus
-    no leak checking and not useable in DLLs unless the DLL always shares the
+    no leak checking and not usable in DLLs unless the DLL always shares the
     main application's MM). Thanks to Jarek Karciarz, Vladimir Ulchenko and Bob
     Gonder for their help.
  Version 1.01 (6 August 2005):
@@ -204,9 +203,8 @@ void * StockGetMemPtr = NULL;
 
 void New_terminate(int code)
 {
-  //FasttMM4.pas need export a "FinalizeMemoryManager" routine which contain
-  //codes of original "finalization" section
-  FinalizeMemoryManager();
+  //FastMM4.pas needs to export a "FinalizeMemoryManager" routine that contains
+  //the code of the original "finalization" section  FinalizeMemoryManager();
 
   #ifdef CheckCppObjectTypeEnabled
   GetCppVirtObjSizeByTypeIdPtrFunc = NULL;
@@ -451,7 +449,7 @@ bool __fastcall Patch_terminate(void)
     #ifndef _RTLDLL //Not uses Dynamic RTL
     PatchLocation = &_terminate;
     #else
-    //Get module handle of RTL dll
+    //Get module handle of RTL DLL
     PIndirectJmp32 P = (PIndirectJmp32)&exit; 
     if ((!IsBadReadPtr(P, sizeof(TIndirectJmp32))) && (P->JmpInst == 0x25FF)
       && (P->DestPtr) && (!IsBadReadPtr(P->DestPtr, sizeof(void *))))
@@ -1799,10 +1797,10 @@ void BCBInstallFastMM()
   #if __BORLANDC__ >= 0x582
   //>= BDS2006 ?
     //CheckCanInstallMemoryManager will finally call System.GetHeapStatus which is the
-    //internal shipped copy of FastGetHeapStatus routine, but the InitializeMemoryManager
-    //routine of that copy is not called yet at this point, and thus System.GetHeapStatus
+//internal, shipped copy of FastGetHeapStatus routine, but the InitializeMemoryManager
+    //routine of that copy is not yet called, and thus System.GetHeapStatus
     //will generate an access violation exception.
-    //Currently avoid this exception by skip the check
+    //Currently, avoid this exception by skipping the check
     #ifndef _NO_VCL
     if (CheckCanInstallMemoryManager())
     #endif //!_NO_VCL
@@ -1972,7 +1970,7 @@ void BCBInstallFastMM()
 
 void BCBUninstallFastMM()
 {
-  //Sadly we cannot uninstall here since there are still live pointers.
+  //Sadly, we cannot uninstall here since there are still live pointers.
 //#if ((!defined(_NO_VCL)) && defined(__DLL__) && defined(_RTLDLL))
 
 //#else

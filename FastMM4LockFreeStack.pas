@@ -255,7 +255,7 @@ begin
   if not obsIsInitialized then begin
     oldAffinity := SetThreadAffinityMask(GetCurrentThread, 1);
     try
-      //Calculate  TaskPopDelay and TaskPushDelay counter values depend on CPU speed!!!}
+      //Calculate the TaskPopDelay and TaskPushDelay counter values, which depend on CPU speed!!!}
       obsTaskPopLoops := 1;
       obsTaskPushLoops := 1;
       for n := 1 to NumOfSamples do begin
@@ -327,7 +327,7 @@ TryAgain:
     Result := PData;
     //Empty test
     if result = nil then
-      CAS(ThreadReference, 0, Reference)         //Clear Reference if task own reference
+      CAS(ThreadReference, 0, Reference)         //Clear Reference if task owns reference
     else if not CAS(Result, ThreadReference, Result.Next, 0, chain) then
       goto TryAgain;
   end; //with chain

@@ -4,10 +4,10 @@ Fast Memory Manager: FullDebugMode Borlndmm.dll support unit
 
 If you use the replacement Borlndmm.dll compiled in FullDebugMode, and you need
  access to some of the extended functionality that is not imported by
- sharemem.pas, then you may use this unit to get access to it. Please note that
- you will still need to add sharemem.pas as the first unit in the "uses"
+ ShareMem.pas, then you may use this unit to get access to it. Please note that
+ you will still need to add ShareMem.pas as the first unit in the "uses"
  section of the .dpr, and the FastMM_FullDebugMode.dll must be available on the
- path. Also, the borlndmm.dll that you will be using *must* be compiled using
+ path. Also, the BorlndMM.dll that you will be using *must* be compiled using
  FullDebugMode.}
 
 unit FastMMDebugSupport;
@@ -39,7 +39,7 @@ procedure LogAllocatedBlocksToFile(AFirstAllocationGroupToLog, ALastAllocationGr
 implementation
 
 const
-  borlndmm = 'borlndmm.dll';
+  borlndmm = 'BorlndMM.dll';
 
 procedure SetMMLogFileName; external borlndmm;
 function GetCurrentAllocationGroup; external borlndmm;

@@ -5,3 +5,5 @@
 .gitattributes text eol=lf
 .gitignore text eol=lf
 Compile_FastMM4_AVX512.cmd text eol=crlf
+Compile_FastMM4_AVX512_Linux.sh text eol=lf
+FastMM4_AVX512_Linux.asm text eol=lf

@@ -11,12 +11,12 @@ Version 1.0.7
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
 
-What was added to FastMM4-AVX in comparison to the original FastMM4:
+Changes in FastMM4-AVX compared to original FastMM4:
 
  - Efficient synchronization
    - improved synchronization between the threads; proper synchronization
-     techniques are used depending on context and availability, i.e., spin-wait
-     loops, umonitor / umwait, SwitchToThread, critical sections, etc.;
+     techniques are used depending on context and availability, including spin-wait
+     loops, umonitor / umwait, SwitchToThread, critical sections, etc.
    - used the "test, test-and-set" technique for the spin-wait loops; this
      technique is recommended by Intel (see Section 11.4.3 "Optimization with
      Spin-Locks" of the Intel 64 and IA-32 Architectures Optimization Reference
@@ -42,7 +42,7 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      variable (LockByte) to "release a lock" on a data structure,
      see https://stackoverflow.com/a/44959764
      for discussion on releasing a lock;
-     you man define "InterlockedRelease" to get the old behavior of the original
+     you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
    - implemented dedicated lock and unlock procedures that operate with
      synchronization variables (LockByte);
@@ -119,14 +119,14 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      "range checking", as well as with "typed @ operator" - for safer
      code. Also added round bracket in the places where the typed @ operator
      was used, to better emphasize on whose address is taken;
-   - the compiler environment is more flexible now: you can now compile FastMM4
-     with, for example, typed "@" operator or any other option. Almost all
-     externally-set compiler directives are honored by FastMM except a few
-     (currently just one) - look for the "Compiler options for FastMM4" section
-     below to see what options cannot be externally set and are always
-     redefined by FastMM4 for itself - even if you set up these compiler options
-     differently outside FastMM4, they will be silently
-     redefined, and the new values will be used for FastMM4 only;
+   - the compiler environment is more flexible now: you can compile FastMM4
+     with, for example, a typed "@" operator or any other option. Almost all
+     externally-set compiler directives are honored by FastMM4, except for a few
+     (currently just one). Refer to the "Compiler options for FastMM4" section
+     below to see which options cannot be externally set and are always
+     redefined by FastMM4 for itself. Even if you set up these compiler options
+     differently outside FastMM4, they will be silently redefined, and the new
+     values will be used for FastMM4 only;
    - the type of one-byte synchronization variables (accessed via "lock cmpxchg"
      or "lock xchg") replaced from Boolean to Byte for stricter type checking;
    - those fixed-block-size memory move procedures that are not needed
@@ -135,12 +135,12 @@ What was added to FastMM4-AVX in comparison to the original FastMM4:
      that is supposed to remove these function after compilation;
    - added length parameter to what were the dangerous null-terminated string
      operations via PAnsiChar, to prevent potential stack buffer overruns
-     (or maybe even stack-based exploitation?), and there some Pascal functions
+     (or maybe even stack-based exploitation?), and there are some Pascal functions
      also left, the argument is not yet checked. See the "todo" comments
      to figure out where the length is not yet checked. Anyway, since these
      memory functions are only used in Debug mode, i.e., in development
      environment, not in Release (production), the impact of this
-     "vulnerability" is minimal (albeit this is a questionable statement);
+     "vulnerability" is minimal (albeit this is a questionable statement)
    - removed all non-US-ASCII characters, to avoid using UTF-8 BOM, for
      better compatibility with very early versions of Delphi (e.g., Delphi 5),
      thanks to Valts Silaputnins;
@@ -214,12 +214,12 @@ The above tests (on Xeon E5-2667v4 and i9) have been done on 03-May-2018.
 
 Here is the single-threading performance comparison in some selected
 scenarios between FastMM v5.03 dated May 12, 2021 and FastMM4-AVX v1.05
-dated May 20, 2021. FastMM4-AVX is compiled with default optinos. This 
+dated May 20, 2021. FastMM4-AVX is compiled with default options. This 
 test is run on May 20, 2021, under Intel Core i7-1065G7 CPU, Ice Lake
-microarchitecture, base frequency: 1.3 GHz, max turbo frequencey: 3.90 GHz, 
+microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz, 
 4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target. 
 Please note that these are the selected scenarios where FastMM4-AVX is 
-faster then FastMM5. In other scenarios, especially in multi-threaded 
+faster than FastMM5. In other scenarios, especially in multi-threaded 
 with heavy contention, FastMM5 is faster.
 
                                              FastMM5  AVX-br.   Ratio
@@ -290,7 +290,7 @@ FastMM4-AVX Version History:
     were incorrect under Linux. Move216AVX1 and Move216AVX2 Linux implementation had
     invalid opcodes. Added support for the GetFPCHeapStatus(). Optimizations on
     single-threaded performance. If you define DisablePauseAndSwitchToThread,
-    it will use EnterCriticalSection/LeaveCriticalSectin. An attempt to free a
+    it will use EnterCriticalSection/LeaveCriticalSection. An attempt to free a
     memory block twice was not caught under 32-bit Delphi. Added SSE fixed block
     copy routines for 32-bit targets. Added support for the "Fast Short REP MOVSB"
     CPU feature. Removed redundant SSE code from 64-bit targets.
@@ -1186,7 +1186,7 @@ interface
   {$undef DetectMMOperationsAfterUninstall}
 {$ENDIF}
 
-{$IFDEF DiablePasCodeAlign}
+{$IFDEF DisablePasCodeAlign}
   {$undef PasCodeAlign}
 {$ENDIF}
 
@@ -2012,22 +2012,22 @@ function DebugGetMem(ASize: {$IFDEF FPC}ptruint{$ELSE}{$IFDEF XE2AndUp}NativeInt
 function DebugFreeMem(APointer: Pointer): {$IFDEF fpc}ptruint{$ELSE}Integer{$ENDIF};
 function DebugReallocMem({$IFDEF FPC}var {$ENDIF}APointer: Pointer; ANewSize: {$IFDEF FPC}ptruint{$ELSE}{$IFDEF XE2AndUp}NativeInt{$ELSE}Integer{$ENDIF}{$ENDIF}): Pointer;
 function DebugAllocMem(ASize: {$IFDEF XE2AndUp}NativeInt{$ELSE}Cardinal{$ENDIF}): Pointer;
-{Scans the memory pool for any corruptions. If a corruption is encountered an "Out of Memory" exception is
+{Scans the memory pool for any corruptions. If a corruption is encountered, an "Out of Memory" exception is
  raised.}
 procedure ScanMemoryPoolForCorruptions;
 {Returns the current "allocation group". Whenever a GetMem request is serviced
  in FullDebugMode, the current "allocation group" is stored in the block header.
- This may help with debugging. Note that if a block is subsequently reallocated
- that it keeps its original "allocation group" and "allocation number" (all
+ This may help with debugging. Note that if a block is subsequently reallocated,
+ it keeps its original "allocation group" and "allocation number" (all
  allocations are also numbered sequentially).}
 function GetCurrentAllocationGroup: Cardinal;
-{Allocation groups work in a stack like fashion. Group numbers are pushed onto
+{Allocation groups work in a stack-like fashion. Group numbers are pushed onto
  and popped off the stack. Note that the stack size is limited, so every push
  should have a matching pop.}
 procedure PushAllocationGroup(ANewCurrentAllocationGroup: Cardinal);
 procedure PopAllocationGroup;
 {Logs detail about currently allocated memory blocks for the specified range of
- allocation groups. if ALastAllocationGroupToLog is less than
+ allocation groups. If ALastAllocationGroupToLog is less than
  AFirstAllocationGroupToLog or it is zero, then all allocation groups are
  logged. This routine also checks the memory pool for consistency at the same
  time, raising an "Out of Memory" error if the check fails.}
@@ -2035,7 +2035,7 @@ procedure LogAllocatedBlocksToFile(AFirstAllocationGroupToLog, ALastAllocationGr
 {$ENDIF}
 {$IFDEF _EventLog}
 {Specify the full path and name for the filename to be used for logging memory
- errors, etc. If ALogFileName is nil or points to an empty string it will
+ errors, etc. If ALogFileName is nil or points to an empty string, it will
  revert to the default log file name.}
 procedure SetMMLogFileName(ALogFileName: PAnsiChar = nil);
 {$ENDIF}
@@ -2305,7 +2305,7 @@ const
   MaxFileNameLength                  = 1024;
   {The MaxFileNameLengthDouble value is extracted from the FastMM4 code
   as an effort to replace all "magic" (unnamed numerical constants) with
-  theier named counterparts. We have yet to igure out why some file names
+  theier named counterparts. We have yet to figure out why some file names
   reserve a buffer of 1024 characters while some other file names reserve
   double of that} {todo: MaxFileNameLengthDouble figure out - see the comment}
   MaxFileNameLengthDouble            = MaxFileNameLength*2;
@@ -2428,7 +2428,7 @@ const
 
   {The granularity of large blocks}
   LargeBlockGranularity = 65536;
-  {The maximum size of a small block. Blocks Larger than this are either
+  {The maximum size of a small block. Blocks larger than this are either
    medium or large blocks.}
   LargeBlockGranularityMask = NativeUInt(-LargeBlockGranularity);
 
@@ -2464,7 +2464,7 @@ const
    may be lying idle.}
   TargetSmallBlocksPerPool = 48;
   {The minimum number of small blocks per pool. Any available medium block must
-   have space for roughly this many small blocks (or more) to be useable as a
+   have space for roughly this many small blocks (or more) to be usable as a
    small block pool.}
   MinimumSmallBlocksPerPool = 12;
   {The lower and upper limits for the optimal small block pool size}
@@ -2505,10 +2505,10 @@ const
   ExtractMediumAndLargeFlagsMask = 15;
 {$ENDIF}
   {-------------Block resizing constants---------------}
-  {The upsize and downsize checker must a a multiple of the granularity,
+  {The upsize and downsize checker must be a multiple of the granularity,
    otherwise on big-granularity and small upsize/downsize constant values,
    reallocating 1-byte blocks, keeping the same size as before, will return
-   different pointer, and, as a result, the FastCode validation suite
+   a different pointer, and, as a result, the FastCode validation suite
    will not pass}
   SmallBlockDownsizeCheckAdder = SmallBlockGranularity*4;
   SmallBlockUpsizeAdder = SmallBlockGranularity*2;
@@ -2664,7 +2664,7 @@ type
     NextSequentialFeedBlockAddress: Pointer;
     {The last block that can be served sequentially.}
     MaxSequentialFeedBlockAddress: Pointer;
-    {The pool that is current being used to serve blocks in sequential order}
+    {The pool that is currently being used to serve blocks in sequential order}
     CurrentSequentialFeedPool: PSmallBlockPoolHeader;
 {$IFDEF UseCustomFixedSizeMoveRoutines}
     {The fixed size move procedure used to move data for this block size when
@@ -2771,7 +2771,7 @@ type
     Reserved1, Reserved2, Reserved3, Reserved4: Pointer;
     {$ENDIF}
     {$ENDIF}
-    {The user allocated size of the Large block}
+    {The user allocated size of the large block}
     UserAllocatedSize: NativeUInt;
     {The size of this block plus the flags}
     BlockSizeAndFlags: NativeUInt;
@@ -3477,7 +3477,7 @@ For Unix (Linux), we use "System V AMD64 ABI" calling convention. }
 {$ENDIF}
 
 
-  {Clear the register just for sure, 32-bit operands in 64-bit mode also clear
+  {Clear the registers just to be sure, 32-bit operands in 64-bit mode also clear
   bits 63-32; moreover, CPUID only operates with 32-bit parts of the registers
   even in the 64-bit mode}
 
@@ -3594,7 +3594,7 @@ end;
 {$ELSE !SimplifiedInterlockedExchangeByte}
 
 { The "InterlockedCompareExchangeByte" function is not compiled by default in
-the FastMM4-AVX brach. The implementation below is the old functionality
+the FastMM4-AVX branch. The implementation below is the old functionality
 of FastMM4 version 4.992. }
 
 {Compare [AAddress], CompareVal:
@@ -3609,10 +3609,10 @@ asm
     ecx = AAddress}
   {$IFNDEF unix}
 
-{Remove false dependency on remainig bits of the eax (31-8), as eax may come
+{Remove false dependency on remaining bits of the eax (31-8), as eax may come
 with these bits trashed, and, as a result, the function will also return these
 bits trashed in EAX. So, it may produce faster code by removing dependency
-and safer code by cleaning possbile trash}
+and safer code by cleaning possible trash}
   movzx eax, al
   movzx edx, dl
 
@@ -4023,7 +4023,7 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the origina FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
@@ -4148,7 +4148,7 @@ end;
 
 {Writes the module filename to the specified buffer and returns the number of
  characters written.}
-function AppendModuleFileName(ABuffer: PAnsiChar; ABufferLengthChars: Integer {including the terminating null character}): Integer;
+function AppendModuleFileName(ABuffer: PAnsiChar; ABufferLengthChars: Integer {(including the terminating null character)}): Integer;
 var
   LModuleHandle: HModule;
 begin
@@ -4529,7 +4529,7 @@ asm
 {We add to the source and destination registers to allow all future offsets
 be in range -127..+127 to have 1-byte offset encoded in the opcodes, not 4
 bytes, so the opcode will be shorter by 4 bytes, the overall code will be
-shorter, and, as a result, faster, inspite of the sacrifice that we make
+shorter, and, as a result, faster, in spite of the sacrifice that we make
 at the start of the routine. The sacrifice is small - maybe just 1 cycle, or
 less, by "add rcx", but it pays up later}
 
@@ -4652,7 +4652,7 @@ denoted "The x64 Application Binary Interface (ABI)", or, briefly, "x64 ABI".
 Since we cannot use xmm6, we use general-purpose
 64-bit registers to copy remaining data.
 
-According to Microsoft, "The x64 ABI considers registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15 nonvolatile. They must be saved and restored by a function that uses them"
+According to Microsoft, "The x64 ABI considers registers RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15, and XMM6-XMM15 are nonvolatile. They must be saved and restored by a function that uses them"
 
 We are using that many ymm registers, not just two of them in a sequence,
 because our routines allow overlapped moves (although it is not needed for
@@ -4949,7 +4949,7 @@ asm
 
 {
 
-Although, under unix, we can use xmm6(ymm6) and xmm7 (ymm7), here we mimic the Win64 code, see the comment at Move216AVX1 on this.
+Although, under Unix, we can use xmm6(ymm6) and xmm7 (ymm7), here we mimic the Win64 code, see the comment at Move216AVX1 on this.
 
 We cannot use xmm6(ymm6) and xmm7 (ymm7) under Windows due to the calling convention.
 
@@ -4980,7 +4980,32 @@ end;
 
 {$IFDEF EnableAVX512}
 {$IFDEF unix}
-{$message error AVX-512 is not yet implemented for UNIX}
+{ Linux System V AMD64 ABI uses different calling convention (rdi, rsi, rdx)
+  than Windows x64 (rcx, rdx, r8). These functions use Linux naming convention.
+  Compile FastMM4_AVX512_Linux.asm with: nasm -Ox -f elf64 FastMM4_AVX512_Linux.asm }
+procedure Move24AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move24AVX512Linux';
+procedure Move56AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move56AVX512Linux';
+procedure Move88AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move88AVX512Linux';
+procedure Move120AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move120AVX512Linux';
+procedure Move152AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move152AVX512Linux';
+procedure Move184AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move184AVX512Linux';
+procedure Move216AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move216AVX512Linux';
+procedure Move248AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move248AVX512Linux';
+procedure Move280AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move280AVX512Linux';
+procedure Move312AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move312AVX512Linux';
+procedure Move344AVX512Linux(const ASource; var ADest; ACount: NativeInt); external name 'Move344AVX512Linux';
+{ Wrapper functions to match Windows function names for common code }
+procedure Move24AVX512(const ASource; var ADest; ACount: NativeInt); begin Move24AVX512Linux(ASource, ADest, ACount); end;
+procedure Move56AVX512(const ASource; var ADest; ACount: NativeInt); begin Move56AVX512Linux(ASource, ADest, ACount); end;
+procedure Move88AVX512(const ASource; var ADest; ACount: NativeInt); begin Move88AVX512Linux(ASource, ADest, ACount); end;
+procedure Move120AVX512(const ASource; var ADest; ACount: NativeInt); begin Move120AVX512Linux(ASource, ADest, ACount); end;
+procedure Move152AVX512(const ASource; var ADest; ACount: NativeInt); begin Move152AVX512Linux(ASource, ADest, ACount); end;
+procedure Move184AVX512(const ASource; var ADest; ACount: NativeInt); begin Move184AVX512Linux(ASource, ADest, ACount); end;
+procedure Move216AVX512(const ASource; var ADest; ACount: NativeInt); begin Move216AVX512Linux(ASource, ADest, ACount); end;
+procedure Move248AVX512(const ASource; var ADest; ACount: NativeInt); begin Move248AVX512Linux(ASource, ADest, ACount); end;
+procedure Move280AVX512(const ASource; var ADest; ACount: NativeInt); begin Move280AVX512Linux(ASource, ADest, ACount); end;
+procedure Move312AVX512(const ASource; var ADest; ACount: NativeInt); begin Move312AVX512Linux(ASource, ADest, ACount); end;
+procedure Move344AVX512(const ASource; var ADest; ACount: NativeInt); begin Move344AVX512Linux(ASource, ADest, ACount); end;
 {$ELSE unix}
 procedure Move24AVX512(const ASource; var ADest; ACount: NativeInt); external;
 procedure Move56AVX512(const ASource; var ADest; ACount: NativeInt); external;
@@ -6626,10 +6651,10 @@ end;
 
 {$IFDEF EnableERMS}
 
-{This routine is only called with the CPU supports "Enhanced REP MOVSB/STOSB",
-see "Intel 64 and IA-32 Architectures Optimization Reference Manual
-p. 3.7.7 (Enhanced REP MOVSB and STOSB operation (ERMSB)).
-We first check the corresponding bit in the CPUID, and, if it is supported,
+{This routine is only called when the CPU supports "Enhanced REP MOVSB/STOSB"
+(see "Intel 64 and IA-32 Architectures Optimization Reference Manual,"
+Section 3.7.7, "Enhanced REP MOVSB and STOSB operation (ERMSB)").
+We first check the corresponding bit in the CPUID, and if it is supported,
 call this routine.}
 
 const
@@ -6905,9 +6930,26 @@ end;
 {$IFDEF 64bit}
 {$IFDEF EnableAVX512}
 {$IFNDEF DisableMoveX32LpAvx512}
+{$IFDEF unix}
+{ Linux System V AMD64 ABI version of MoveX32LpAvx512WithErms }
+procedure MoveX32LpAvx512WithErmsLinux(const ASource; var ADest; ACount: NativeInt); external name 'MoveX32LpAvx512WithErmsLinux';
+procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt);
+begin
+  MoveX32LpAvx512WithErmsLinux(ASource, ADest, ACount);
+end;
+{$ELSE unix}
 procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); external;
+{$ENDIF unix}
 {$ENDIF}
 
+{$IFDEF unix}
+{ FastMM4_AVX512_Linux.o file is needed to enable AVX-512 code for FastMM4-AVX on Linux.
+  Use "nasm -Ox -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o" to compile.
+
+  Define DisableAVX512 if you don't want to compile this .o file.}
+
+{$L FastMM4_AVX512_Linux.o}
+{$ELSE unix}
 { FastMM4_AVX512.obj file is needed to enable AVX-512 code for FastMM4-AVX.
   Use "nasm.exe -Ox -f win64 FastMM4_AVX512.asm" to compile this .obj file,
   or run the Compile_FastMM4_AVX512.cmd file.
@@ -6915,6 +6957,7 @@ procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); 
   Define DisableAVX512 if you don't want to compile this .obj file.}
 
 {$L FastMM4_AVX512.obj}
+{$ENDIF unix}
 {$ENDIF}
 {$ENDIF}
 
@@ -8206,7 +8249,7 @@ begin
     LBinNumber := MediumBlockBinCount - 1;
   {Get the bin}
   LPBin := @(MediumBlockBins[LBinNumber]);
-  {Bins are LIFO, se we insert this block as the first free block in the bin}
+  {Bins are LIFO, so we insert this block as the first free block in the bin}
   LPFirstFreeBlock := LPBin^.NextFreeBlock;
   APMediumFreeBlock^.PreviousFreeBlock := LPBin;
   APMediumFreeBlock^.NextFreeBlock := LPFirstFreeBlock;
@@ -8242,7 +8285,7 @@ asm
   add edx, MediumBlockBinCount - 1
   {Get the bin in ecx}
   lea ecx, [MediumBlockBins + edx * 8]
-  {Bins are LIFO, se we insert this block as the first free block in the bin}
+  {Bins are LIFO, so we insert this block as the first free block in the bin}
   mov edx, TMediumFreeBlock[ecx].NextFreeBlock
   {Was this bin empty?}
   cmp edx, ecx
@@ -8294,7 +8337,7 @@ asm
   lea rcx, MediumBlockBins
   shl edx, 4
   add rcx, rdx
-  {Bins are LIFO, se we insert this block as the first free block in the bin}
+  {Bins are LIFO, so we insert this block as the first free block in the bin}
   mov rdx, TMediumFreeBlock[rcx].NextFreeBlock
   {Was this bin empty?}
   cmp rdx, rcx
@@ -15040,7 +15083,7 @@ begin
 end;
 
 {Specify the full path and name for the filename to be used for logging memory
- errors, etc. If ALogFileName is nil or points to an empty string it will
+ errors, etc. If ALogFileName is nil or points to an empty string, it will
  revert to the default log file name.}
 procedure SetMMLogFileName(ALogFileName: PAnsiChar = nil);
 var
@@ -15187,15 +15230,15 @@ end;
 
 {Returns the current "allocation group". Whenever a GetMem request is serviced
  in FullDebugMode, the current "allocation group" is stored in the block header.
- This may help with debugging. Note that if a block is subsequently reallocated
- that it keeps its original "allocation group" and "allocation number" (all
+ This may help with debugging. Note that if a block is subsequently reallocated,
+ it keeps its original "allocation group" and "allocation number" (all
  allocations are also numbered sequentially).}
 function GetCurrentAllocationGroup: Cardinal;
 begin
   Result := AllocationGroupStack[AllocationGroupStackTop];
 end;
 
-{Allocation groups work in a stack like fashion. Group numbers are pushed onto
+{Allocation groups work in a stack-like fashion. Group numbers are pushed onto
  and popped off the stack. Note that the stack size is limited, so every push
  should have a matching pop.}
 procedure PushAllocationGroup(ANewCurrentAllocationGroup: Cardinal);
@@ -16408,7 +16451,7 @@ begin
 end;
 
 {Logs detail about currently allocated memory blocks for the specified range of
- allocation groups. if ALastAllocationGroupToLog is less than
+ allocation groups. If ALastAllocationGroupToLog is less than
  AFirstAllocationGroupToLog or it is zero, then all allocation groups are
  logged. This routine also checks the memory pool for consistency at the same
  time, raising an "Out of Memory" error if the check fails.}
@@ -16429,7 +16472,7 @@ begin
   InternalScanMemoryPool(LFirstAllocationGroupToLog, LLastAllocationGroupToLog);
 end;
 
-{Scans the memory pool for any corruptions. If a corruption is encountered an "Out of Memory" exception is
+{Scans the memory pool for any corruptions. If a corruption is encountered, an "Out of Memory" exception is
  raised.}
 procedure ScanMemoryPoolForCorruptions;
 begin
@@ -19464,7 +19507,7 @@ This is because the operating system would not save the registers and the states
 
 { Here is the Intel algorithm to detext AVX }
 { QUOTE from the Intel 64 and IA-32 Architectures Optimization Reference Manual
-1) Detect CPUID.1:ECX.OSXSAVE[bit 27] = 1 (XGETBV enabled for application use1)
+1) Detect CPUID.1:ECX.OSXSAVE[bit 27] = 1 (XGETBV enabled for application use)
 2) Issue XGETBV and verify that XCR0[2:1] = '11b' (XMM state and YMM state are enabled by OS).
 3) detect CPUID.1:ECX.AVX[bit 28] = 1 (AVX instructions supported).
 ENDQUOTE}

@@ -176,7 +176,7 @@ begin
   else
     dist.HighPart := 0;
 
-  dist.QuadPart := lseek(hFile, dist.QuadPart, dwMoveMethod); // dwMoveMethod = same as in windows
+  dist.QuadPart := lseek(hFile, dist.QuadPart, dwMoveMethod); // dwMoveMethod = same as in Windows
   if dist.QuadPart = -1 then
     Result := DWORD(-1)
   else

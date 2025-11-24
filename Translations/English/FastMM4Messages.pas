@@ -104,12 +104,12 @@ const
   {$endif}
   {$ifdef FullDebugMode}
     {$ifdef LogMemoryLeakDetailToFile}
-    + 'Memory leak detail is logged to a text file in the same folder as this application. '
+    + 'Memory leak details is logged to a text file in the same folder as this application. '
     {$else}
-    + 'Enable the "LogMemoryLeakDetailToFile" to obtain a log file containing detail on memory leaks. '
+    + 'Enable the "LogMemoryLeakDetailToFile" to obtain a log file containing details on memory leaks. '
     {$endif}
   {$else}
-    + 'To obtain a log file containing detail on memory leaks, enable the "FullDebugMode" and "LogMemoryLeakDetailToFile" conditional defines. '
+    + 'To obtain a log file containing details on memory leaks, enable the "FullDebugMode" and "LogMemoryLeakDetailToFile" conditional defines. '
   {$endif}
     + 'To disable this memory leak check, undefine "EnableMemoryLeakReporting".'#13#10
 {$endif}

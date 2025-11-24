@@ -89,7 +89,7 @@ Set the default options for FastMM here.
  multi-threaded DLL. Since the primary goal of FastMM4-AVX is improvement in
  multi-threaded applications, this option is enabled by default. However, if you
  know for sure that your application is Single-Threaded, undefine this to improve
- performance - this will save yo from unnecessary locking!
+ performance - this will save you from unnecessary locking!
  You can define "ForceSingleThreaded" to undefine "AssumeMultiThreaded"}
 
 {$define AssumeMultiThreaded}
@@ -99,7 +99,7 @@ Set the default options for FastMM here.
 supports SwitchToThread() API call. This option has no effect for 64-bit target,
 since it is always assumed under 64-bit that both "pause" and SwitchToThread()
 are supported. So it is only relevant for 32-bit platforms with very old CPUs.
-If you are sure that "pause" and SwithchToThread() are always avaialbe, the
+If you are sure that "pause" and SwitchToThread() are always available, the
 program may skip checking and improve speed. However, if you define
 "DisablePauseAndSwitchToThread", then "AssumePauseAndSwitchToThreadAvailable"
 will be automatically undefined}
@@ -122,10 +122,10 @@ calls will be used instead }
  also defined (see below) in which case it will call SwitchToThread instead of
  Sleep.
 
-*** Note: This option was added in FastMM 4 version Version 4.68
+*** Note: This option was added in FastMM4 version 4.68
     on 3 July 2006, is provided only if you wish to restore old
     functionality (e.g. for testing, etc.), and is not recommended
-    for FastMM4-AVX, since this it provides suboptimal performance compare
+    for FastMM4-AVX, since it provides suboptimal performance compared
     to the new locking mechanism implemented in the FastMM4-AVX.
 This option has no effect when SmallBlocksLockedCriticalSection/
 MediumBlocksLockedCriticalSection/LargeBlocksLockedCriticalSection is enabled}
@@ -142,10 +142,10 @@ MediumBlocksLockedCriticalSection/LargeBlocksLockedCriticalSection is enabled}
  but FastMM4 loads it dynamically, so it would not fail even under very old
  versions of Windows.
 
-*** Note: This option was added in FastMM 4 version Version 4.97
+*** Note: This option was added in FastMM4 version 4.97
     on 30 September 2010, is provided only if you wish to restore old
     functionality (e.g. for testing, etc.), and is not recommended
-    for FastMM4-AVX, since this it provides suboptimal performance compare
+    for FastMM4-AVX, since it provides suboptimal performance compared
     to the new locking mechanism implemented in the FastMM4-AVX.
 This option has no effect when SmallBlocksLockedCriticalSection/
 MediumBlocksLockedCriticalSection/LargeBlocksLockedCriticalSection is enabled}
@@ -157,7 +157,7 @@ MediumBlocksLockedCriticalSection/LargeBlocksLockedCriticalSection is enabled}
 of "lock cmpxchg" used in earlier versions of FastMM4: there is actually no
 reason to use "cmpxchg", because  the simple instruction - "xchg" - perfectly
 suits our need. Although "xchg" has exactly the same latency and costs in terms
-of CPU cycles as "cmpxghg", it is just simper way to do the lock that we need,
+of CPU cycles as "cmpxchg", it is just simpler way to do the lock that we need,
 and, according to the Occam's razor principle, simple things are better. If you
 wish to restore old functionality of FastMM4 version 4.992, disable this option,
 e.g. by defining "DontUseSimplifiedInterlockedExchangeByte" }
@@ -186,10 +186,10 @@ When these options are enabled, FastMM4-AVX checks:
 if both of the above conditions are met, uses
 "pause"-based spin-wait loops for 5000 iterations and then
 SwitchToThread() instead of critical sections; If a CPU doesn't have the
-"pause" instrcution or Windows doesn't have the SwitchToThread() API
+"pause" instruction or Windows doesn't have the SwitchToThread() API
 function, it will use EnterCriticalSection/LeaveCriticalSection.
 
-If you wound not define the 3 options below, you will get the locking
+If you would not define the 3 options below, you will get the locking
 mechanism from the original FastMM4.
 
 Since these options are defined by default, you may define
@@ -254,8 +254,8 @@ be able to use efficient locking without inline assembly.}
  directive for the 32-bit or 64-bit inline assembly.
  Delphi 32-bit or 64-bit compiler incorrectly encodes conditional jumps
  (used 6-byte instructions instead of just 2 bytes, so it prevents branch
- predicions. So for Embarcadero (former Borland) 32-bit or 64-bit
- Delphi, EnableAsmCodeAlign will have no effect. However, undre FreePascal
+ predictions. So for Embarcadero (former Borland) 32-bit or 64-bit
+ Delphi, EnableAsmCodeAlign will have no effect. However, under FreePascal
  it turns on using the ".align". To force using it under Delphi, define
  "ForceAsmCodeAlign".
 
@@ -354,7 +354,7 @@ be able to use efficient locking without inline assembly.}
 	
   {.$define MemoryLoadLibrarySupport}
   {Uses MemoryLoadLibrary to allow loading FastMM_FullDebugMode.dll from 
-  Ressource if no DLL is found.}
+  Resource if no DLL is found.}
  
   {.$define IncludeResource}
   (*Include Platform depending FullDebugMode.dll in JCLDebug-Mode.
@@ -484,7 +484,7 @@ Combine it with the two options below for further fine-tuning.}
    equivalent during memory leak reporting.
    This is useful for duplicate class names (like EConversionError, which is in
    units Data.DBXJSONReflect, REST.JsonReflect and System.ConvUtils,
-   or TClipboard being in Vcl.Clibprd and WinAPI.ApplicationModel.DataTransfer }
+   or TClipboard being in Vcl.Clipbrd and WinAPI.ApplicationModel.DataTransfer }
 
   {$define EnableMemoryLeakReportingUsesQualifiedClassName}
 
@@ -598,7 +598,7 @@ Combine it with the two options below for further fine-tuning.}
   instructions: umonitor/umwait, introduced by Alder Lake microarchitecture,
   launched in 2021, to wait for a synchronization variable
   instead of pause-based loop;
-  however these instuctions for FastMM synchronization are not as efficient
+  however these instructions for FastMM synchronization are not as efficient
   as pause-based loop, so only enable it if your tests show clear benefit
   in your scenarios }
 

@@ -113,7 +113,7 @@ const
     + 'Enable the "LogMemoryLeakDetailToFile" to obtain a log file containing detail on memory leaks. '
     {$endif}
   {$else}
-    + 'To obtain a log file containing detail on memory leaks, enable the "FullDebugMode" and "LogMemoryLeakDetailToFile" conditional defines. '
+    + 'To obtain a log file containing details on memory leaks, enable the "FullDebugMode" and "LogMemoryLeakDetailToFile" conditional defines. '
   {$endif}
     + 'To disable this memory leak check, undefine "EnableMemoryLeakReporting".'#13#10
 {$endif}

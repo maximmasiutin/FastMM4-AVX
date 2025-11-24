@@ -4,11 +4,11 @@ unit FastMMMemoryModule;
   * Memory DLL loading code
   * ------------------------
   *
-  * Original C Code
+  * Original C code
   * Memory DLL loading code
   * Version 0.0.4
   *
-  * Copyright ( c ) 2004-2015 by Joachim Bauch / mail@joachim-bauch.de
+  * Copyright (c) 2004-2015 by Joachim Bauch / mail@joachim-bauch.de
   * http://www.joachim-bauch.de
   *
   * The contents of this file are subject to the Mozilla Public License Version
@@ -21,14 +21,14 @@ unit FastMMMemoryModule;
   * for the specific language governing rights and limitations under the
   * License.
   *
-  * The Original Code is MemoryModule.c
+  * The Original code is MemoryModule.c
   *
-  * The Initial Developer of the Original Code is Joachim Bauch.
+  * The Initial Developer of the Original code is Joachim Bauch.
   *
-  * Portions created by Joachim Bauch are Copyright ( C ) 2004-2015
-  * Joachim Bauch. All Rights Reserved.
+  * Portions created by Joachim Bauch are Copyright (C) 2004-2015
+  * Joachim Bauch. All rights reserved.
   *
-  * ================== MemoryModule "Conversion to Delphi" ==================
+  * ================== MemoryModule "conversion to Delphi" ==================
   *
   * Copyright ( c ) 2015 by Fr0sT / https://github.com/Fr0sT-Brutal
   *
@@ -39,8 +39,8 @@ unit FastMMMemoryModule;
   * NOTE
   *   This code is Delphi translation of original C code taken from https://github.com/fancycode/MemoryModule
   *     ( commit dc173ca from Mar 1, 2015 ).
-  *   Resource loading and exe loading, custom functions, user data not implemented yet.
-  *   Tested under RAD Studio XE2 and XE6 32/64-bit, Lazarus 32-bit
+  *   Resource loading, EXE loading, custom functions, and user data are not yet implemented.
+  *   Tested under RAD Studio XE2 and XE6 (32/64-bit), Lazarus (32-bit)
   * }
 
 interface
@@ -60,8 +60,8 @@ interface
 
 {$DEFINE GetModuleHandle}
 {$IF Defined( GetModuleHandle ) AND ( NOT Defined( FastMM4 ) AND NOT Defined( FastMM5 ) )}
-  {$DEFINE UnloadAllOnFinalize} // Unload all Modules during Finalization of this Unit
-  {$DEFINE GetModuleHandleCriticalSection} // Thread-Safe
+  {$DEFINE UnloadAllOnFinalize} // Unload all modules during finalization of this unit
+  {$DEFINE GetModuleHandleCriticalSection} // thread-safe
 {$IFEND GetModuleHandle}
 
 {$IFDEF MANIFEST}
@@ -74,7 +74,7 @@ interface
 {$WARN COMBINING_SIGNED_UNSIGNED OFF}
 
 // To compile under FPC, Delphi mode must be used
-// Also define CPUX64 for simplicity
+// Also, define CPUX64 for simplicity
 {$IFDEF FPC}
   {$mode delphi}
   {$IFDEF CPU64}
@@ -102,7 +102,7 @@ type
   TMemoryModuleModules = record
     Handle : HMODULE;
     {$IFDEF GetModuleHandle_BuildImportTable}
-    Free   : boolean;
+    Free   : Boolean;
     {$ENDIF GetModuleHandle_BuildImportTable}
   end;
 
@@ -683,7 +683,7 @@ begin
   {$IFEND}
   for i := 0 to module.headers.FileHeader.NumberOfSections - 1 do
     begin
-    // section doesn't contain data in the dll itself, but may define
+    // section doesn't contain data in the DLL itself, but may define
     // uninitialized data
     if section.SizeOfRawData = 0 then
       begin
@@ -758,7 +758,7 @@ begin
   Result := True;
 end;
 
-// Protection flags for memory pages ( Executable, Readable, Writeable )
+// Protection flags for memory pages ( executable, readable, writable )
 const
   ProtectionFlags: array[ Boolean, Boolean, Boolean ] of Cardinal =
   ( 
@@ -868,7 +868,7 @@ begin
     alignedAddress := ALIGN_DOWN( sectionData.address, module.pageSize );
     sectionSize := GetRealSectionSize( module, section );
     // Combine access flags of all sections that share a page
-    // TODO( fancycode ): We currently share flags of a trailing large section
+    // TODO( FancyCode ): We currently share flags of a trailing large section
     //   with the page of a first small section. This should be optimized.
     if ( sectionData.alignedAddress = alignedAddress ) or
         {$IF Defined( FPC ) OR ( CompilerVersion >= 20 )}
@@ -929,11 +929,11 @@ end;
 function ExecuteTLS( module: PMemoryModule ): Boolean;
 var
   codeBase: Pointer;
-  // TLS callback pointers are VA's ( ImageBase included ) so if the module resides at
-  // the other ImageBage they become invalid. This routine relocates them to the
+  // TLS callback pointers are VAs ( ImageBase included ) so if the module resides at
+  // the other ImageBase they become invalid. This routine relocates them to the
   // actual ImageBase.
-  // The case seem to happen with DLLs only and they rarely use TLS callbacks.
-  // Moreover, they probably don't work at all when using DLL dynamically which is
+  // This case seems to happen with DLLs only, and they rarely use TLS callbacks.
+  // Moreover, they probably don't work at all when using DLLs dynamically, which is
   // the case in our code.
   function FixPtr( OldPtr: Pointer ): Pointer;
   begin
@@ -960,7 +960,7 @@ begin
     callback := FixPtr( callback );
 
     if ( NativeUInt( callback ) < NativeUInt( module^.codeBase ) ) or
-       ( NativeUInt( callback ) >= NativeUInt( module^.codeBase ) + Module^.headers.OptionalHeader.SizeOfCode ) then // MS Validate me
+       ( NativeUInt( callback ) >= NativeUInt( module^.codeBase ) + Module^.headers.OptionalHeader.SizeOfCode ) then // MS: Validate me
       Exit;
 
     try
@@ -987,7 +987,7 @@ var
   dest: Pointer;
   relInfo: {PUINT16}PWORD;
   patchAddrHL: PDWORD;
-// patchAddrHL: PULONGLONG; // MS Fix for MIL ... to validate
+// patchAddrHL: PULONGLONG; // MS fix for MIL ... to validate
  {$IFDEF CPUX64}
   patchAddr64: PULONGLONG;
   {$ENDIF}
@@ -1167,7 +1167,7 @@ begin
         {$IF Defined( FPC ) OR ( CompilerVersion >= 20 )}
         thunkData := PIMAGE_IMPORT_BY_NAME( PByte( codebase ) + thunkRef^ );
         {$ELSE}
-        thunkData := PIMAGE_IMPORT_BY_NAME( PAnsiChar( codebase ) + thunkRef^ ); // RangeCheck causing Internal-Error C1118
+        thunkData := PIMAGE_IMPORT_BY_NAME( PAnsiChar( codebase ) + thunkRef^ ); // Range check causing internal error C1118
         {$IFEND}
         funcRef^ := GetProcAddress_Internal( handle, PAnsiChar( @( thunkData.Name ) ) );
         end;
@@ -1699,8 +1699,8 @@ var
   ActivateActCtx   : function( hActCtx: THandle; lpCookie: PULONG_PTR ): BOOL; stdcall;
   DeactivateActCtx : function( dwFlags: DWORD; ulCookie: THandle ): BOOL; stdcall;
 {$IFEND}
-// Loading from HMODULE only works for FULLY initialized Modules
-// LOAD_LIBRARY_AS_DATAFILE isnt sufficient
+// Loading from HMODULE only works for FULLY initialized modules
+// LOAD_LIBRARY_AS_DATAFILE isn't sufficient
 function LoadManifest( Module : THandle; var hActCtx : THandle; Cookie : PULONG_PTR; TempFile : boolean = True ) : boolean;
   {$IF NOT DECLARED(tagACTCTXA)}
   const
@@ -1956,7 +1956,7 @@ begin
       Exit;
       end;
 
-    // TLS callbacks are executed BEFORE the main loading
+    // TLS callbacks are executed before the main loading
     ExecuteTLS( module );
 //    if not ExecuteTLS( module ) then
 //      begin
@@ -2534,7 +2534,7 @@ function MemoryResourceExists( var ResourceName : string ) : HRSRC;
   end;
   {$IFEND}
 const
-  NamePrefix = 'DLL'; // Resource DLLs need to start with a Letter
+  NamePrefix = 'DLL'; // Resource DLLs need to start with a letter
   RES_TYPE_  = 'DLL'; // RT_RCDATA{10};  
 begin
   result := 0;

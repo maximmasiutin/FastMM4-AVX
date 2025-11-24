@@ -38,8 +38,16 @@ FastMM4.o
 FastMM4.ppu
 FastMM4Messages.ppu
 FastMM4Messages.o
+*.ppu
 
-FastMM4_AVX512.obj 
+# NASM object files
+FastMM4_AVX512.obj
+FastMM4_AVX512_Linux.o
 
+# Test build artifacts
 /Tests/Simple/SimpleTest.dproj
 /Tests/Simple/SimpleTest.res
+/Tests/Advanced/AdvancedTest
+/Tests/Advanced/AdvancedTest64
+/Tests/Advanced/*.o
+libimpFastMM4.a
