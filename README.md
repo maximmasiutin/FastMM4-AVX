@@ -77,7 +77,10 @@ Changes in FastMM4-AVX compared to original FastMM4:
      memory is lost by padding; however, if your CPU supports
      "Fast Short REP MOVSB" (Ice Lake or newer), you can disable AVX, and align
      by just 8 bytes, and this may even be faster because less memory is wasted
-     on alignment;
+     on alignment; all alignment options (8, 16, 32 bytes) work in both Release
+     and DEBUG/FullDebugMode builds; although some AVX-512 instructions may require
+     64-byte alignment, FastMM4-AVX does not support 64-byte alignment, but uses
+     unaligned move instructions (vmovdqu64) for 512-bit operations instead;
    - with AVX, memory copy is secure - all XMM/YMM/ZMM registers used to copy
      memory are cleared by vxorps/vpxor, so the leftovers of the copied memory
      are not exposed in the XMM/YMM/ZMM registers;
@@ -343,8 +346,10 @@ Advantages:
  - Supports up to 3GB of user mode address space under Windows 32-bit and 4GB
    under Windows 64-bit. Add the "$SetPEFlags $20" option (in curly braces)
    to your .dpr to enable this.
- - Highly aligned memory blocks. Can be configured for either 8-byte or 16-byte
-   alignment.
+ - Highly aligned memory blocks. Can be configured for 8-byte, 16-byte, or 32-byte
+   alignment. All alignment options work in both Release and DEBUG/FullDebugMode builds.
+   Note: 64-byte alignment is not supported, but AVX-512 code uses unaligned moves for
+   512-bit operations, so 64-byte alignment is not required.
  - Good scaling under multi-threaded applications
  - Intelligent reallocations. Avoids slow memory move operations through
    not performing unnecessary downsizes and by having a minimum percentage

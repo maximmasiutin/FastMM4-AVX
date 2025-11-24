@@ -1719,11 +1719,6 @@ of just one option: "Boolean short-circuit evaluation".}
 {$ENDIF}
 
 
-{$IFDEF unix}
-{$undef EnableAVX512} // AVX-512 is not yet implemented for UNIX
-{$ENDIF unix}
-
-
 {$IFDEF 32bit}
 {$define AuxAsmRoutines}
 {$ENDIF}
@@ -6929,7 +6924,7 @@ end;
 {$IFNDEF DisableMoveX32LpAvx512}
 {$IFDEF unix}
 { Linux System V AMD64 ABI version of MoveX32LpAvx512WithErms }
-procedure MoveX32LpAvx512WithErm(const ASource; var ADest; ACount: NativeInt); external name 'MoveX32LpAvx512WithErms';
+procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); external name 'MoveX32LpAvx512WithErms';
 {$ELSE unix}
 procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); external;
 {$ENDIF unix}
@@ -6937,17 +6932,13 @@ procedure MoveX32LpAvx512WithErms(const ASource; var ADest; ACount: NativeInt); 
 
 {$IFDEF unix}
 { FastMM4_AVX512_Linux.o file is needed to enable AVX-512 code for FastMM4-AVX on Linux.
-  Use "nasm -Ox -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o" to compile.
-
-  Define DisableAVX512 if you don't want to compile this .o file.}
+  Use "nasm -Ox -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o" to compile}
 
 {$L FastMM4_AVX512_Linux.o}
 {$ELSE unix}
 { FastMM4_AVX512.obj file is needed to enable AVX-512 code for FastMM4-AVX.
   Use "nasm.exe -Ox -f win64 FastMM4_AVX512.asm" to compile this .obj file,
-  or run the Compile_FastMM4_AVX512.cmd file.
-
-  Define DisableAVX512 if you don't want to compile this .obj file.}
+  or run the Compile_FastMM4_AVX512.cmd file.}
 
 {$L FastMM4_AVX512.obj}
 {$ENDIF unix}
