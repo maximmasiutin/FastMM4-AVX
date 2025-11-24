@@ -262,18 +262,18 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
+- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
+    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
+    across Linux and Windows,  covering diverse test configurations; 
+    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation 
+    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr` 
+    tool for verifying detected CPU features; Updated documentation and code comments for improved 
+    clarity and accuracy across multiple files; Added support for AVX-512 for Linux; 
+    Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
+
 - 1.0.7 (21 March 2023) - implemented the use of umonitor/umwait instructions;
     thanks to TetzkatLipHoka for the updated FullDebugMode to v1.64
     of the original FastMM4.
-
-- 1.0.8 (24 November 2025)
-    - Enabled AVX-512 support for Linux builds, including optimized assembly routines.
-    - Integrated GitHub Actions for comprehensive CI/CD across Linux and Windows, covering diverse test configurations.
-    - Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation for allocation, reallocations, alignment, and security.
-    - Added `PrintCpuFeatures.dpr` tool for verifying detected CPU features.
-    - Updated documentation and code comments for improved clarity and accuracy across multiple files.
-    - Fixed an issue where AVX-512 was incorrectly disabled for Linux.
-    - Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.6 (25 August 2021) - it can now be compiled with any alignment (8, 16, 32)
     regardless of the target (x86, x64) and whether inline assembly is used
@@ -1773,7 +1773,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.7';
+  FastMM4AvxVersion = '1.0.8';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 

@@ -266,21 +266,21 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
+- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
+    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
+    across Linux and Windows,  covering diverse test configurations; 
+    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation 
+    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr` 
+    tool for verifying detected CPU features; Updated documentation and code comments for improved 
+    clarity and accuracy across multiple files; Added support for AVX-512 for Linux; 
+    Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
+
 - 1.0.7 (22 March 2023) - implemented the optional use of user mode wait
     (WaitPKG) umonitor/umwait instructions to wait for a synchronization
     variable; it is disabled by default; define the "EnableWaitPKG" conditional
     define to enable this feature; however it may not be as efficient
     as the pause-based loop, so only use this feature it if your tests
     show clear benefit in your scenarios.
-
-- 1.0.8 (24 November 2025)
-    - Enabled AVX-512 support for Linux builds, including optimized assembly routines.
-    - Integrated GitHub Actions for comprehensive CI/CD across Linux and Windows, covering diverse test configurations.
-    - Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation for allocation, reallocations, alignment, and security.
-    - Added `PrintCpuFeatures.dpr` tool for verifying detected CPU features.
-    - Updated documentation and code comments for improved clarity and accuracy across multiple files.
-    - Fixed an issue where AVX-512 was incorrectly disabled for Linux.
-    - Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.6 (25 August 2021) - it can now be compiled with any alignment (8, 16, 32)
     regardless of the target (x86, x64) and whether inline assembly is used
