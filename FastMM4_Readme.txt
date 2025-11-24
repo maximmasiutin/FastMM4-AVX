@@ -6,7 +6,6 @@ Description:
 
 A fast replacement memory manager for Embarcadero Delphi Win32 applications that scales well under multi-threaded usage, is not prone to memory fragmentation, and supports shared memory without the use of external .DLL files.
 
-FastMM4-AVX (version 1.0.8 - 24 November 2025) is a high-performance memory manager for Pascal/Delphi applications with optimizations for modern CPUs. It's a fork of the original FastMM4 v4.993 by Pierre le Riche, enhanced with AVX/AVX2/AVX512 instructions, improved synchronization, and better multi-threading performance.
 
 
 Homepage:
@@ -15,22 +14,11 @@ Homepage:
 https://github.com/pleriche/FastMM4
 
 
-FastMM4-AVX Changes (since version 1.0.7):
-------------------------------------------
-
-- Enabled AVX-512 support for Linux builds, including optimized assembly routines.
-- Integrated GitHub Actions for comprehensive CI/CD across Linux and Windows, covering diverse test configurations.
-- Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation for allocation, reallocations, alignment, and security.
-- Added `PrintCpuFeatures.dpr` tool for verifying detected CPU features.
-- Updated documentation and code comments for improved clarity and accuracy across multiple files.
-- Fixed an issue where AVX-512 was incorrectly disabled for Linux.
-- Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
-
 
 Usage:
 ------
 
-Delphi. Place this unit as the very first unit under the "uses" section in your project's .dpr file. When sharing memory between an application and a DLL (e.g. when passing a long string or dynamic array to a DLL function), both the main application and the DLL must be compiled using this memory manager (with the required conditional defines set). There are some conditional defines (inside FastMM4Options.inc) that may be used to tweak the memory manager. To enable support for a user mode address space greater than 2GB you will have to use the EditBin* tool to set the LARGE_ADDRESS_AWARE flag in the EXE header. This informs Windows x64 or Windows 32-bit (with the /3GB option set) that the application supports an address space larger than 2GB (up to 4GB). In Delphi 6 and later you can also specify this flag through the compiler directive {$SetPEFlags $20}
+Delphi: Place this unit as the very first unit under the "uses" section in your project's .dpr file. When sharing memory between an application and a DLL (e.g. when passing a long string or dynamic array to a DLL function), both the main application and the DLL must be compiled using this memory manager (with the required conditional defines set). There are some conditional defines (inside FastMM4Options.inc) that may be used to tweak the memory manager. To enable support for a user mode address space greater than 2GB you will have to use the EditBin* tool to set the LARGE_ADDRESS_AWARE flag in the EXE header. This informs Windows x64 or Windows 32-bit (with the /3GB option set) that the application supports an address space larger than 2GB (up to 4GB). In Delphi 6 and later you can also specify this flag through the compiler directive {$SetPEFlags $20}
 *The EditBin tool ships with the MS Visual C compiler.
 C++ Builder 6: Refer to the instructions inside FastMM4BCB.cpp.
 
@@ -119,11 +107,11 @@ Requests for large blocks are passed through to the operating system (VirtualAll
 
 The medium block manager obtains memory from the OS in 1.25MB chunks. These chunks are called "medium block pools" and are subdivided into medium blocks as the application requests them. Unused medium blocks are kept in double-linked lists. There are 1024 such lists, and since the medium block granularity is 256 bytes that means there is a bin for every possible medium block size. FastMM maintains a two-level "bitmap" of these lists, so there is never any need to step through them to find a suitable unused block - a few bitwise operations on the "bitmaps" is all that is required. Whenever a medium block is freed, FastMM checks the neighbouring blocks to determine whether they are unused and can thus be combined with the block that is being freed. (There may never be two neighbouring medium blocks that are both unused.) FastMM has no background "clean-up" thread, so everything must be done as part of the freemem/getmem/reallocmem call.
 
-In an object-oriented programming language like Delphi, most memory allocations and frees are usually for small objects. In practical tests with various Delphi applications it was found that, on average, over 99% of all memory operations involve blocks <2K. It thus makes sense to optimize specifically for these small blocks. Small blocks are allocated from "small block pools". Small block pools are actually medium blocks that are subdivided into equal-sized small blocks. Since a particular small block pool contains only equal-sized blocks, and adjacent free small blocks are never combined, it allows the small block allocator to be greatly simplified and thus much faster. FastMM maintains a double-linked list of pools with available blocks for every small block size, so finding an available block for the requested size when servicing a getmem request is very speedy.
+In an object oriented programming language like Delphi, most memory allocations and frees are usually for small objects. In practical tests with various Delphi applications it was found that, on average, over 99% of all memory operations involve blocks <2K. It thus makes sense to optimize specifically for these small blocks. Small blocks are allocated from "small block pools". Small block pools are actually medium blocks that are subdivided into equal sized small blocks. Since a particular small block pool contains only equal sized blocks, and adjacent free small blocks are never combined, it allows the small block allocator to be greatly simplified and thus much faster. FastMM maintains a double-linked list of pools with available blocks for every small block size, so finding an available block for the requested size when servicing a getmem request is very speedy.
 
-Moving data around in memory is typically a very expensive operation. Consequently, FastMM uses an intelligent reallocation algorithm to avoid moving memory as much as possible. When a block is upsized FastMM adjusts the block size in anticipation of future upsizes, thus improving the odds that the next reallocation can be done in place. When a pointer is resized to a smaller size, FastMM requires the new size to be significantly smaller than the old size otherwise the block will not be moved.
+Moving data around in memory is typically a very expensive operation. Consequently, FastMM thus an intelligent reallocation algorithm to avoid moving memory as much as possible. When a block is upsized FastMM adjusts the block size in anticipation of future upsizes, thus improving the odds that the next reallocation can be done in place. When a pointer is resized to a smaller size, FastMM requires the new size to be significantly smaller than the old size otherwise the block will not be moved.
 
-Speed is further improved by an improved locking mechanism: Each small block size, the medium blocks and large blocks are locked individually. If, when servicing a getmem request, the optimal block type is locked by another thread, then FastMM will try up to three larger block sizes. This design drastically reduces the number of thread contentions and improves performance for multi-threaded applications.
+Speed is further improved by an improved locking mechanism: Every small block size, the medium blocks and large blocks are locked individually. If, when servicing a getmem request, the optimal block type is locked by another thread, then FastMM will try up to three larger block sizes. This design drastically reduces the number of thread contentions and improves performance for multi-threaded applications.
 
 
 Important Notes Regarding Delphi 2005:
