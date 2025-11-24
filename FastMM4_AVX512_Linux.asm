@@ -25,7 +25,7 @@
 ; This file uses Linux System V AMD64 ABI:
 ;   rdi = source pointer (was rcx in Windows version)
 ;   rsi = destination pointer (was rdx in Windows version)
-;   rdx = size (for MoveX32LpAvx512WithErmsLinux, was r8 in Windows version)
+;   rdx = size (for MoveX32LpAvx512WithErms, was r8 in Windows version)
 ; ============================================================================
 
 ; This code uses zmm26 - zmm31 registers to avoid AVX-SSE transition penalty.
@@ -59,18 +59,18 @@
 
 section	.text
 
-	global		Move24AVX512Linux
-	global		Move56AVX512Linux
-	global		Move88AVX512Linux
-	global		Move120AVX512Linux
-	global		Move152AVX512Linux
-	global		Move184AVX512Linux
-	global		Move216AVX512Linux
-	global		Move248AVX512Linux
-	global		Move280AVX512Linux
-	global		Move312AVX512Linux
-	global		Move344AVX512Linux
-	global		MoveX32LpAvx512WithErmsLinux
+	global		Move24AVX512
+	global		Move56AVX512
+	global		Move88AVX512
+	global		Move120AVX512
+	global		Move152AVX512
+	global		Move184AVX512
+	global		Move216AVX512
+	global		Move248AVX512
+	global		Move280AVX512
+	global		Move312AVX512
+	global		Move344AVX512
+	global		MoveX32LpAvx512WithErms
 
 	%use		smartalign
 	ALIGNMODE	p6, 32	; p6 NOP strategy, and jump over the NOPs only if they're 32B or larger.
@@ -80,7 +80,7 @@ section	.text
 ; ============================================================================
 
 	align		16
-Move24AVX512Linux:
+Move24AVX512:
 	; rdi = source, rsi = destination
 	vmovdqa64	EVEXR128N0, [rdi]
 	mov		rax, [rdi+10h]
@@ -89,7 +89,7 @@ Move24AVX512Linux:
 	vpxord		EVEXR128N0, EVEXR128N0, EVEXR128N0
 	ret
 
-Move56AVX512Linux:
+Move56AVX512:
 	; rdi = source, rsi = destination
 	vmovdqa64	EVEXR256N0, [rdi+00h]
 	vmovdqa64	EVEXR128N1, [rdi+20h]
@@ -102,7 +102,7 @@ Move56AVX512Linux:
 	ret
 
 	align		16
-Move88AVX512Linux:
+Move88AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi]
 	vmovdqa64	EVEXR128N1, [rdi+40h]
@@ -115,7 +115,7 @@ Move88AVX512Linux:
 	ret
 
 	align		16
-Move120AVX512Linux:
+Move120AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi]
 	vmovdqa64	EVEXR256N1, [rdi+40h]
@@ -131,7 +131,7 @@ Move120AVX512Linux:
 	ret
 
 	align		16
-Move152AVX512Linux:
+Move152AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -147,7 +147,7 @@ Move152AVX512Linux:
 	ret
 
 	align		16
-Move184AVX512Linux:
+Move184AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -166,7 +166,7 @@ Move184AVX512Linux:
 	ret
 
 	align		16
-Move216AVX512Linux:
+Move216AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -185,7 +185,7 @@ Move216AVX512Linux:
 	ret
 
 	align		16
-Move248AVX512Linux:
+Move248AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -207,7 +207,7 @@ Move248AVX512Linux:
 	ret
 
 	align		16
-Move280AVX512Linux:
+Move280AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -229,7 +229,7 @@ Move280AVX512Linux:
 	ret
 
 	align		16
-Move312AVX512Linux:
+Move312AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -254,7 +254,7 @@ Move312AVX512Linux:
 	ret
 
 	align		16
-Move344AVX512Linux:
+Move344AVX512:
 	; rdi = source, rsi = destination
 	vmovdqu64	EVEXR512N0, [rdi+00h]
 	vmovdqu64	EVEXR512N1, [rdi+40h]
@@ -280,7 +280,7 @@ Move344AVX512Linux:
 
 
 	align		16
-MoveX32LpAvx512WithErmsLinux:
+MoveX32LpAvx512WithErms:
 	; Linux System V AMD64 ABI: rdi=src, rsi=dst, rdx=size
 	; Note: Linux already uses rdi/rsi for rep movsb, no need to save/restore
 

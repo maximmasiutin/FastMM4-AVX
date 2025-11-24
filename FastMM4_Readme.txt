@@ -6,6 +6,7 @@ Description:
 
 A fast replacement memory manager for Embarcadero Delphi Win32 applications that scales well under multi-threaded usage, is not prone to memory fragmentation, and supports shared memory without the use of external .DLL files.
 
+FastMM4-AVX (version 1.0.8 - 24 November 2025) is a high-performance memory manager for Pascal/Delphi applications with optimizations for modern CPUs. It's a fork of the original FastMM4 v4.993 by Pierre le Riche, enhanced with AVX/AVX2/AVX512 instructions, improved synchronization, and better multi-threading performance.
 
 
 Homepage:
@@ -13,6 +14,17 @@ Homepage:
 
 https://github.com/pleriche/FastMM4
 
+
+FastMM4-AVX Changes (since version 1.0.7):
+------------------------------------------
+
+- Enabled AVX-512 support for Linux builds, including optimized assembly routines.
+- Integrated GitHub Actions for comprehensive CI/CD across Linux and Windows, covering diverse test configurations.
+- Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation for allocation, reallocations, alignment, and security.
+- Added `PrintCpuFeatures.dpr` tool for verifying detected CPU features.
+- Updated documentation and code comments for improved clarity and accuracy across multiple files.
+- Fixed an issue where AVX-512 was incorrectly disabled for Linux.
+- Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 
 Usage:

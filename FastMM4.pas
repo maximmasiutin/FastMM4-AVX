@@ -2,11 +2,11 @@
 
 FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support for FastMM4)
  - Copyright (C) 2017-2020 Ritlabs, SRL. All rights reserved.
- - Copyright (C) 2020-2023 Maxim Masiutin. All rights reserved.
+ - Copyright (C) 2020-2025 Maxim Masiutin. All rights reserved.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.7
+Version 1.0.8
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -265,6 +265,15 @@ FastMM4-AVX Version History:
 - 1.0.7 (21 March 2023) - implemented the use of umonitor/umwait instructions;
     thanks to TetzkatLipHoka for the updated FullDebugMode to v1.64
     of the original FastMM4.
+
+- 1.0.8 (24 November 2025)
+    - Enabled AVX-512 support for Linux builds, including optimized assembly routines.
+    - Integrated GitHub Actions for comprehensive CI/CD across Linux and Windows, covering diverse test configurations.
+    - Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation for allocation, reallocations, alignment, and security.
+    - Added `PrintCpuFeatures.dpr` tool for verifying detected CPU features.
+    - Updated documentation and code comments for improved clarity and accuracy across multiple files.
+    - Fixed an issue where AVX-512 was incorrectly disabled for Linux.
+    - Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.6 (25 August 2021) - it can now be compiled with any alignment (8, 16, 32)
     regardless of the target (x86, x64) and whether inline assembly is used
