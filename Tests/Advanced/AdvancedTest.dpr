@@ -1446,7 +1446,7 @@ begin
   // Simple PRNG for reproducibility
   for i := 0 to Count - 1 do
   begin
-    Seed := (Seed * 1103515245 + 12345) and $7FFFFFFF;
+    Seed := (Int64(Seed) * 1103515245 + 12345) and $7FFFFFFF;
     Sizes[i] := (Seed mod 100000) + 1; // 1 to 100000 bytes
     Ptrs[i] := nil;
   end;
