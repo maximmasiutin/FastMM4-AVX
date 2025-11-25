@@ -33,7 +33,9 @@ program AdvancedTest;
 // memory in ways that may trigger false positives
 {$DEFINE DisableMemoryLeakReporting}
 
+{$IFNDEF UNIX}
 {$APPTYPE CONSOLE}
+{$ENDIF}
 
 uses
   {$IFDEF UNIX}
