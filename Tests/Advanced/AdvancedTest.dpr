@@ -1491,69 +1491,83 @@ end;
 // Main
 // =============================================================================
 begin
-  Log('');
-  Log('FastMM4-AVX Advanced Test Suite');
-  Log('================================');
-  Log('');
+  try
+    WriteLn('Starting AdvancedTest...');
+    Flush(Output);
 
-  // Block allocation tests
-  TestSmallBlockAllocation;
-  TestMediumBlockAllocation;
-  TestLargeBlockAllocation;
+    Log('');
+    Log('FastMM4-AVX Advanced Test Suite');
+    Log('================================');
+    Log('');
+    Flush(Output);
 
-  // Edge case tests
-  TestZeroSizeAllocation;
-  TestAllocMemZeroFill;
-  TestMinimumAllocationSize;
-  TestLargeSizeEdgeCases;
+    // Block allocation tests
+    TestSmallBlockAllocation;
+    TestMediumBlockAllocation;
+    TestLargeBlockAllocation;
 
-  // Realloc tests
-  TestReallocGrowing;
-  TestReallocShrinking;
-  TestReallocSameSize;
-  TestReallocNilPointer;
-  TestSequentialSizeIncrements;
-  TestReallocOscillation;
-  TestContentPreservationRealloc;
+    // Edge case tests
+    TestZeroSizeAllocation;
+    TestAllocMemZeroFill;
+    TestMinimumAllocationSize;
+    TestLargeSizeEdgeCases;
 
-  // Alignment tests
-  TestMemoryAlignment;
+    // Realloc tests
+    TestReallocGrowing;
+    TestReallocShrinking;
+    TestReallocSameSize;
+    TestReallocNilPointer;
+    TestSequentialSizeIncrements;
+    TestReallocOscillation;
+    TestContentPreservationRealloc;
 
-  // Stress tests
-  TestRapidAllocFreeCycles;
-  TestInterleavedAllocation;
-  TestBlockSizeBoundaries;
-  TestMultiplePoolStress;
-  TestFreeListIntegrity;
-  TestAllocationAfterLargeFree;
+    // Alignment tests
+    TestMemoryAlignment;
 
-  // Size variation tests
-  TestPowerOfTwoSizes;
-  TestOddSizes;
-  TestMixedSizeRandomPattern;
+    // Stress tests
+    TestRapidAllocFreeCycles;
+    TestInterleavedAllocation;
+    TestBlockSizeBoundaries;
+    TestMultiplePoolStress;
+    TestFreeListIntegrity;
+    TestAllocationAfterLargeFree;
 
-  // Concurrent test (if not single-threaded)
-  {$IFNDEF ForceSingleThreaded}
-  TestConcurrentAllocation;
-  {$ELSE}
-  Log('[SKIP] ConcurrentAllocation (ForceSingleThreaded defined)');
-  {$ENDIF}
+    // Size variation tests
+    TestPowerOfTwoSizes;
+    TestOddSizes;
+    TestMixedSizeRandomPattern;
 
-  Log('');
-  Log('================================');
-  Log('Results: ' + IntToStr(GTestsPassed) + ' passed, ' + IntToStr(GTestsFailed) + ' failed');
-  Log('');
+    // Concurrent test (if not single-threaded)
+    {$IFNDEF ForceSingleThreaded}
+    TestConcurrentAllocation;
+    {$ELSE}
+    Log('[SKIP] ConcurrentAllocation (ForceSingleThreaded defined)');
+    {$ENDIF}
 
-  if GExitCode <> TEST_PASSED then
-    Log('TESTS FAILED!')
-  else
-    Log('ALL TESTS PASSED!');
+    Log('');
+    Log('================================');
+    Log('Results: ' + IntToStr(GTestsPassed) + ' passed, ' + IntToStr(GTestsFailed) + ' failed');
+    Log('');
 
-  {$IFDEF WINDOWS}
-  // For FPC on Windows, ExitCode is generally honored
-  ExitCode := GExitCode;
-  {$ELSE}
-  // For FPC on Linux, ExitCode is generally honored
-  ExitCode := GExitCode;
-  {$ENDIF}
+    if GExitCode <> TEST_PASSED then
+      Log('TESTS FAILED!')
+    else
+      Log('ALL TESTS PASSED!');
+
+    {$IFDEF WINDOWS}
+    // For FPC on Windows, ExitCode is generally honored
+    ExitCode := GExitCode;
+    {$ELSE}
+    // For FPC on Linux, ExitCode is generally honored
+    ExitCode := GExitCode;
+    {$ENDIF}
+
+  except
+    on E: Exception do
+    begin
+      WriteLn('FATAL ERROR: ', E.ClassName, ': ', E.Message);
+      Flush(Output);
+      ExitCode := TEST_FAILED;
+    end;
+  end;
 end.
