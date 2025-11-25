@@ -392,7 +392,8 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dFullDebugMode', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
-          & '.\AdvancedTest.exe'
+          & '.\AdvancedTest.exe' > AdvancedTest_FullDebugMode_32bit_output.log 2>&1
+          Get-Content AdvancedTest_FullDebugMode_32bit_output.log
 
       - name: Compile and run AdvancedTest 32-bit (Align16Bytes)
         run: |
