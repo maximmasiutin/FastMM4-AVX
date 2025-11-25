@@ -376,3 +376,6 @@ MoveX32LpAvx512WithErms:
 	mov		[rsi+rdx], rax
 @exitLinux:
 	ret
+
+; Mark stack as non-executable for security (prevents linker warning)
+section .note.GNU-stack noalloc noexec nowrite progbits
