@@ -379,49 +379,49 @@ jobs:
       - name: Compile and run AdvancedTest 32-bit (Release)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', '-dIgnoreMemoryAllocatedBefore', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (Debug)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDEBUG', '-dIgnoreMemoryAllocatedBefore', '-g', '-O-', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDEBUG', '-dIgnoreMemoryAllocatedBefore', '-g', '-O-', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (FullDebugMode)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dFullDebugMode', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dFullDebugMode', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (Align16Bytes)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign16Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign16Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (Align32Bytes)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign32Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign32Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (ForceSingleThreaded)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dForceSingleThreaded', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dForceSingleThreaded', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (DontUseASMVersion)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 32-bit (AlwaysClearFreedMemory)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       # =========================================================================
@@ -430,47 +430,47 @@ jobs:
       - name: Compile and run AdvancedTest 64-bit (Release)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', '-dIgnoreMemoryAllocatedBefore', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (Debug)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDEBUG', '-dIgnoreMemoryAllocatedBefore', '-g', '-O-', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDEBUG', '-dIgnoreMemoryAllocatedBefore', '-g', '-O-', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (FullDebugMode)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dFullDebugMode', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dFullDebugMode', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (Align16Bytes)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign16Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign16Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (Align32Bytes)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign32Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign32Bytes', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (ForceSingleThreaded)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dForceSingleThreaded', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dForceSingleThreaded', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (DontUseASMVersion)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
 
       - name: Compile and run AdvancedTest 64-bit (AlwaysClearFreedMemory)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-O4', 'AdvancedTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
