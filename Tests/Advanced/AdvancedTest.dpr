@@ -43,41 +43,24 @@ uses
   FastMM4Messages in '../../FastMM4Messages.pas',
   {$IFDEF FPC}
   SysUtils,
-  Classes,
-  IOUtils; // For TFile for internal logging
+  Classes;
   {$ELSE}
   System.SysUtils,
-  System.Classes,
-  IOUtils; // For TFile for internal logging
+  System.Classes;
   {$ENDIF}
 
 const
   TEST_PASSED = 0;
   TEST_FAILED = 1;
-  INTERNAL_LOG_FILE_NAME = 'AdvancedTest_InternalRuntimeLog.txt';
 
 var
   GTestsPassed: Integer = 0;
   GTestsFailed: Integer = 0;
   GExitCode: Integer = TEST_PASSED;
-  GInternalLogFile: TextFile;
 
-procedure InternalLog(const Msg: string);
-begin
-  // Write to internal log file
-  if Assigned(GInternalLogFile) then
-  begin
-    WriteLn(GInternalLogFile, Msg);
-    Flush(GInternalLogFile); // Ensure content is written immediately
-  end;
-  // Also write to console (stdout)
-  WriteLn(Msg);
-end;
-
-// Redefine the global Log procedure to use our internal logging
 procedure Log(const Msg: string);
 begin
-  InternalLog(Msg);
+  WriteLn(Msg);
 end;
 
 procedure TestPass(const TestName: string);
@@ -906,7 +889,7 @@ begin
   else
   begin
     // Allocation failure for 100MB might be acceptable in some environments
-    Log('  Note: 100MB allocation returned nil (may be OK in constrained env)');
+    Log('  Note: 10MB allocation returned nil (may be OK in constrained env)');
   end;
 
   if Success then
@@ -1346,11 +1329,12 @@ begin
 
   // Verify original content
   for i := 0 to 999 do
-  begin
-    if P[i] <> Byte(i mod 256) then
     begin
-      Success := False;
-      Break;
+      if P[i] <> Byte(i mod 256) then
+      begin
+        Success := False;
+        Break;
+      end;
     end;
   end;
 
@@ -1508,145 +1492,140 @@ end;
 // Main
 // =============================================================================
 begin
-  AssignFile(GInternalLogFile, INTERNAL_LOG_FILE_NAME);
-  Rewrite(GInternalLogFile);
+  Log('');
+  Log('FastMM4-AVX Advanced Test Suite - START');
+  Log('=======================================');
+  Log('');
 
-  try
-    Log('');
-    Log('FastMM4-AVX Advanced Test Suite - START');
-    Log('=======================================');
-    Log('');
+  // Block allocation tests
+  Log('Running TestSmallBlockAllocation...');
+  TestSmallBlockAllocation;
+  Log('TestSmallBlockAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Block allocation tests
-    Log('Running TestSmallBlockAllocation...');
-    TestSmallBlockAllocation;
-    Log('TestSmallBlockAllocation finished.');
+  Log('Running TestMediumBlockAllocation...');
+  TestMediumBlockAllocation;
+  Log('TestMediumBlockAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestMediumBlockAllocation...');
-    TestMediumBlockAllocation;
-    Log('TestMediumBlockAllocation finished.');
+  Log('Running TestLargeBlockAllocation...');
+  TestLargeBlockAllocation;
+  Log('TestLargeBlockAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestLargeBlockAllocation...');
-    TestLargeBlockAllocation;
-    Log('TestLargeBlockAllocation finished.');
+  // Edge case tests
+  Log('Running TestZeroSizeAllocation...');
+  TestZeroSizeAllocation;
+  Log('TestZeroSizeAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Edge case tests
-    Log('Running TestZeroSizeAllocation...');
-    TestZeroSizeAllocation;
-    Log('TestZeroSizeAllocation finished.');
+  Log('Running TestAllocMemZeroFill...');
+  TestAllocMemZeroFill;
+  Log('TestAllocMemZeroFill finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestAllocMemZeroFill...');
-    TestAllocMemZeroFill;
-    Log('TestAllocMemZeroFill finished.');
+  Log('Running TestMinimumAllocationSize...');
+  TestMinimumAllocationSize;
+  Log('TestMinimumAllocationSize finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestMinimumAllocationSize...');
-    TestMinimumAllocationSize;
-    Log('TestMinimumAllocationSize finished.');
+  Log('Running TestLargeSizeEdgeCases...');
+  TestLargeSizeEdgeCases;
+  Log('TestLargeSizeEdgeCases finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestLargeSizeEdgeCases...');
-    TestLargeSizeEdgeCases;
-    Log('TestLargeSizeEdgeCases finished.');
+  // Realloc tests
+  Log('Running TestReallocGrowing...');
+  TestReallocGrowing;
+  Log('TestReallocGrowing finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Realloc tests
-    Log('Running TestReallocGrowing...');
-    TestReallocGrowing;
-    Log('TestReallocGrowing finished.');
+  Log('Running TestReallocShrinking...');
+  TestReallocShrinking;
+  Log('TestReallocShrinking finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestReallocShrinking...');
-    TestReallocShrinking;
-    Log('TestReallocShrinking finished.');
+  Log('Running TestReallocSameSize...');
+  TestReallocSameSize;
+  Log('TestReallocSameSize finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestReallocSameSize...');
-    TestReallocSameSize;
-    Log('TestReallocSameSize finished.');
+  Log('Running TestReallocNilPointer...');
+  TestReallocNilPointer;
+  Log('TestReallocNilPointer finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestReallocNilPointer...');
-    TestReallocNilPointer;
-    Log('TestReallocNilPointer finished.');
+  Log('Running TestSequentialSizeIncrements...');
+  TestSequentialSizeIncrements;
+  Log('TestSequentialSizeIncrements finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestSequentialSizeIncrements...');
-    TestSequentialSizeIncrements;
-    Log('TestSequentialSizeIncrements finished.');
+  Log('Running TestReallocOscillation...');
+  TestReallocOscillation;
+  Log('TestReallocOscillation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestReallocOscillation...');
-    TestReallocOscillation;
-    Log('TestReallocOscillation finished.');
+  Log('Running TestContentPreservationRealloc...');
+  TestContentPreservationRealloc;
+  Log('TestContentPreservationRealloc finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestContentPreservationRealloc...');
-    TestContentPreservationRealloc;
-    Log('TestContentPreservationRealloc finished.');
+  // Alignment tests
+  Log('Running TestMemoryAlignment...');
+  TestMemoryAlignment;
+  Log('TestMemoryAlignment finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Alignment tests
-    Log('Running TestMemoryAlignment...');
-    TestMemoryAlignment;
-    Log('TestMemoryAlignment finished.');
+  // Stress tests
+  Log('Running TestRapidAllocFreeCycles...');
+  TestRapidAllocFreeCycles;
+  Log('TestRapidAllocFreeCycles finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Stress tests
-    Log('Running TestRapidAllocFreeCycles...');
-    TestRapidAllocFreeCycles;
-    Log('TestRapidAllocFreeCycles finished.');
+  Log('Running TestInterleavedAllocation...');
+  TestInterleavedAllocation;
+  Log('TestInterleavedAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestInterleavedAllocation...');
-    TestInterleavedAllocation;
-    Log('TestInterleavedAllocation finished.');
+  Log('Running TestBlockSizeBoundaries...');
+  TestBlockSizeBoundaries;
+  Log('TestBlockSizeBoundaries finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestBlockSizeBoundaries...');
-    TestBlockSizeBoundaries;
-    Log('TestBlockSizeBoundaries finished.');
+  Log('Running TestMultiplePoolStress...');
+  TestMultiplePoolStress;
+  Log('TestMultiplePoolStress finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestMultiplePoolStress...');
-    TestMultiplePoolStress;
-    Log('TestMultiplePoolStress finished.');
+  Log('Running TestFreeListIntegrity...');
+  TestFreeListIntegrity;
+  Log('TestFreeListIntegrity finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestFreeListIntegrity...');
-    TestFreeListIntegrity;
-    Log('TestFreeListIntegrity finished.');
+  Log('Running TestAllocationAfterLargeFree...');
+  TestAllocationAfterLargeFree;
+  Log('TestAllocationAfterLargeFree finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestAllocationAfterLargeFree...');
-    TestAllocationAfterLargeFree;
-    Log('TestAllocationAfterLargeFree finished.');
+  // Size variation tests
+  Log('Running TestPowerOfTwoSizes...');
+  TestPowerOfTwoSizes;
+  Log('TestPowerOfTwoSizes finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    // Size variation tests
-    Log('Running TestPowerOfTwoSizes...');
-    TestPowerOfTwoSizes;
-    Log('TestPowerOfTwoSizes finished.');
+  Log('Running TestOddSizes...');
+  TestOddSizes;
+  Log('TestOddSizes finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestOddSizes...');
-    TestOddSizes;
-    Log('TestOddSizes finished.');
+  Log('Running TestMixedSizeRandomPattern...');
+  TestMixedSizeRandomPattern;
+  Log('TestMixedSizeRandomPattern finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
 
-    Log('Running TestMixedSizeRandomPattern...');
-    TestMixedSizeRandomPattern;
-    Log('TestMixedSizeRandomPattern finished.');
+  // Concurrent test (if not single-threaded)
+  Log('Checking for ConcurrentAllocation...');
+  {$IFNDEF ForceSingleThreaded}
+  Log('Running TestConcurrentAllocation...');
+  TestConcurrentAllocation;
+  Log('TestConcurrentAllocation finished. Passed: ' + IntToStr(GTestsPassed) + ', Failed: ' + IntToStr(GTestsFailed));
+  {$ELSE}
+  Log('[SKIP] ConcurrentAllocation (ForceSingleThreaded defined)');
+  {$ENDIF}
 
-    // Concurrent test (if not single-threaded)
-    Log('Checking for ConcurrentAllocation...');
-    {$IFNDEF ForceSingleThreaded}
-    Log('Running TestConcurrentAllocation...');
-    TestConcurrentAllocation;
-    Log('TestConcurrentAllocation finished.');
-    {$ELSE}
-    Log('[SKIP] ConcurrentAllocation (ForceSingleThreaded defined)');
-    {$ENDIF}
+  Log('');
+  Log('================================');
+  Log('Results: ' + IntToStr(GTestsPassed) + ' passed, ' + IntToStr(GTestsFailed) + ' failed');
+  Log('');
 
-    Log('');
-    Log('================================');
-    Log('Results: ' + IntToStr(GTestsPassed) + ' passed, ' + IntToStr(GTestsFailed) + ' failed');
-    Log('');
+  if GExitCode <> TEST_PASSED then
+    Log('TESTS FAILED!')
+  else
+    Log('ALL TESTS PASSED!');
 
-    if GExitCode <> TEST_PASSED then
-      Log('TESTS FAILED!')
-    else
-      Log('ALL TESTS PASSED!');
+  Log('AdvancedTest finished. Exiting with code: ' + IntToStr(GExitCode));
 
-    Log('AdvancedTest finished. Exiting with code: ' + IntToStr(GExitCode));
-
-    {$IFDEF WINDOWS}
-    Halt(GExitCode);
-    {$ELSE}
-    Halt(GExitCode);
-    {$ENDIF}
-  finally
-    CloseFile(GInternalLogFile);
-  end;
+  {$IFDEF WINDOWS}
+  // For FPC on Windows, ExitCode is generally honored
+  ExitCode := GExitCode;
+  {$ELSE}
+  // For FPC on Linux, ExitCode is generally honored
+  ExitCode := GExitCode;
+  {$ENDIF}
 end.
