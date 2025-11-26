@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.8 (24 November 2025)
+Version: 1.0.9 (26 November 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -266,14 +266,17 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
+- 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
+    allocations (CVE-2017-17426 class).
+
 - 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
     optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
     across Linux and Windows,  covering diverse test configurations; 
     Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation 
     for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr` 
-    tool for verifying detected CPU features; Updated documentation and code comments for improved 
-    clarity and accuracy across multiple files; Added support for AVX-512 for Linux; 
-    Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
+    tool for verifying detected CPU features; Updated documentation and code comments 
+    for improved clarity and accuracy across multiple files; Added support for AVX-512 
+    for Linux; Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.7 (22 March 2023) - implemented the optional use of user mode wait
     (WaitPKG) umonitor/umwait instructions to wait for a synchronization
