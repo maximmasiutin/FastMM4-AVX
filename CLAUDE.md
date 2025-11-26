@@ -26,15 +26,56 @@ The `fpc.exe` compiler, typically found in `S:\ProgramFiles\FPC\3.2.2\bin\i386-w
 **Why:** Debug modes work natively on Linux without requiring external DLL dependencies.
 
 ### Windows CI (GitHub Actions)
-**RESTRICTED:** Release mode only (`-O4` optimization)
-
-**Do NOT add tests with:**
-- `-dDEBUG` flag
-- `-dFullDebugMode` flag
-
-**Reason:** Debug modes require external DLLs (e.g., `FastMM_FullDebugMode.dll`) that are not available in Windows CI environments. Windows debug testing should be performed locally during development.
+**ALLOWED:** Both Release and Debug modes
 
 **Allowed on Windows CI:**
-- Release builds with various configuration options (alignment, threading, synchronization)
+- `-dDEBUG` flag - **ALLOWED** (no external DLL requirement)
+- Release builds with `-O4` optimization
+- Debug builds with `-g -O-` options
+- All configuration options (alignment, threading, synchronization)
 - Compilation validation for Windows 32-bit and 64-bit
-- Functional testing with release-optimized builds only
+
+**Do NOT use on Windows CI:**
+- `-dFullDebugMode` flag - **NOT ALLOWED** (requires `FastMM_FullDebugMode.dll`)
+
+**Reason:** FullDebugMode requires external DLLs that are not available in Windows CI environments. FullDebugMode testing should be performed locally during development.
+
+## Git Location
+
+Git is installed at `S:\ProgramFiles\Git\bin\git.exe`
+
+## Running Shell Commands on Windows
+
+**IMPORTANT:** When running shell commands on Windows from Claude Code:
+
+### Use .bat Files for Complex Commands
+The Bash tool has issues with backslashes and `&&` operators. Instead of trying to run complex commands directly:
+
+1. **Create a .bat file** with the commands you need to run
+2. **Execute the .bat file** using PowerShell's `Start-Process`
+
+### Example Pattern That Works:
+```powershell
+powershell.exe -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -ArgumentList '/c','C:\\q\\FastMM4-AVX\\script.bat' -Wait -NoNewWindow -RedirectStandardOutput 'C:\\q\\FastMM4-AVX\\output.txt'; Get-Content 'C:\\q\\FastMM4-AVX\\output.txt'"
+```
+
+### .bat File Example:
+```batch
+@echo off
+cd /d C:\q\FastMM4-AVX
+S:\ProgramFiles\Git\bin\git.exe status
+S:\ProgramFiles\Git\bin\git.exe add .
+S:\ProgramFiles\Git\bin\git.exe commit -m "message"
+```
+
+### What Does NOT Work:
+- Direct bash commands with Windows paths (backslashes get eaten)
+- `cmd.exe /c "cd /d C:\path && command"` - the `&&` doesn't work reliably
+- Calling .bat files directly from bash - paths get mangled
+- Git commands without full path when git is not in PATH
+
+### Key Points:
+- Always use **double backslashes** (`\\`) in PowerShell string arguments
+- Always use **full paths** to executables (like `S:\ProgramFiles\Git\bin\git.exe`)
+- Use `-RedirectStandardOutput` to capture output from batch files
+- The `cd /d` command in batch files properly changes both drive and directory

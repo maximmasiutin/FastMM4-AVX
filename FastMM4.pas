@@ -2441,11 +2441,11 @@ const
 
   {Maximum safe allocation size to prevent integer overflow (CVE-2017-17426 class)
    This is the largest size we can safely add overhead to without wrapping around.
-   Formula: High(NativeUInt) - LargeBlockHeaderSize - LargeBlockGranularity - BlockHeaderSize
-   On 64-bit: 0xFFFFFFFFFFFFFFFF - 32 - 65536 - 8 = 0xFFFFFFFFFFFEFFD8 (~18 exabytes)
-   On 32-bit: 0xFFFFFFFF - 24 - 65536 - 4 = 0xFFFEFFE4 (~4 gigabytes)}
+   The value is set conservatively below where malicious overflow values typically appear
+   (e.g., $FFFFFFFFFFEFFFA9, $FFFFFFFFFFF00000 on 64-bit). These "attack" values are
+   designed to wrap around when overhead is added.}
   {$IFDEF 64bit}
-  MaxSafeLargeBlockSize = NativeUInt($FFFFFFFFFFFE0000); {Conservative estimate for 64-bit}
+  MaxSafeLargeBlockSize = NativeUInt($FFFFFFFFFFE00000); {~2MB below max, blocks overflow attack values}
   {$ELSE}
   MaxSafeLargeBlockSize = NativeUInt($FFFE0000); {Conservative estimate for 32-bit}
   {$ENDIF}
@@ -8710,9 +8710,13 @@ begin
   {$ENDIF}
 
   {Security check: Prevent integer overflow in size calculation (CVE-2017-17426 class)
-   If ASize is too large, adding overhead would wrap around to a small value,
-   causing VirtualAlloc to allocate a tiny buffer while the application attempts
-   to write huge amounts of data, leading to heap corruption and potential RCE.}
+   If ASize is too large, adding overhead (LargeBlockHeaderSize + LargeBlockGranularity
+   + BlockHeaderSize) would wrap around to a small value, causing VirtualAlloc to
+   allocate a tiny buffer while the application writes huge amounts of data, leading
+   to heap corruption and potential RCE. MaxSafeLargeBlockSize is set conservatively
+   to ensure the calculation below cannot overflow. Note: ASize is NativeUInt, so any
+   negative signed value passed by caller becomes a large unsigned value that will
+   be rejected by this check.}
   if ASize > MaxSafeLargeBlockSize then
   begin
     {Return nil to indicate allocation failure - same behavior as out-of-memory}

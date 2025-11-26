@@ -377,6 +377,9 @@ jobs:
       # =========================================================================
       # Security Tests - Windows
       # =========================================================================
+      # Note: -dFullDebugMode requires external DLLs not available in CI.
+      # -dDEBUG is OK on Windows CI (no external DLL requirement).
+
       - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
