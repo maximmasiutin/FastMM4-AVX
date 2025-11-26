@@ -42,7 +42,13 @@ The `fpc.exe` compiler, typically found in `S:\ProgramFiles\FPC\3.2.2\bin\i386-w
 
 ## Git Location
 
-Git is installed at `S:\ProgramFiles\Git\bin\git.exe`
+Git is installed at `S:\ProgramFiles\Git\cmd\git.exe`
+Note: `S:\ProgramFiles\Git\cmd` is in the system PATH.
+
+## GitHub CLI Location
+
+GitHub CLI (gh) is installed at `S:\ProgramFiles\GitHubCli\gh.exe`
+Note: Use `gh api` for operations that don't require local git integration.
 
 ## Running Shell Commands on Windows
 

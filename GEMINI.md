@@ -2,7 +2,7 @@
 
 FastMM4-AVX is a high-performance memory manager for Pascal/Delphi applications with optimizations for modern CPUs. It's a fork of the original FastMM4 v4.993 by Pierre le Riche, enhanced with AVX/AVX2/AVX512 instructions, improved synchronization, and better multi-threading performance.
 
-**Version:** 1.0.8 (24 November 2025)
+**Version:** 1.0.9 (26 November 2025)
 **Base FastMM4 Version:** 4.993
 
 ## Key Features
@@ -59,6 +59,13 @@ FastMM4-AVX uses a three-tier memory management system:
 -   **Compilers**: Delphi 4+, C++ Builder 4+, FreePascal/Lazarus
 
 ## Build System
+
+### Git Installation
+Git is installed at `S:\ProgramFiles\Git\cmd\git.exe`
+Note: `S:\ProgramFiles\Git\cmd` is in the system PATH.
+
+### GitHub CLI Installation
+GitHub CLI (gh) is installed at `S:\ProgramFiles\GitHubCli\gh.exe`
 
 ### FreePascal Installation
 FPC 3.2.2 is installed at `S:\ProgramFiles\FPC\3.2.2\`
