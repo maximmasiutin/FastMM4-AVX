@@ -2436,6 +2436,17 @@ const
    medium or large blocks.}
   LargeBlockGranularityMask = NativeUInt(-LargeBlockGranularity);
 
+  {Maximum safe allocation size to prevent integer overflow (CVE-2017-17426 class)
+   This is the largest size we can safely add overhead to without wrapping around.
+   Formula: High(NativeUInt) - LargeBlockHeaderSize - LargeBlockGranularity - BlockHeaderSize
+   On 64-bit: 0xFFFFFFFFFFFFFFFF - 32 - 65536 - 8 = 0xFFFFFFFFFFFEFFD8 (~18 exabytes)
+   On 32-bit: 0xFFFFFFFF - 24 - 65536 - 4 = 0xFFFEFFE4 (~4 gigabytes)}
+  {$IFDEF 64bit}
+  MaxSafeLargeBlockSize = NativeUInt($FFFFFFFFFFFE0000); {Conservative estimate for 64-bit}
+  {$ELSE}
+  MaxSafeLargeBlockSize = NativeUInt($FFFE0000); {Conservative estimate for 32-bit}
+  {$ENDIF}
+
 {$IFDEF Align32Bytes}
   MaximumSmallBlockSize = 2624;
 {$ELSE}
@@ -8694,6 +8705,18 @@ begin
   {$IFNDEF AssumeMultiThreaded}
   LLockLargeBlocksLocked := False;
   {$ENDIF}
+
+  {Security check: Prevent integer overflow in size calculation (CVE-2017-17426 class)
+   If ASize is too large, adding overhead would wrap around to a small value,
+   causing VirtualAlloc to allocate a tiny buffer while the application attempts
+   to write huge amounts of data, leading to heap corruption and potential RCE.}
+  if ASize > MaxSafeLargeBlockSize then
+  begin
+    {Return nil to indicate allocation failure - same behavior as out-of-memory}
+    Result := nil;
+    Exit;
+  end;
+
   {Pad the block size to include the header and granularity. We also add a
    SizeOf(Pointer) overhead so a huge block size is a multiple of 16 bytes less
    SizeOf(Pointer) (so we can use a single move function for reallocating all
@@ -9897,7 +9920,7 @@ end;
 {$ENDIF}
 
 {$IFDEF 32Bit}
-assembler;
+assembler; // FastGetMemAssembler begin 32-bit
 asm
   {On entry:
     eax = ASize}
@@ -10526,8 +10549,11 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 
 @IsALargeBlockRequest:
+  {Security check: Prevent integer overflow in size calculation (CVE-2017-17426 class)}
   test eax, eax
   js  @DontAllocateLargeBlock
+  cmp eax, MaxSafeLargeBlockSize
+  ja  @DontAllocateLargeBlock
   pop ebx
 
 {$IFNDEF AssumeMultiThreaded}
@@ -10554,7 +10580,7 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 end;
 {$ELSE}
 {64-bit BASM implementation}
-assembler;
+assembler; // FastGetMemAssembler begin 64-bit
 asm
   {On entry:
     rcx = ASize}
@@ -11237,8 +11263,12 @@ but we don't need them at this point - we only save RAX}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @IsALargeBlockRequest:
   xor rax, rax
+  {Security check: Prevent integer overflow in size calculation (CVE-2017-17426 class)}
   test rcx, rcx
   js @Done
+  mov r8, MaxSafeLargeBlockSize
+  cmp rcx, r8
+  ja @Done
   call AllocateLargeBlock
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @Done: {it automatically restores 4 registers from stack}
@@ -13394,7 +13424,7 @@ assembler;
 const
   cLocalVarStackOfsMediumBlock = 4 {size of a 32-bit register} * 4 {4 saved registers to skip for a medium block};
 {$ENDIF}
-asm
+asm // FastReallocMemAssembler begin 32-bit
 {$IFDEF fpc}
   push esi
   mov esi, eax

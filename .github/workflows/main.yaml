@@ -9,6 +9,8 @@ on:
       - FastMM4Messages.pas
       - FastMM4Options.inc
       - Tests/Advanced/**
+      - Tests/Simple/IntegerOverflowTest.dpr
+      - Tests/Simple/SimpleTest.dpr
 
   workflow_dispatch:
 
@@ -115,6 +117,33 @@ jobs:
         run: |
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -dRequireIDEPresenceForLeakReporting -O4 SimpleTest.dpr
+
+      # =========================================================================
+      # Security Tests - Linux
+      # =========================================================================
+      - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -O4 IntegerOverflowTest.dpr
+          ./IntegerOverflowTest
+
+      - name: Compile and run Integer Overflow Test (64-bit Debug with ASM)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -dDEBUG -g -O- IntegerOverflowTest.dpr
+          ./IntegerOverflowTest
+
+      - name: Compile and run Integer Overflow Test (64-bit Release Pure Pascal)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -dDontUseASMVersion -O4 IntegerOverflowTest.dpr
+          ./IntegerOverflowTest
+
+      - name: Compile and run Integer Overflow Test (64-bit Debug Pure Pascal)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -dDontUseASMVersion -dDEBUG -g -O- IntegerOverflowTest.dpr
+          ./IntegerOverflowTest
 
       # =========================================================================
       # Advanced Tests - Linux (AVX-512 enabled via FastMM4_AVX512_Linux.o)
@@ -344,6 +373,57 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dRequireIDEPresenceForLeakReporting', '-O4', 'SimpleTest.dpr')
+
+      # =========================================================================
+      # Security Tests - Windows
+      # =========================================================================
+      - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (64-bit Debug with ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (64-bit Release Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (64-bit Debug Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit Release with ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit Debug with ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit Release Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit Debug Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit

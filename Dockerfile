@@ -27,19 +27,28 @@ RUN apt-get update && \
 
 # Create working directory structure
 WORKDIR /fastmm4-avx
-RUN mkdir -p Tests/Advanced
+RUN mkdir -p Tests/Advanced Tests/Simple
 
 # Copy source files
 COPY FastMM4.pas FastMM4Messages.pas FastMM4Options.inc ./
 COPY FastMM4_AVX512_Linux.asm ./
 COPY Tests/Advanced/AdvancedTest.dpr Tests/Advanced/run-tests.sh ./Tests/Advanced/
+COPY Tests/Simple/IntegerOverflowTest.dpr ./Tests/Simple/
 
 # Compile AVX-512 assembly for Linux ELF64 format
 # FastMM4_AVX512_Linux.asm uses Linux System V AMD64 ABI (rdi, rsi, rdx)
 RUN nasm -Ox -Ov -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o
 
+# Compile and run Integer Overflow security test
+WORKDIR /fastmm4-avx/Tests/Simple
+RUN echo "=== Compiling Integer Overflow Test ===" && \
+    fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -O4 IntegerOverflowTest.dpr && \
+    echo "=== Running Integer Overflow Test ===" && \
+    ./IntegerOverflowTest && \
+    echo "=== Integer Overflow Test Complete ==="
+
 # Convert line endings and make test script executable
-RUN sed -i 's/\r$//' ./Tests/Advanced/run-tests.sh && chmod +x ./Tests/Advanced/run-tests.sh
+RUN sed -i 's/\r$//' /fastmm4-avx/Tests/Advanced/run-tests.sh && chmod +x /fastmm4-avx/Tests/Advanced/run-tests.sh
 
 # Set working directory to test location
 WORKDIR /fastmm4-avx/Tests/Advanced
