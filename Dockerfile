@@ -25,6 +25,9 @@ RUN apt-get update && \
     nasm \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for running tests
+RUN useradd -m -u 1000 -s /bin/bash testuser
+
 # Create working directory structure
 WORKDIR /fastmm4-avx
 RUN mkdir -p Tests/Advanced Tests/Simple
@@ -33,25 +36,28 @@ RUN mkdir -p Tests/Advanced Tests/Simple
 COPY FastMM4.pas FastMM4Messages.pas FastMM4Options.inc ./
 COPY FastMM4_AVX512_Linux.asm ./
 COPY Tests/Advanced/AdvancedTest.dpr Tests/Advanced/run-tests.sh ./Tests/Advanced/
-COPY Tests/Simple/IntegerOverflowTest.dpr ./Tests/Simple/
+COPY Tests/Simple/IntegerOverflowTest.dpr Tests/Simple/test_overflow_linux.sh ./Tests/Simple/
 
 # Compile AVX-512 assembly for Linux ELF64 format
 # FastMM4_AVX512_Linux.asm uses Linux System V AMD64 ABI (rdi, rsi, rdx)
 RUN nasm -Ox -Ov -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o
 
-# Compile and run Integer Overflow security test
-WORKDIR /fastmm4-avx/Tests/Simple
-RUN echo "=== Compiling Integer Overflow Test ===" && \
-    fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -O4 IntegerOverflowTest.dpr && \
-    echo "=== Running Integer Overflow Test ===" && \
-    ./IntegerOverflowTest && \
-    echo "=== Integer Overflow Test Complete ==="
-
-# Convert line endings and make test script executable
+# Convert line endings and make test scripts executable
+RUN sed -i 's/\r$//' /fastmm4-avx/Tests/Simple/test_overflow_linux.sh && chmod +x /fastmm4-avx/Tests/Simple/test_overflow_linux.sh
 RUN sed -i 's/\r$//' /fastmm4-avx/Tests/Advanced/run-tests.sh && chmod +x /fastmm4-avx/Tests/Advanced/run-tests.sh
+
+# Run Integer Overflow security tests (all 4 configurations)
+WORKDIR /fastmm4-avx/Tests/Simple
+RUN ./test_overflow_linux.sh
+
+# Change ownership to non-root user
+RUN chown -R testuser:testuser /fastmm4-avx
 
 # Set working directory to test location
 WORKDIR /fastmm4-avx/Tests/Advanced
+
+# Switch to non-root user
+USER testuser
 
 # Entry point - run tests script
 ENTRYPOINT ["./run-tests.sh"]

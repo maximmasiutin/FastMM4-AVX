@@ -25,21 +25,12 @@
 # Demos (not needed for tests)
 Demos/
 
-# Other test files (we only need Advanced)
-Tests/Simple/
-Tests/Benchmark/
+# Other test files (we need Advanced and IntegerOverflowTest from Simple)
 
 # IDE project files
 *.dproj
 *.dpr.local
 *.identcache
 
-# Audit files
-AUDIT_*.md
-SECURITY_*.md
-GEMINI.md
-
 # Other
-.github/
 *.a
-libimpFastMM4.a
