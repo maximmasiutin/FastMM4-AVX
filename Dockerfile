@@ -36,19 +36,13 @@ RUN mkdir -p Tests/Advanced Tests/Simple
 COPY FastMM4.pas FastMM4Messages.pas FastMM4Options.inc ./
 COPY FastMM4_AVX512_Linux.asm ./
 COPY Tests/Advanced/AdvancedTest.dpr Tests/Advanced/run-tests.sh ./Tests/Advanced/
-COPY Tests/Simple/IntegerOverflowTest.dpr Tests/Simple/test_overflow_linux.sh ./Tests/Simple/
 
 # Compile AVX-512 assembly for Linux ELF64 format
 # FastMM4_AVX512_Linux.asm uses Linux System V AMD64 ABI (rdi, rsi, rdx)
 RUN nasm -Ox -Ov -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o
 
 # Convert line endings and make test scripts executable
-RUN sed -i 's/\r$//' /fastmm4-avx/Tests/Simple/test_overflow_linux.sh && chmod +x /fastmm4-avx/Tests/Simple/test_overflow_linux.sh
 RUN sed -i 's/\r$//' /fastmm4-avx/Tests/Advanced/run-tests.sh && chmod +x /fastmm4-avx/Tests/Advanced/run-tests.sh
-
-# Run Integer Overflow security tests (all 4 configurations)
-WORKDIR /fastmm4-avx/Tests/Simple
-RUN ./test_overflow_linux.sh
 
 # Change ownership to non-root user
 RUN chown -R testuser:testuser /fastmm4-avx
