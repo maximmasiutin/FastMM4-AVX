@@ -5,11 +5,11 @@ program AdvancedTest;
   Tests for security issues from AUDIT_FINDINGS_v2.md plus additional robustness tests.
 
   Categories:
-  1. Integer Overflow Tests (AUDIT_FINDINGS_v2.md Section 2)
-  2. Memory Alignment Tests (AUDIT_FINDINGS_v2.md Section 3)
-  3. Double-Free Detection Tests (AUDIT_FINDINGS_v2.md Section 1.2)
-  4. Use-After-Free Detection Tests (AUDIT_FINDINGS_v2.md Section 1.1)
-  5. Information Disclosure Tests (AUDIT_FINDINGS_v2.md Section 1.3)
+  1. Integer Overflow Tests
+  2. Memory Alignment Tests
+  3. Double-Free Detection Tests
+  4. Use-After-Free Detection Tests
+  5. Information Disclosure Tests
   6. Small/Medium/Large Block Allocation Tests
   7. Realloc Boundary Tests
   8. Zero-Size Allocation Tests
@@ -21,17 +21,6 @@ program AdvancedTest;
   14. Fragmentation Stress Tests
   15. AllocMem Zero-Fill Tests
 }
-
-{$IFDEF FPC}
-  {$mode objfpc}{$H+}
-  // FreePascal allocates memory in system unit initialization before we can
-  // install FastMM4. See https://bugs.freepascal.org/view.php?id=38391
-  {$DEFINE IgnoreMemoryAllocatedBefore}
-{$ENDIF}
-
-// Disable memory leak reporting for test suite - the test suite allocates
-// memory in ways that may trigger false positives
-{$DEFINE DisableMemoryLeakReporting}
 
 {$IFNDEF UNIX}
 {$APPTYPE CONSOLE}

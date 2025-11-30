@@ -266,7 +266,7 @@ FastMM4-AVX Version History:
     Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
     instruction to defensively clear FPU state before fild sequence. This prevents
     exceptions or silent memory corruption when callers violate ABI by leaving
-    values on FPU stack. See https://stackoverflow.com/q/79833922 for details.
+    values on FPU stack. See https://stackoverflow.com/q/79833922/6910868 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
     allocations (CVE-2017-17426 class).
@@ -325,6 +325,33 @@ FastMM4-AVX Version History:
 - 1.01 (10 October 2017) - made the source code compile under Delphi5,
     thanks to Valts Silaputnins.
 - 1.00 (27 July 2017) - initial revision.
+
+
+SECURITY WARNINGS:
+
+The following security features are NOT implemented in FastMM4-AVX:
+
+1. Safe-Unlinking (pleriche/FastMM4 Issue #80)
+   The doubly-linked list unlink operation in RemoveMediumFreeBlock does not
+   verify pointer integrity. This makes FastMM4-AVX vulnerable to the classic
+   "unlink attack" where corrupted free list pointers can achieve arbitrary
+   memory writes. This vulnerability has been fixed in glibc since 2005.
+   Recommended fix: Add pointer consistency checks before unlink operations:
+     if (P->bk->fd != P) or (P->fd->bk != P) then Error;
+   See: https://github.com/pleriche/FastMM4/issues/80
+
+2. Double-Free Detection in Production Builds
+   Double-free detection only occurs in FullDebugMode. Production builds have
+   no mechanism to detect if a block is freed twice. This can lead to
+   use-after-free vulnerabilities where a block appears in the free list
+   multiple times. Modern allocators (glibc 2.29+, hardened_malloc, Scudo)
+   implement tcache-key or similar mechanisms for production double-free
+   detection.
+
+For security-critical applications, consider:
+- Using FullDebugMode during development and testing
+- Enabling CheckHeapForCorruption and AlwaysClearFreedMemory
+- Using a hardened allocator for production deployments in adversarial contexts
 
 
 The original FastMM4 description follows:
@@ -5380,37 +5407,20 @@ end;
 procedure Move36(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-  {Fix for pleriche/FastMM4 Issue #85: FPU register corruption in ReallocMem.
-   The fild/fistp sequence uses the x87 FPU stack. If a caller violates the ABI
-   by leaving values on the FPU stack (e.g., after a failed val() call), our
-   fild instructions can overflow the 8-slot FPU stack, causing exceptions or
-   silent memory corruption.
-
-   Per System V ABI (Intel386 Supplement, page 3-12): "Registers %st(1) through
-   %st(7) must be empty before entry and upon exit from a function."
-
-   The EMMS instruction clears the FPU tag word, marking all registers as empty.
-   This defensively handles ABI-violating callers. EMMS is fast on Pentium-era
-   CPUs where this code path executes (modern CPUs use the SSE path instead).
-
-   References:
-   - StackOverflow discussion: https://stackoverflow.com/q/79833922
-   - Intel Manual Vol.1 Ch.9: https://xem.github.io/minix86/manual/intel-x86-and-64-manual-vol1/o_7281d5ea06a5b67a-232.html
-   - Agner Fog Calling Conventions: https://www.agner.org/optimize/calling_conventions.pdf
-   - EMMS instruction reference: https://www.felixcloutier.com/x86/emms
-   - ABI requirements: https://stackoverflow.com/q/35963861
-   - Defensive EMMS usage: https://stackoverflow.com/q/480562}
-  emms
-  fild qword ptr [eax]
-  fild qword ptr [eax + 8]
-  fild qword ptr [eax + 16]
-  fild qword ptr [eax + 24]
-  mov ecx, [eax + 32]
-  mov [edx + 32], ecx
-  fistp qword ptr [edx + 24]
-  fistp qword ptr [edx + 16]
-  fistp qword ptr [edx + 8]
-  fistp qword ptr [edx]
+  {Fixed pleriche/FastMM4 Issue #85: Replaced FPU-based copy with rep movsd.
+   The previous fild/fistp sequence could cause FPU stack overflow if callers
+   violated ABI by leaving values on FPU stack. rep movsd avoids FPU entirely,
+   works on all x86 CPUs (no MMX/EMMS requirement), and is fast on all CPUs.
+   See https://stackoverflow.com/q/79833922/6910868 for details.}
+  push esi
+  push edi
+  mov esi, eax
+  mov edi, edx
+  mov ecx, 9
+  cld
+  rep movsd
+  pop edi
+  pop esi
 {$ELSE}
 
 {$IFDEF AlignAtLeast16Bytes}
@@ -5579,20 +5589,16 @@ end;
 procedure Move44(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
-  emms
-  fild qword ptr [eax]
-  fild qword ptr [eax + 8]
-  fild qword ptr [eax + 16]
-  fild qword ptr [eax + 24]
-  fild qword ptr [eax + 32]
-  mov ecx, [eax + 40]
-  mov [edx + 40], ecx
-  fistp qword ptr [edx + 32]
-  fistp qword ptr [edx + 24]
-  fistp qword ptr [edx + 16]
-  fistp qword ptr [edx + 8]
-  fistp qword ptr [edx]
+  {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
+  push esi
+  push edi
+  mov esi, eax
+  mov edi, edx
+  mov ecx, 11
+  cld
+  rep movsd
+  pop edi
+  pop esi
 {$ELSE}
 
 {$IFDEF AlignAtLeast16Bytes}
@@ -5679,22 +5685,16 @@ end;
 procedure Move52(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
-  emms
-  fild qword ptr [eax]
-  fild qword ptr [eax + 8]
-  fild qword ptr [eax + 16]
-  fild qword ptr [eax + 24]
-  fild qword ptr [eax + 32]
-  fild qword ptr [eax + 40]
-  mov ecx, [eax + 48]
-  mov [edx + 48], ecx
-  fistp qword ptr [edx + 40]
-  fistp qword ptr [edx + 32]
-  fistp qword ptr [edx + 24]
-  fistp qword ptr [edx + 16]
-  fistp qword ptr [edx + 8]
-  fistp qword ptr [edx]
+  {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
+  push esi
+  push edi
+  mov esi, eax
+  mov edi, edx
+  mov ecx, 13
+  cld
+  rep movsd
+  pop edi
+  pop esi
 {$ELSE}
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5899,24 +5899,16 @@ end;
 procedure Move60(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
-  emms
-  fild qword ptr [eax]
-  fild qword ptr [eax + 8]
-  fild qword ptr [eax + 16]
-  fild qword ptr [eax + 24]
-  fild qword ptr [eax + 32]
-  fild qword ptr [eax + 40]
-  fild qword ptr [eax + 48]
-  mov ecx, [eax + 56]
-  mov [edx + 56], ecx
-  fistp qword ptr [edx + 48]
-  fistp qword ptr [edx + 40]
-  fistp qword ptr [edx + 32]
-  fistp qword ptr [edx + 24]
-  fistp qword ptr [edx + 16]
-  fistp qword ptr [edx + 8]
-  fistp qword ptr [edx]
+  {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
+  push esi
+  push edi
+  mov esi, eax
+  mov edi, edx
+  mov ecx, 15
+  cld
+  rep movsd
+  pop edi
+  pop esi
 {$ELSE}
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -6015,26 +6007,16 @@ end;
 procedure Move68(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
-  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
-  emms
-  fild qword ptr [eax]
-  fild qword ptr [eax + 8]
-  fild qword ptr [eax + 16]
-  fild qword ptr [eax + 24]
-  fild qword ptr [eax + 32]
-  fild qword ptr [eax + 40]
-  fild qword ptr [eax + 48]
-  fild qword ptr [eax + 56]
-  mov ecx, [eax + 64]
-  mov [edx + 64], ecx
-  fistp qword ptr [edx + 56]
-  fistp qword ptr [edx + 48]
-  fistp qword ptr [edx + 40]
-  fistp qword ptr [edx + 32]
-  fistp qword ptr [edx + 24]
-  fistp qword ptr [edx + 16]
-  fistp qword ptr [edx + 8]
-  fistp qword ptr [edx]
+  {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
+  push esi
+  push edi
+  mov esi, eax
+  mov edi, edx
+  mov ecx, 17
+  cld
+  rep movsd
+  pop edi
+  pop esi
 {$ELSE 32Bit}
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -6236,7 +6218,7 @@ asm
 {$IFDEF EnableMMX}
   {$IFNDEF ForceMMX}
   test FastMMCpuFeaturesA, FastMMCpuFeatureMMX
-  jz @FPUMove
+  jz @MovsMove
   {$ENDIF}
   {Make the counter negative based: The last 12 bytes are moved separately}
   neg ecx
@@ -6287,29 +6269,29 @@ asm
   jmp @Finish
   {$ENDIF ForceMMX}
 {$ENDIF EnableMMX}
-{FPU code is only used if MMX is not forced}
+{Fallback path when MMX is not available - use rep movsd instead of FPU}
 {$IFNDEF ForceMMX}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
-@FPUMove:
-  neg ecx
-  jns @FPUMoveLast12
-  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 16{$ENDIF}
-@FPUMoveLoop:
-  {Move a 16 byte block}
-  fild qword ptr [eax + ecx]
-  fild qword ptr [eax + ecx + 8]
-  fistp qword ptr [edx + ecx + 8]
-  fistp qword ptr [edx + ecx]
-  {Are there another 16 bytes to move?}
-  add ecx, 16
-  js @FPUMoveLoop
-  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
-@FPUMoveLast12:
-  {Do the last 12 bytes}
-  fild qword ptr [eax + ecx]
-  fistp qword ptr [edx + ecx]
-  mov eax, [eax + ecx + 8]
-  mov [edx + ecx + 8], eax
+@MovsMove:
+  {Fixed pleriche/FastMM4 Issue #85: Replaced FPU with rep movsd.
+   At entry: eax = ASource + ecx, edx = ADest + ecx, ecx = ACount - 12
+   The setup code subtracted 12 from ecx but did NOT negate it.
+   Recover original pointers and use rep movsd which works on all x86 CPUs.}
+  push esi
+  push edi
+  mov esi, eax
+  sub esi, ecx       {Recover ASource: eax had ecx added, so subtract it back}
+  mov edi, edx
+  sub edi, ecx       {Recover ADest: edx had ecx added, so subtract it back}
+  {ecx currently holds (ACount - 12). We need dword count = (ACount + 3) / 4.
+   Add back the 12 that was subtracted, plus 3 for rounding up: 12 + 3 = 15}
+  add ecx, 15
+  shr ecx, 2         {Divide by 4 to get dword count}
+  cld
+  rep movsd
+  pop edi
+  pop esi
+  jmp @Finish
 {$ENDIF ForceMMX}
 {$ELSE 32bit}
   {$IFNDEF unix}
@@ -7086,7 +7068,7 @@ asm
 {$IFDEF EnableMMX}
   {$IFNDEF ForceMMX}
   test FastMMCpuFeaturesA, FastMMCpuFeatureMMX
-  jz @FPUMoveLoop
+  jz @MovsMoveLoop
   {$ENDIF}
 
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 16{$ENDIF}
@@ -7116,21 +7098,29 @@ asm
   mov [edx + ecx], eax
   jmp @Finish
 {$ENDIF}
-{FPU code is only used if MMX is not forced}
+{Fallback path when MMX is not available - use rep movsd instead of FPU}
 {$IFNDEF ForceMMX}
 
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 16{$ENDIF}
 
-@FPUMoveLoop:
-  {Move an 8 byte block}
-  fild qword ptr [eax + ecx]
-  fistp qword ptr [edx + ecx]
-  {Are there another 8 bytes to move?}
-  add ecx, 8
-  js @FPUMoveLoop
-  {Do the last 4 bytes}
-  mov eax, [eax + ecx]
-  mov [edx + ecx], eax
+@MovsMoveLoop:
+  {Fixed pleriche/FastMM4 Issue #85: Replaced FPU with rep movsd.
+   At entry: eax = ASource + ACount - 4, edx = ADest + ACount - 4, ecx = 4 - ACount
+   The setup code subtracted 4 from ecx AND negated it (for negative-indexing loop).
+   Recover original pointers and use rep movsd which works on all x86 CPUs.}
+  push esi
+  push edi
+  lea esi, [eax + ecx]  {Recover ASource: eax and ecx cancel out}
+  lea edi, [edx + ecx]  {Recover ADest: edx and ecx cancel out}
+  {ecx currently holds (4 - ACount) because it was negated. We need to un-negate
+   it first to get (ACount - 4), then add back the 4 plus 3 for rounding: 4 + 3 = 7}
+  neg ecx               {Un-negate: now ecx = ACount - 4}
+  add ecx, 7            {Add back 4 that was subtracted, plus 3 for rounding up}
+  shr ecx, 2            {Divide by 4 to get dword count}
+  cld
+  rep movsd
+  pop edi
+  pop esi
   jmp @Finish
 {$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}

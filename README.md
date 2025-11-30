@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.9 (30 November 2025)
+Version: 1.0.10 (30 November 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -266,11 +266,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
-- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
-    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
-    instruction to defensively clear FPU state before fild sequence. This prevents
-    exceptions or silent memory corruption when callers violate ABI by leaving
-    values on FPU stack. See https://stackoverflow.com/q/79833922 for details.
+- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit Move36/44/52/60/68 
+    procedures (pleriche/FastMM4 Issue #85) by adding EMMS instruction to defensively 
+    clear FPU state before fild sequence. This prevents exceptions or silent memory
+    corruption when callers violate ABI by leaving values on FPU stack.
+    See https://stackoverflow.com/q/79833922/6910868 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block
     allocations (CVE-2017-17426 class). 
@@ -332,6 +332,39 @@ FastMM4-AVX Version History:
 - 1.01 (10 October 2017) - made the source code compile under Delphi5,
     thanks to Valts Silaputnins.
 - 1.00 (27 July 2017) - initial revision.
+
+
+
+Remaining Security issues and known limitations:
+
+ - Safe-Unlinking Protection (pleriche/FastMM4 Issue #80) is not implemented.
+   Safe-unlinking validates pointer consistency before unlink operations on
+   medium block free lists. This prevents the classic "unlink attack" where
+   corrupted free list pointers can achieve arbitrary memory writes.
+   The validation checks: P->bk->fd == P && P->fd->bk == P
+   This follows the glibc pattern implemented in version 2.3.6 (2005).
+   See: https://github.com/pleriche/FastMM4/issues/80
+
+ - Double-Free Detection is only available in FullDebugMode.
+   Production builds have no mechanism to detect if a block is freed twice.
+   This can lead to use-after-free vulnerabilities where a block appears in
+   the free list multiple times. Modern allocators (glibc 2.29+, hardened_malloc,
+   Scudo) implement tcache-key or similar mechanisms for production double-free
+   detection. For security-critical applications, consider using FullDebugMode
+   during testing and enabling CheckHeapForCorruption in production.
+
+Known Limitations:
+
+ - UseReleaseStack must NOT be used in DLLs (pleriche/FastMM4 Issue #65)
+   The UseReleaseStack feature creates a background cleanup thread. During DLL
+   unload (DllMain with DLL_PROCESS_DETACH), DestroyCleanupThread calls
+   WaitForSingleObject with INFINITE timeout to wait for the thread to exit.
+   Problem: DllMain runs with Windows loader lock held. If the cleanup thread
+   is waiting for the loader lock (e.g., during thread exit or any API call
+   that internally uses LoadLibrary/FreeLibrary), deadlock occurs. This affects
+   Windows Server 2016+ and regsvr32/COM+ registration scenarios.
+   Workaround: Do not define UseReleaseStack when building DLLs.
+   See: https://github.com/pleriche/FastMM4/issues/65
 
 
 The original FastMM4 description follows:
