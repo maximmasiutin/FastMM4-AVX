@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.9 (26 November 2025)
+Version 1.0.10 (30 November 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -261,6 +261,12 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
+    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
+    instruction to defensively clear FPU state before fild sequence. This prevents
+    exceptions or silent memory corruption when callers violate ABI by leaving
+    values on FPU stack. See https://stackoverflow.com/q/79833922 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
     allocations (CVE-2017-17426 class).
@@ -1776,7 +1782,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.9';
+  FastMM4AvxVersion = '1.0.10';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 
@@ -5374,6 +5380,27 @@ end;
 procedure Move36(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
+  {Fix for pleriche/FastMM4 Issue #85: FPU register corruption in ReallocMem.
+   The fild/fistp sequence uses the x87 FPU stack. If a caller violates the ABI
+   by leaving values on the FPU stack (e.g., after a failed val() call), our
+   fild instructions can overflow the 8-slot FPU stack, causing exceptions or
+   silent memory corruption.
+
+   Per System V ABI (Intel386 Supplement, page 3-12): "Registers %st(1) through
+   %st(7) must be empty before entry and upon exit from a function."
+
+   The EMMS instruction clears the FPU tag word, marking all registers as empty.
+   This defensively handles ABI-violating callers. EMMS is fast on Pentium-era
+   CPUs where this code path executes (modern CPUs use the SSE path instead).
+
+   References:
+   - StackOverflow discussion: https://stackoverflow.com/q/79833922
+   - Intel Manual Vol.1 Ch.9: https://xem.github.io/minix86/manual/intel-x86-and-64-manual-vol1/o_7281d5ea06a5b67a-232.html
+   - Agner Fog Calling Conventions: https://www.agner.org/optimize/calling_conventions.pdf
+   - EMMS instruction reference: https://www.felixcloutier.com/x86/emms
+   - ABI requirements: https://stackoverflow.com/q/35963861
+   - Defensive EMMS usage: https://stackoverflow.com/q/480562}
+  emms
   fild qword ptr [eax]
   fild qword ptr [eax + 8]
   fild qword ptr [eax + 16]
@@ -5552,6 +5579,8 @@ end;
 procedure Move44(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
+  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
+  emms
   fild qword ptr [eax]
   fild qword ptr [eax + 8]
   fild qword ptr [eax + 16]
@@ -5650,6 +5679,8 @@ end;
 procedure Move52(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
+  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
+  emms
   fild qword ptr [eax]
   fild qword ptr [eax + 8]
   fild qword ptr [eax + 16]
@@ -5868,6 +5899,8 @@ end;
 procedure Move60(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
+  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
+  emms
   fild qword ptr [eax]
   fild qword ptr [eax + 8]
   fild qword ptr [eax + 16]
@@ -5982,6 +6015,8 @@ end;
 procedure Move68(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
 {$IFDEF 32Bit}
+  {Fix for pleriche/FastMM4 Issue #85 - see Move36 for detailed explanation}
+  emms
   fild qword ptr [eax]
   fild qword ptr [eax + 8]
   fild qword ptr [eax + 16]

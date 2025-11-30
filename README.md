@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.9 (26 November 2025)
+Version: 1.0.9 (30 November 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -266,8 +266,14 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
-- 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
-    allocations (CVE-2017-17426 class).
+- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
+    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
+    instruction to defensively clear FPU state before fild sequence. This prevents
+    exceptions or silent memory corruption when callers violate ABI by leaving
+    values on FPU stack. See https://stackoverflow.com/q/79833922 for details.
+
+- 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block
+    allocations (CVE-2017-17426 class). 
 
 - 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
     optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
