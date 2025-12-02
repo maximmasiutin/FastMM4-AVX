@@ -144,7 +144,7 @@ const
 var
   Ptrs: array[0..19] of Pointer;
   Sizes: array[0..19] of Integer;
-  i, j: Integer;
+  i: Integer;
   P: PByte;
   Success: Boolean;
 begin
@@ -1163,7 +1163,7 @@ end;
 procedure TAllocThread.Execute;
 var
   Ptrs: array[0..99] of Pointer;
-  i, j: Integer;
+  i: Integer;
 begin
   for i := 0 to 99 do
     Ptrs[i] := nil;
