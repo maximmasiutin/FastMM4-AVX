@@ -1427,6 +1427,7 @@ interface
 {$ENDIF}
 
 {$IFDEF Linux}
+  {$define PurePascal}
   {$define POSIX}
   {$IFDEF 64Bit}
     {$define PIC}  // Linux 64bit ASM is PIC
@@ -1789,6 +1790,10 @@ of just one option: "Boolean short-circuit evaluation".}
   {$IFDEF PurePascal}
     {$define SynchroVarLongint}
   {$ENDIF}
+{$ENDIF}
+
+{$IFDEF LINUX}
+  {$define SynchroVarLongint}
 {$ENDIF}
 
 {$IFDEF PurePascal}
@@ -2284,6 +2289,9 @@ procedure FastMMDisableWaitPKG;
 implementation
 
 uses
+{$IFDEF LINUX}
+System.SyncObjs,
+{$ENDIF}
 {$IFNDEF POSIX}
   Windows,
   {$IFDEF _EventLog}
@@ -2302,7 +2310,13 @@ uses
     {$IFDEF fpc}
   BaseUnix,
     {$ELSE}
-  Libc,
+       {$IFDEF LINUX}
+        // Modern Delphi (LLVM) on Linux uses Posix.* units, not Libc
+        Posix.Stdlib, Posix.Unistd, Posix.Fcntl, Posix.PThread,
+      {$ELSE}
+        // Fallback for old Kylix or strictly legacy targets expecting Libc
+        Libc,
+      {$ENDIF}
     {$ENDIF}
   {$ENDIF}
 {$ENDIF}
@@ -3009,9 +3023,16 @@ const
   FastMMCpuFeatureB_WAITPKG                     = Byte(UnsignedBit shl 0);
 {$ENDIF}
 
+{$IFDEF LINUX}
+type
+  TRtlCriticalSection = System.SyncObjs.TCriticalSection;
+{$ENDIF}
+
+
 {-------------------------Private variables----------------------------}
 var
   {-----------------Small block management------------------}
+
 {$IFDEF SmallBlocksLockedCriticalSection}
   SmallBlockCriticalSections: array[0..NumSmallBlockTypes-1] of TRtlCriticalSection;
 {$ENDIF}
@@ -3604,7 +3625,11 @@ function InterlockedExchangeByte(var Target: TSynchronizationVariable; const Val
 begin
   Result :=
   {$IFDEF SynchroVarLongint}
-  InterlockedExchange
+  {$IFDEF LINUX}
+    AtomicExchange
+  {$ELSE}
+    InterlockedExchange
+  {$ENDIF}
   {$ELSE}
   Windows.InterlockedExchange8
   {$ENDIF}
