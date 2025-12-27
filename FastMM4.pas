@@ -267,9 +267,9 @@ FastMM4-AVX Version History:
     64-bit asm Move procedures, fixed POSIX WriteFile buffer passing.
 
 - 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
-    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
-    instruction to defensively clear FPU state before fild sequence. This prevents
-    exceptions or silent memory corruption when callers violate ABI by leaving
+    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by replacing
+    fild/fistp with rep movsd. This eliminates FPU register usage entirely,
+    preventing exceptions or memory corruption when callers violate ABI by leaving
     values on FPU stack. See https://stackoverflow.com/q/79833922/6910868 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
