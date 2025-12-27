@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.10 (30 November 2025)
+Version 1.0.11 (27 December 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -261,6 +261,10 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.11 (27 December 2025) Fix Delphi LLVM Linux compilation (issue #35): added
+    critical section wrapper procedures for Linux, added PurePascal guards for
+    64-bit asm Move procedures, fixed POSIX WriteFile buffer passing.
 
 - 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
     Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by adding EMMS
@@ -1814,7 +1818,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.10';
+  FastMM4AvxVersion = '1.0.11';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 
@@ -3026,6 +3030,27 @@ const
 {$IFDEF LINUX}
 type
   TRtlCriticalSection = System.SyncObjs.TCriticalSection;
+
+procedure InitializeCriticalSection(var CS: TRtlCriticalSection);
+begin
+  CS := TRtlCriticalSection.Create;
+end;
+
+procedure DeleteCriticalSection(var CS: TRtlCriticalSection);
+begin
+  CS.Free;
+  CS := nil;
+end;
+
+procedure EnterCriticalSection(var CS: TRtlCriticalSection);
+begin
+  CS.Enter;
+end;
+
+procedure LeaveCriticalSection(var CS: TRtlCriticalSection);
+begin
+  CS.Leave;
+end;
 {$ENDIF}
 
 
@@ -4160,7 +4185,7 @@ function GetModuleFileName(Module: HMODULE; Buffer: PAnsiChar; BufLen: Integer):
 const
   CUnknown = 'unknown'#0;
 var
-  LUnknown: array[0..Length(CUnknown)-1] of AnsiChar = CUnknown;
+  tmp: array[0..4095] of Char;
 begin
   if FastMMIsInstalled then
   begin
@@ -5282,7 +5307,7 @@ end;
 
 {$ENDIF ExcludeSmallGranularMoves}
 
-
+{$IFNDEF PurePascal}
 {$IFDEF 64bit}
 procedure Move24(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
@@ -5321,7 +5346,7 @@ asm
   xorps xmm0, xmm0
 end;
 {$ENDIF 64bit}
-
+{$ENDIF PurePascal}
 
 {$IFNDEF ExcludeSmallGranularMoves}
 
@@ -5776,7 +5801,7 @@ end;
 
 {$ENDIF ExcludeSmallGranularMoves}
 
-
+{$IFNDEF PurePascal}
 {$IFDEF 64bit}
 procedure Move56(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
 asm
@@ -5887,8 +5912,10 @@ asm
   xorps xmm2, xmm2
   xorps xmm3, xmm3
 end;
-
 {$ENDIF 64bit}
+{$ENDIF PurePascal}
+
+
 
 {$IFNDEF ExcludeSmallGranularMoves}
 
@@ -7235,8 +7262,7 @@ function WriteFile(hFile: THandle; const Buffer; nNumberOfBytesToWrite: Cardinal
   var lpNumberOfBytesWritten: Cardinal; lpOverlapped: Pointer): Boolean; stdcall;
 begin
   {$IFNDEF fpc}
-  lpNumberOfBytesWritten := __write(hFile, {$IFDEF MACOS}@Buffer{$ELSE}Buffer{$ENDIF},
-    nNumberOfBytesToWrite);
+  lpNumberOfBytesWritten := __write(hFile, {$IFDEF POSIX}@Buffer{$ELSE}Buffer{$ENDIF}, nNumberOfBytesToWrite);
   {$ELSE}
   lpNumberOfBytesWritten := fpwrite(hFile, Buffer, nNumberOfBytesToWrite);
   {$ENDIF}

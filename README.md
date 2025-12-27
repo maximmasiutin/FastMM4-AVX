@@ -6,7 +6,7 @@ FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support fo
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.10 (30 November 2025)
+Version: 1.0.11 (27 December 2025)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -265,6 +265,10 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.11 (27 December 2025) Fix Delphi LLVM Linux compilation (issue #35): added
+    critical section wrapper procedures for Linux, added PurePascal guards for
+    64-bit asm Move procedures, fixed POSIX WriteFile buffer passing.
 
 - 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit Move36/44/52/60/68 
     procedures (pleriche/FastMM4 Issue #85) by adding EMMS instruction to defensively 
