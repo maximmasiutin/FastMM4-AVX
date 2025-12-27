@@ -1431,12 +1431,12 @@ interface
 {$ENDIF}
 
 {$IFDEF Linux}
-  {$define PurePascal}
   {$define POSIX}
   {$IFDEF 64Bit}
     {$define PIC}  // Linux 64bit ASM is PIC
   {$ENDIF}
   {$IFNDEF FPC}
+    {$define PurePascal}  // Delphi LLVM Linux needs PurePascal
     {$define KYLIX}
   {$ENDIF}
 {$ENDIF}
@@ -1797,7 +1797,9 @@ of just one option: "Boolean short-circuit evaluation".}
 {$ENDIF}
 
 {$IFDEF LINUX}
-  {$define SynchroVarLongint}
+  {$IFNDEF FPC}
+    {$define SynchroVarLongint}  // Delphi LLVM Linux needs Longint sync vars
+  {$ENDIF}
 {$ENDIF}
 
 {$IFDEF PurePascal}
