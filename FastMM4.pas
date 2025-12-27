@@ -3656,7 +3656,11 @@ begin
   Result :=
   {$IFDEF SynchroVarLongint}
   {$IFDEF LINUX}
+    {$IFDEF FPC}
+    InterlockedExchange
+    {$ELSE}
     AtomicExchange
+    {$ENDIF}
   {$ELSE}
     InterlockedExchange
   {$ENDIF}
