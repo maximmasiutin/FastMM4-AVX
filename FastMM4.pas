@@ -2294,7 +2294,9 @@ implementation
 
 uses
 {$IFDEF LINUX}
+  {$IFNDEF FPC}
 System.SyncObjs,
+  {$ENDIF}
 {$ENDIF}
 {$IFNDEF POSIX}
   Windows,
@@ -3028,6 +3030,8 @@ const
 {$ENDIF}
 
 {$IFDEF LINUX}
+  {$IFNDEF FPC}
+  {Delphi LLVM on Linux needs wrapper procedures for critical sections}
 type
   TRtlCriticalSection = System.SyncObjs.TCriticalSection;
 
@@ -3051,6 +3055,7 @@ procedure LeaveCriticalSection(var CS: TRtlCriticalSection);
 begin
   CS.Leave;
 end;
+  {$ENDIF}
 {$ENDIF}
 
 
