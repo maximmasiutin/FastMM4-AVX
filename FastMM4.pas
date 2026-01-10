@@ -3857,13 +3857,9 @@ asm
 @DidntLockAtFirstAttempt:
 
 {$IFDEF EnableWaitPKG}
-   {$IFDEF FPC}
    push r8
    call GetFastMMCpuFeaturesB
    pop  r8
-   {$ELSE}
-   movzx eax, FastMMCpuFeaturesB
-   {$ENDIF}
    test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
 
@@ -4000,13 +3996,9 @@ asm
    jmp  @Finish
 @DidntLockAtFirstAttempt:
 {$IFDEF EnableWaitPKG}
-   {$IFDEF FPC}
    push rcx
    call GetFastMMCpuFeaturesB
    pop  rcx
-   {$ELSE}
-   movzx eax, FastMMCpuFeaturesB
-   {$ENDIF}
    test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
    mov  eax, cLockByteLocked
@@ -6361,7 +6353,14 @@ asm
   {$IFDEF AllowAsmNoframe}
   .noframe
   {$ENDIF}
-  test FastMMCpuFeaturesA, FastMMCpuFeatureERMS
+  push rcx
+  push rdx
+  push r8
+  call GetFastMMCpuFeaturesA
+  pop  r8
+  pop  rdx
+  pop  rcx
+  test al, FastMMCpuFeatureERMS
   jz @NoERMS
   call MoveWithErmsNoAVX
   jmp @Finish
@@ -6962,7 +6961,12 @@ asm
 {$IFDEF EnableFSRM}
   // moves of 64 bytes or less are good only when we have fast short strings on 64 bit,
   // but not on 32 bit
-  test    FastMMCpuFeaturesA, FastMMCpuFeatureFSRM
+  push    rsi
+  push    rdi
+  call    GetFastMMCpuFeaturesA
+  pop     rdi
+  popr    rsi
+  test    al, FastMMCpuFeatureFSRM
   jnz     @movs
 {$ENDIF}
 {$ENDIF}
@@ -10858,7 +10862,14 @@ asm
    jmp  @GotTheLock
 @DidntLockAtFirstAttempt:
 {$IFDEF EnableWaitPKG}
-   test FastMMCpuFeaturesB, FastMMCpuFeatureB_WaitPKG
+   push r8
+   push r9
+   push rdx
+   call FastMMCpuFeaturesB
+   pop  rdx
+   pop  r9
+   pop  r8
+   test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
 
    push r8
@@ -12677,7 +12688,14 @@ asm
    jmp  @GotTheLock
 @DidntLockAtFirstAttempt:
 {$IFDEF EnableWaitPKG}
-   test FastMMCpuFeaturesB, FastMMCpuFeatureB_WaitPKG
+   push r8
+   push r9
+   push rdx
+   call FastMMCpuFeaturesB
+   pop  rdx
+   pop  r9
+   pop  r8
+   test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
 
    push r8
@@ -16449,6 +16467,8 @@ var
   LCurPtr, LEndPtr: Pointer;
 begin
   {Get the first and last pointer for the pool}
+  LCurPtr := nil;
+  LEndPtr := nil;
   GetFirstAndLastSmallBlockInPool(APSmallBlockPool, LCurPtr, LEndPtr);
   {Step through all blocks}
   while UIntPtr(LCurPtr) <= UIntPtr(LEndPtr) do
@@ -17634,6 +17654,7 @@ var
   LCallback: TWalkAllocatedBlocksCallback;
 begin
   {Get the current memory manager usage summary.}
+  FillChar(LMemoryManagerUsageSummary, SizeOf(LMemoryManagerUsageSummary), 0);
   GetMemoryManagerUsageSummary(LMemoryManagerUsageSummary);
   {Allocate the memory required to capture detailed allocation information.}
   LPLogInfo := VirtualAlloc(nil, SizeOf(TMemoryLogInfo), MEM_COMMIT or MEM_TOP_DOWN, PAGE_READWRITE);
@@ -17913,6 +17934,8 @@ var
     ;
     LPLeakedClasses := @LSmallBlockLeaks[LBlockTypeIndex];
     {Get the first and last pointer for the pool}
+    LCurPtr := nil;
+    LEndPtr := nil;
     GetFirstAndLastSmallBlockInPool(APSmallBlockPool, LCurPtr, LEndPtr);
     {Step through all blocks}
     while UIntPtr(LCurPtr) <= UIntPtr(LEndPtr) do
@@ -18481,6 +18504,7 @@ var
   LSBTIndex: Integer;
 begin
   {Get the memory manager state}
+  FillChar(LMMS, SizeOf(LMMS), 0);
   GetMemoryManagerState(LMMS);
   {Add up the totals}
   LAllocatedBytes := LMMS.TotalAllocatedMediumBlockSize + LMMS.TotalAllocatedLargeBlockSize;
@@ -18897,8 +18921,11 @@ end;
 
 {Returns the current installation state of the memory manager.}
 function FastMM_GetInstallationState: TFastMM_MemoryManagerInstallationState;
+var
+  LMemoryManagerSet: Boolean;
 begin
-  if IsMemoryManagerSet then
+  LMemoryManagerSet := System.IsMemoryManagerSet;
+  if LMemoryManagerSet then
   begin
     if FastMMIsInstalled then
     begin
@@ -19312,7 +19339,10 @@ var
 var
   HeapTotalAllocated: NativeUInt;
 {$ENDIF}
+var
+  LMemoryManagerSet: Boolean;
 begin
+  LMemoryManagerSet := False;
   {Default to error}
   Result := False;
 {$IFDEF FullDebugMode}
@@ -19344,7 +19374,9 @@ begin
   {Has another MM been set, or has the Embarcadero MM been used? If so, this
    file is not the first unit in the uses clause of the project's .dpr file.}
 
-  if IsMemoryManagerSet then
+
+  LMemoryManagerSet := System.IsMemoryManagerSet;
+  if LMemoryManagerSet then
   begin
     {When using runtime packages, another library may already have installed
      FastMM: Silently ignore the installation request.}
