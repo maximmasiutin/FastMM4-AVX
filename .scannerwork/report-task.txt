@@ -1,0 +1,6 @@
+projectKey=FastMM4-AVX
+serverUrl=http://localhost:9000
+serverVersion=25.11.0.114957
+dashboardUrl=http://localhost:9000/dashboard?id=FastMM4-AVX
+ceTaskId=46ea75cd-0aea-4b46-bae9-d613a7593e0d
+ceTaskUrl=http://localhost:9000/api/ce/task?id=46ea75cd-0aea-4b46-bae9-d613a7593e0d
