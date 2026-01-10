@@ -19,7 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Run Trivy vulnerability scanner on the cloned repository files
         uses: aquasecurity/trivy-action@0.33.1
