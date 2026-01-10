@@ -56,3 +56,5 @@ libimpFastMM4.a
 
 # SonarQube scanner
 .scannerwork 
+
+fastmm4-avx-reports
