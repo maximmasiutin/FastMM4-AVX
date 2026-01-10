@@ -1,2 +1,0 @@
-'C:\q\FastMM4-AVX\test_normal.bat' is not recognized as an internal or external command,
-operable program or batch file.
