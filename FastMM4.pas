@@ -6965,7 +6965,7 @@ asm
   push    rdi
   call    GetFastMMCpuFeaturesA
   pop     rdi
-  popr    rsi
+  pop     rsi
   test    al, FastMMCpuFeatureFSRM
   jnz     @movs
 {$ENDIF}
@@ -10865,7 +10865,7 @@ asm
    push r8
    push r9
    push rdx
-   call FastMMCpuFeaturesB
+   call GetFastMMCpuFeaturesB
    pop  rdx
    pop  r9
    pop  r8
@@ -12691,7 +12691,7 @@ asm
    push r8
    push r9
    push rdx
-   call FastMMCpuFeaturesB
+   call GetFastMMCpuFeaturesB
    pop  rdx
    pop  r9
    pop  r8
