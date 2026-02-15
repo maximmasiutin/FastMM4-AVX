@@ -11961,7 +11961,16 @@ begin
       if (LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag)) = 0 then
         Result := FreeLargeBlock(APointer)
       else
+      begin
+        {Double-free or invalid pointer detection (CWE-415): raise error
+         instead of silently returning -1.}
+{$IFDEF BCB6OrDelphi7AndUp}
+        System.Error(reInvalidPtr);
+{$ELSE}
+        System.RunError(reInvalidPtr);
+{$ENDIF}
         Result := CFastFreeMemReturnValueError;
+      end;
     end;
   end;
 end;
@@ -12469,8 +12478,17 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jmp @Finish
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontFreeLargeBlock:
-  {Attempt to free an already free block}
-  mov eax, -1
+  {Double-free or invalid pointer detection (CWE-415)}
+  pop ebx
+{$IFNDEF AssumeMultiThreaded}
+  pop ebp
+{$ENDIF}
+  mov eax, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @Exit:
   pop ebx
@@ -13039,12 +13057,20 @@ but we don't need them at this point}
   jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @NotASmallOrMediumBlock:
-  {Attempt to free an already free block?}
-  mov eax, -1
   {Is it in fact a large block?}
   test dl, IsFreeBlockFlag + IsMediumBlockFlag
-  jnz @Done
+  jnz @DoubleFreeDetected
   call FreeLargeBlock
+  jmp @Done
+@DoubleFreeDetected:
+  {Double-free or invalid pointer detection (CWE-415)}
+  sub rsp, 28h
+  mov ecx, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @Done: {automatically restores registers from stack by implicitly inserting pop instructions (rbx, rsi and r12)}
 {$IFNDEF AllowAsmParams}
