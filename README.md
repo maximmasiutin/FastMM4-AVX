@@ -2,11 +2,11 @@
 
 FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support for FastMM4)
  - Copyright (C) 2017-2020 Ritlabs, SRL. All rights reserved.
- - Copyright (C) 2020-2025 Maxim Masiutin. All rights reserved.
+ - Copyright (C) 2020-2026 Maxim Masiutin. All rights reserved.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.11 (27 December 2025)
+Version: 1.0.12 (5 March 2026)
 
 This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
 (see below for the original FastMM4 description)
@@ -265,6 +265,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.12 (5 March 2026) Security: Added production-build double-free detection
+  in FastFreeMem (CWE-415), added advanced regression tests for double-free
+  across small/medium/large block paths, and fixed FreePascal install guard
+  handling for pre-initialization allocations.
 
 - 1.0.11 (27 December 2025) Fix Delphi LLVM Linux compilation (issue #35): added
     critical section wrapper procedures for Linux, added PurePascal guards for
