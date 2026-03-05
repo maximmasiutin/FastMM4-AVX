@@ -214,12 +214,12 @@ The above tests (on Xeon E5-2667v4 and i9) have been done on 03-May-2018.
 
 Here is the single-threading performance comparison in some selected
 scenarios between FastMM v5.03 dated May 12, 2021 and FastMM4-AVX v1.05
-dated May 20, 2021. FastMM4-AVX is compiled with default options. This 
+dated May 20, 2021. FastMM4-AVX is compiled with default options. This
 test is run on May 20, 2021, under Intel Core i7-1065G7 CPU, Ice Lake
-microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz, 
-4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target. 
-Please note that these are the selected scenarios where FastMM4-AVX is 
-faster than FastMM5. In other scenarios, especially in multi-threaded 
+microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz,
+4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target.
+Please note that these are the selected scenarios where FastMM4-AVX is
+faster than FastMM5. In other scenarios, especially in multi-threaded
 with heavy contention, FastMM5 is faster.
 
                                              FastMM5  AVX-br.   Ratio
@@ -272,16 +272,16 @@ FastMM4-AVX Version History:
     preventing exceptions or memory corruption when callers violate ABI by leaving
     values on FPU stack. See https://stackoverflow.com/q/79833922/6910868 for details.
 
-- 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block 
+- 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block
     allocations (CVE-2017-17426 class).
 
-- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
-    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
-    across Linux and Windows,  covering diverse test configurations; 
-    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation 
-    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr` 
-    tool for verifying detected CPU features; Updated documentation and code comments 
-    for improved clarity and accuracy across multiple files; Added support for AVX-512 
+- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including
+    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD
+    across Linux and Windows,  covering diverse test configurations;
+    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation
+    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr`
+    tool for verifying detected CPU features; Updated documentation and code comments
+    for improved clarity and accuracy across multiple files; Added support for AVX-512
     for Linux; Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.7 (21 March 2023) - implemented the use of umonitor/umwait instructions;
@@ -299,8 +299,8 @@ FastMM4-AVX Version History:
     block sizes of 1024 and 2048 bytes, while in previous versions
     instead of 1024-byte blocks there were 1056-byte blocks,
     and instead of 2048-byte blocks were 2176-byte blocks;
-    fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64 
-    versions compiled under Delphi and FreePascal passed all the FastCode 
+    fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64
+    versions compiled under Delphi and FreePascal passed all the FastCode
     validation suites.
 
 - 1.05 (20 May 2021) - improved speed of releasing memory blocks on higher thread
@@ -1405,7 +1405,7 @@ interface
   {$ENDIF}
   {$IFDEF UseReleaseStack}
     {$Message error 'LogLockContention requires FullDebugMode but UseReleaseStack is incompatible with FullDebugMode'}
-  {$ENDIF}  
+  {$ENDIF}
 {$ENDIF}
 
 {Release stack requires ~ASMVersion (for now).}
@@ -11961,7 +11961,16 @@ begin
       if (LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag)) = 0 then
         Result := FreeLargeBlock(APointer)
       else
+      begin
+        {Double-free or invalid pointer detection (CWE-415): raise error
+         instead of silently returning -1.}
+{$IFDEF BCB6OrDelphi7AndUp}
+        System.Error(reInvalidPtr);
+{$ELSE}
+        System.RunError(reInvalidPtr);
+{$ENDIF}
         Result := CFastFreeMemReturnValueError;
+      end;
     end;
   end;
 end;
@@ -12469,8 +12478,14 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jmp @Finish
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontFreeLargeBlock:
-  {Attempt to free an already free block}
-  mov eax, -1
+  {Double-free or invalid pointer detection (CWE-415)}
+  mov eax, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
+  jmp @Exit
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @Exit:
   pop ebx
@@ -13039,12 +13054,20 @@ but we don't need them at this point}
   jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @NotASmallOrMediumBlock:
-  {Attempt to free an already free block?}
-  mov eax, -1
   {Is it in fact a large block?}
   test dl, IsFreeBlockFlag + IsMediumBlockFlag
-  jnz @Done
+  jnz @DoubleFreeDetected
   call FreeLargeBlock
+  jmp @Done
+@DoubleFreeDetected:
+  {Double-free or invalid pointer detection (CWE-415)}
+  mov ecx, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
+  jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @Done: {automatically restores registers from stack by implicitly inserting pop instructions (rbx, rsi and r12)}
 {$IFNDEF AllowAsmParams}
@@ -19352,7 +19375,7 @@ begin
    available?}
   if ( FullDebugModeDLL = 0 )
       {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
-      AND ( MemoryResourceExists( {$IFNDEF 64Bit}'FastMM_FullDebugMode'{$ELSE}'FastMM_FullDebugMode64'{$ENDIF} ) = 0 ) 
+      AND ( MemoryResourceExists( {$IFNDEF 64Bit}'FastMM_FullDebugMode'{$ELSE}'FastMM_FullDebugMode64'{$ENDIF} ) = 0 )
       {$IFEND} then
     Exit;
     {$ENDIF}
@@ -19407,6 +19430,7 @@ See https://bugs.freepascal.org/view.php?id=38391 for more details.
 Please double-check that the FastMM4 unit is the first unit in the units ("uses")
 list of your .lpr file (or any other main file where you define project
 units). }
+{$IFNDEF FPC}
 {$IFNDEF IgnoreMemoryAllocatedBefore}
   if HeapTotalAllocated <> 0 then
   begin
@@ -19427,6 +19451,7 @@ units). }
   {$ENDIF}
     Exit;
   end;
+{$ENDIF}
 {$ENDIF}
 {$ENDIF}
   {All OK}
@@ -20837,7 +20862,7 @@ begin
     CreateCleanupThread;
     {$ENDIF}
 
-    InitializationCodeHasRun := True;    
+    InitializationCodeHasRun := True;
     {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
     FastMM_LoadDebugSupportLibrary;
     {$IFEND}
@@ -20900,7 +20925,7 @@ begin
   end;
 
   {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
-  if NOT InitializationCodeHasRun then // Resource is loaded after FastMM since we allocate Memory here .. 
+  if NOT InitializationCodeHasRun then // Resource is loaded after FastMM since we allocate Memory here ..
     Exit;
 
   if ( FullDebugModeDLL = 0 ) then
