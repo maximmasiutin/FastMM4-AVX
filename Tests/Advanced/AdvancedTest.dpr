@@ -1419,7 +1419,100 @@ begin
 end;
 
 // =============================================================================
-// Test 25: Mixed Size Random Pattern
+// Test 25: Double-Free Detection (small/medium/large)
+// =============================================================================
+procedure TestDoubleFreeDetection;
+const
+  TestName = 'DoubleFreeDetection';
+var
+  PSmall, PMedium, PLarge: Pointer;
+  SmallRaised, MediumRaised, LargeRaised: Boolean;
+  SmallWrongType, MediumWrongType, LargeWrongType: Boolean;
+begin
+  {$IFDEF FPC}
+  TestPass(TestName + ' (skipped on FPC: non-recoverable System.Error semantics)');
+  Exit;
+  {$ENDIF}
+
+  SmallRaised := False;
+  MediumRaised := False;
+  LargeRaised := False;
+  SmallWrongType := False;
+  MediumWrongType := False;
+  LargeWrongType := False;
+
+  PSmall := nil;
+  PMedium := nil;
+  PLarge := nil;
+
+  {Small block}
+  GetMem(PSmall, 64);
+  if PSmall = nil then
+  begin
+    TestFail(TestName, 'Small allocation failed');
+    Exit;
+  end;
+  FreeMem(PSmall);
+  try
+    FreeMem(PSmall);
+  except
+    on E: EInvalidPointer do
+      SmallRaised := True;
+    on E: Exception do
+      SmallWrongType := True;
+  end;
+
+  {Medium block}
+  GetMem(PMedium, 4096);
+  if PMedium = nil then
+  begin
+    TestFail(TestName, 'Medium allocation failed');
+    Exit;
+  end;
+  FreeMem(PMedium);
+  try
+    FreeMem(PMedium);
+  except
+    on E: EInvalidPointer do
+      MediumRaised := True;
+    on E: Exception do
+      MediumWrongType := True;
+  end;
+
+  {Large block}
+  GetMem(PLarge, 300 * 1024);
+  if PLarge = nil then
+  begin
+    TestFail(TestName, 'Large allocation failed');
+    Exit;
+  end;
+  FreeMem(PLarge);
+  try
+    FreeMem(PLarge);
+  except
+    on E: EInvalidPointer do
+      LargeRaised := True;
+    on E: Exception do
+      LargeWrongType := True;
+  end;
+
+  if SmallRaised and MediumRaised and LargeRaised
+     and (not SmallWrongType) and (not MediumWrongType) and (not LargeWrongType) then
+    TestPass(TestName)
+  else
+    TestFail(
+      TestName,
+      'Expected EInvalidPointer on double-free not raised for all sizes (small=' +
+      BoolToStr(SmallRaised, True) + ', medium=' + BoolToStr(MediumRaised, True) +
+      ', large=' + BoolToStr(LargeRaised, True) +
+      ', wrongTypeSmall=' + BoolToStr(SmallWrongType, True) +
+      ', wrongTypeMedium=' + BoolToStr(MediumWrongType, True) +
+      ', wrongTypeLarge=' + BoolToStr(LargeWrongType, True) + ')'
+    );
+end;
+
+// =============================================================================
+// Test 26: Mixed Size Random Pattern
 // =============================================================================
 procedure TestMixedSizeRandomPattern;
 const
@@ -1522,6 +1615,7 @@ begin
     TestMultiplePoolStress;
     TestFreeListIntegrity;
     TestAllocationAfterLargeFree;
+    TestDoubleFreeDetection;
 
     // Size variation tests
     TestPowerOfTwoSizes;
