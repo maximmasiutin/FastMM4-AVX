@@ -9547,7 +9547,8 @@ begin
         System.RunError(reInvalidPtr);
   {$ENDIF}
 {$ENDIF CheckHeapForCorruption}
-      LNewFirstFreeBlock := Pointer(UIntPtr(LNewFirstFreeBlock) and DropSmallFlagsMask);
+      {Safe-Linking: Deobfuscate the new first free block using ASLR-like masking}
+      LNewFirstFreeBlock := Pointer((UIntPtr(LNewFirstFreeBlock) and DropSmallFlagsMask) xor ((UIntPtr(Result) shr 12) and DropSmallFlagsMask));
       {Increment the number of used blocks}
       Inc(LPSmallBlockPool^.BlocksInUse);
       {Set the new first free block}
@@ -10089,11 +10090,19 @@ like IsMultithreaded or MediumBlocksLocked}
   add TSmallBlockPoolHeader[edx].BlocksInUse, 1
   {Get the new first free block}
   and ecx, [eax - BlockHeaderSize]
+  { Safe-Linking: Deobfuscate the new first free block }
+  push ebx
+  mov ebx, eax
+  shr ebx, 12
+  and ebx, DropSmallFlagsMask
+  xor ecx, ebx
+  pop ebx
   {Set the new first free block}
   mov TSmallBlockPoolHeader[edx].FirstFreeBlock, ecx
   {Set the block header}
   mov [eax - BlockHeaderSize], edx
-  {Is the chunk now full?}
+  {Is the chunk now full? Set ZF using the deobfuscated address!}
+  test ecx, ecx
   jz @RemoveSmallPool
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @UnlockSmallBlockAndExit:
@@ -10767,11 +10776,19 @@ asm
   add TSmallBlockPoolHeader[rdx].BlocksInUse, 1
   {Get the new first free block}
   and rcx, [rax - BlockHeaderSize]
+  { Safe-Linking: Deobfuscate the new first free block }
+  push rbx
+  mov rbx, rax
+  shr rbx, 12
+  and rbx, DropSmallFlagsMask
+  xor rcx, rbx
+  pop rbx
   {Set the new first free block}
   mov TSmallBlockPoolHeader[rdx].FirstFreeBlock, rcx
   {Set the block header}
   mov [rax - BlockHeaderSize], rdx
-  {Is the chunk now full?}
+  {Is the chunk now full? Set ZF using the deobfuscated address!}
+  test rcx, rcx
   jz @RemoveSmallPool
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 16{$ENDIF}
 @UnlockSmallBlockAndExit:
@@ -11837,8 +11854,8 @@ begin
         LPSmallBlockPool^.PreviousPartiallyFreePool := PSmallBlockPoolHeader(LPSmallBlockType);
         LPSmallBlockType^.NextPartiallyFreePool := LPSmallBlockPool;
       end;
-      {Store the old first free block}
-      PNativeUInt(PByte(APointer) - BlockHeaderSize)^ := UIntPtr(LOldFirstFreeBlock) or IsFreeBlockFlag;
+      {Safe-Linking: Obfuscate the old first free block (XOR with Address >> 12)}
+      PNativeUInt(PByte(APointer) - BlockHeaderSize)^ := (UIntPtr(LOldFirstFreeBlock) xor ((UIntPtr(APointer) shr 12) and DropSmallFlagsMask)) or IsFreeBlockFlag;
       {Store this as the new first free block}
       LPSmallBlockPool^.FirstFreeBlock := APointer;
       {Decrement the number of allocated blocks}
@@ -12055,13 +12072,24 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   mov eax, TSmallBlockPoolHeader[edx].FirstFreeBlock
   {Is the pool now empty?}
   jz @PoolIsNowEmpty
+
+  { Safe-Linking: Obfuscate the old first free block }
+  push ebx
+  mov ebx, ecx
+  shr ebx, 12
+  and ebx, DropSmallFlagsMask
+  xor ebx, eax
+
   {Was the pool full?}
   test eax, eax
   {Store this as the new first free block}
   mov TSmallBlockPoolHeader[edx].FirstFreeBlock, ecx
   {Store the previous first free block as the block header}
-  lea eax, [eax + IsFreeBlockFlag]
+  lea eax, [ebx + IsFreeBlockFlag]
   mov [ecx - BlockHeaderSize], eax
+  
+  pop ebx
+
   {Insert the pool back into the linked list if it was full}
   jz @SmallPoolWasFull
   {All ok}
@@ -12584,13 +12612,24 @@ asm
   mov rax, TSmallBlockPoolHeader[rdx].FirstFreeBlock
   {Is the pool now empty?}
   jz @PoolIsNowEmpty
+
+  { Safe-Linking: Obfuscate the old first free block }
+  push rbx
+  mov rbx, rcx
+  shr rbx, 12
+  and rbx, DropSmallFlagsMask
+  xor rbx, rax
+
   {Was the pool full?}
   test rax, rax
   {Store this as the new first free block}
   mov TSmallBlockPoolHeader[rdx].FirstFreeBlock, rcx
   {Store the previous first free block as the block header}
-  lea rax, [rax + IsFreeBlockFlag]
+  lea rax, [rbx + IsFreeBlockFlag]
   mov [rcx - BlockHeaderSize], rax
+  
+  pop rbx
+
   {Insert the pool back into the linked list if it was full}
   jz @SmallPoolWasFull
   {All ok}
