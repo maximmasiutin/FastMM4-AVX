@@ -22,28 +22,45 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Run Trivy vulnerability scanner on the cloned repository files
+        id: trivy_scan
+        continue-on-error: true
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # 0.33.1
         with:
-          version: 'v0.67.2'
+          version: 'v0.69.3'
           scan-type: 'fs'
-          scanners: 'vuln,misconfig,secret,license'
+          # SARIF upload supports security findings; keep license checks out of this SARIF job.
+          scanners: 'vuln,misconfig,secret'
           ignore-unfixed: true
           format: 'sarif'
           output: ${{ env.SARIF_FILE }}
           severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
+      - name: Print exact Trivy error details when scan fails
+        if: steps.trivy_scan.outcome == 'failure'
+        run: |
+          echo "Trivy action step failed. Running direct Trivy CLI in debug mode to show exact error."
+          trivy --version || true
+          trivy fs --debug \
+            --scanners vuln,misconfig,secret \
+            --ignore-unfixed \
+            --format sarif \
+            --output "${{ env.SARIF_FILE }}" \
+            . 2>&1 | tee trivy-debug.log || true
+          echo "----- Trivy debug output (last 200 lines) -----"
+          tail -n 200 trivy-debug.log || true
+          exit 1
+
       - name: Check Trivy scan results existence
+        if: steps.trivy_scan.outcome == 'success'
         run: |
           if [ ! -f "${{ env.SARIF_FILE }}" ]; then
             echo "Error: ${{ env.SARIF_FILE }} does not exist."
             exit 1
           fi
           ls -lash ${{ env.SARIF_FILE }}
-          
+
       - name: Upload Trivy scan results to GitHub Security tab
+        if: steps.trivy_scan.outcome == 'success'
         uses: github/codeql-action/upload-sarif@014f16e7ab1402f30e7c3329d33797e7948572db # v4.31.3
         with:
           sarif_file: ${{ env.SARIF_FILE }}
-
-
-
