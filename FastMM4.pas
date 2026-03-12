@@ -2296,15 +2296,9 @@ procedure GetFastMMCpuUserModeMonitorLineSizes(var Smallest, Largest: Word);
 procedure FastMMDisableWaitPKG;
 {$ENDIF}
 
-
 implementation
 
 uses
-{$IFDEF LINUX}
-  {$IFNDEF FPC}
-System.SyncObjs,
-  {$ENDIF}
-{$ENDIF}
 {$IFNDEF POSIX}
   Windows,
   {$IFDEF _EventLog}
@@ -2325,7 +2319,7 @@ System.SyncObjs,
     {$ELSE}
        {$IFDEF LINUX}
         // Modern Delphi (LLVM) on Linux uses Posix.* units, not Libc
-        Posix.Stdlib, Posix.Unistd, Posix.Fcntl, Posix.PThread,
+        Posix.SysTypes, Posix.Stdlib, Posix.Unistd, Posix.Fcntl, Posix.PThread,
       {$ELSE}
         // Fallback for old Kylix or strictly legacy targets expecting Libc
         Libc,
@@ -3038,29 +3032,71 @@ const
 
 {$IFDEF LINUX}
   {$IFNDEF FPC}
-  {Delphi LLVM on Linux needs wrapper procedures for critical sections}
+  {Delphi LLVM on Linux: use POSIX pthread_mutex directly instead of
+   System.SyncObjs.TCriticalSection, because System.SyncObjs pulls in
+   System.Classes whose finalization runs after FastMM4 is uninstalled,
+   causing EInvalidPointer in FreeMem (GitHub issue #39).
+   Posix.PThread is already in the uses clause and has no
+   initialization or finalization side effects.}
 type
-  TRtlCriticalSection = System.SyncObjs.TCriticalSection;
+  TRtlCriticalSection = pthread_mutex_t;
 
 procedure InitializeCriticalSection(var CS: TRtlCriticalSection);
+var
+  Attr: pthread_mutexattr_t;
+  LResult: Integer;
 begin
-  CS := TRtlCriticalSection.Create;
+  LResult := pthread_mutexattr_init(Attr);
+  if LResult <> 0 then
+    System.Error(reInvalidOp);
+  LResult := pthread_mutexattr_settype(Attr, PTHREAD_MUTEX_RECURSIVE);
+  if LResult <> 0 then
+  begin
+    LResult := pthread_mutexattr_destroy(Attr);
+    if LResult <> 0 then
+      System.Error(reInvalidOp);
+    System.Error(reInvalidOp);
+  end;
+  LResult := pthread_mutex_init(CS, Attr);
+  if LResult <> 0 then
+  begin
+    LResult := pthread_mutexattr_destroy(Attr);
+    if LResult <> 0 then
+      System.Error(reInvalidOp);
+    System.Error(reInvalidOp);
+  end;
+  LResult := pthread_mutexattr_destroy(Attr);
+  if LResult <> 0 then
+    System.Error(reInvalidOp);
 end;
 
 procedure DeleteCriticalSection(var CS: TRtlCriticalSection);
+var
+  LResult: Integer;
 begin
-  CS.Free;
-  CS := nil;
+  LResult := pthread_mutex_destroy(CS);
+  if LResult <> 0 then
+    System.Error(reInvalidOp)
+  else
+    FillChar(CS, SizeOf(CS), 0);
 end;
 
 procedure EnterCriticalSection(var CS: TRtlCriticalSection);
+var
+  LResult: Integer;
 begin
-  CS.Enter;
+  LResult := pthread_mutex_lock(CS);
+  if LResult <> 0 then
+    System.Error(reInvalidOp);
 end;
 
 procedure LeaveCriticalSection(var CS: TRtlCriticalSection);
+var
+  LResult: Integer;
 begin
-  CS.Leave;
+  LResult := pthread_mutex_unlock(CS);
+  if LResult <> 0 then
+    System.Error(reInvalidOp);
 end;
   {$ENDIF}
 {$ENDIF}
@@ -8336,6 +8372,14 @@ var
   LPBin,
   LPFirstFreeBlock: PMediumFreeBlock;
 begin
+  {Guard against unsigned underflow: a block smaller than the minimum
+   medium block size would wrap around in the subtraction below (issue #39).}
+  if AMediumBlockSize < MinimumMediumBlockSize then
+  {$IFNDEF SystemRunError}
+    System.Error(reInvalidOp);
+  {$ELSE}
+    System.RunError(reInvalidOp);
+  {$ENDIF}
   {Get the bin number for this block size. Get the bin that holds blocks of at
    least this size.}
   LBinNumber := (AMediumBlockSize - MinimumMediumBlockSize) shr MediumBlockGranularityPowerOf2;
@@ -11445,6 +11489,19 @@ begin
   LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
   {Get the medium block size}
   LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
+  {A valid medium block must be at least MinimumMediumBlockSize bytes.
+   A zero or undersized value indicates a corrupt block header, which
+   would cause an unsigned underflow in InsertMediumBlockIntoBin.
+   See issue #39 for a case where this occurs during Delphi/Linux
+   ICU initialization.}
+  if LBlockSize < MinimumMediumBlockSize then
+  begin
+    {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+    {$ELSE}
+      System.RunError(reInvalidPtr);
+    {$ENDIF}
+  end;
   {When running a cleanup operation, medium blocks are already locked.}
 {$IFDEF UseReleaseStack}
   if not ACleanupOperation then

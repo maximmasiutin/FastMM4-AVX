@@ -11,6 +11,19 @@ on:
       - Tests/Advanced/**
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
+      - Tests/Simple/CriticalSectionTest.dpr
+
+  pull_request:
+    branches:
+      - master
+    paths:
+      - FastMM4.pas
+      - FastMM4Messages.pas
+      - FastMM4Options.inc
+      - Tests/Advanced/**
+      - Tests/Simple/IntegerOverflowTest.dpr
+      - Tests/Simple/SimpleTest.dpr
+      - Tests/Simple/CriticalSectionTest.dpr
 
   workflow_dispatch:
 
@@ -207,6 +220,28 @@ jobs:
           fpc -B -Mdelphi -Tlinux -Px86_64 -dDisableAVX512 -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
           ./AdvancedTest
 
+      # =========================================================================
+      # Critical Section Tests - Linux
+      # Uses -dDisablePauseAndSwitchToThread to force the CS code path
+      # instead of the default spin-lock path.
+      # =========================================================================
+      - name: Compile and run CriticalSectionTest (Linux 64-bit, CS forced)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dDisablePauseAndSwitchToThread -dIgnoreMemoryAllocatedBefore -O4 CriticalSectionTest.dpr
+          ./CriticalSectionTest
+
+      - name: Compile and run CriticalSectionTest (Linux 64-bit, CS forced, Pure Pascal)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dDisablePauseAndSwitchToThread -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 CriticalSectionTest.dpr
+          ./CriticalSectionTest
+
+      - name: Compile and run CriticalSectionTest (Linux 64-bit, spin-lock path)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -O4 CriticalSectionTest.dpr
+          ./CriticalSectionTest
 
   build_windows:
     runs-on: windows-latest
@@ -518,3 +553,37 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-O4', '-dDisableMemoryLeakReporting', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
+
+      # =========================================================================
+      # Critical Section Tests - Windows
+      # Uses -dDisablePauseAndSwitchToThread to force the CS code path.
+      # =========================================================================
+      - name: Compile and run CriticalSectionTest 64-bit (CS forced)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDisablePauseAndSwitchToThread', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
+          & '.\CriticalSectionTest.exe'
+
+      - name: Compile and run CriticalSectionTest 64-bit (CS forced, Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDisablePauseAndSwitchToThread', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
+          & '.\CriticalSectionTest.exe'
+
+      - name: Compile and run CriticalSectionTest 32-bit (CS forced)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisablePauseAndSwitchToThread', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
+          & '.\CriticalSectionTest.exe'
+
+      - name: Compile and run CriticalSectionTest 32-bit (CS forced, Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisablePauseAndSwitchToThread', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
+          & '.\CriticalSectionTest.exe'
+
+      - name: Compile and run CriticalSectionTest 64-bit (spin-lock path)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
+          & '.\CriticalSectionTest.exe'
