@@ -8375,11 +8375,17 @@ begin
   {Guard against unsigned underflow: a block smaller than the minimum
    medium block size would wrap around in the subtraction below (issue #39).}
   if AMediumBlockSize < MinimumMediumBlockSize then
-  {$IFNDEF SystemRunError}
+  begin
+    {$IFDEF SoftInvalidFreeMem}
+    Exit;
+    {$ELSE}
+    {$IFNDEF SystemRunError}
     System.Error(reInvalidOp);
-  {$ELSE}
+    {$ELSE}
     System.RunError(reInvalidOp);
-  {$ENDIF}
+    {$ENDIF}
+    {$ENDIF}
+  end;
   {Get the bin number for this block size. Get the bin that holds blocks of at
    least this size.}
   LBinNumber := (AMediumBlockSize - MinimumMediumBlockSize) shr MediumBlockGranularityPowerOf2;
@@ -11496,10 +11502,17 @@ begin
    ICU initialization.}
   if LBlockSize < MinimumMediumBlockSize then
   begin
+    {$IFDEF SoftInvalidFreeMem}
+    {Return error instead of raising: the pointer was likely not allocated
+     by FastMM (e.g. foreign C allocator on Delphi/Linux, see issue #39).}
+    Result := -1;
+    Exit;
+    {$ELSE}
     {$IFDEF BCB6OrDelphi7AndUp}
       System.Error(reInvalidPtr);
     {$ELSE}
       System.RunError(reInvalidPtr);
+    {$ENDIF}
     {$ENDIF}
   end;
   {When running a cleanup operation, medium blocks are already locked.}

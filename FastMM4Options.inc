@@ -674,6 +674,35 @@ Combine it with the two options below for further fine-tuning.}
 
 
 
+{-----------------------Foreign Pointer Compatibility-------------------------}
+
+{On some platforms (notably Delphi/Linux), the runtime library may call
+ FreeMem for pointers that were allocated by a foreign allocator (e.g. the
+ C runtime's malloc) rather than by FastMM. When such a pointer reaches
+ FreeMediumBlock, its block header typically has an invalid size (e.g. zero),
+ which FastMM's guards detect.
+
+ By default, FastMM raises a fatal error (reInvalidPtr) when it encounters
+ an invalid block header. This is the safest behavior because it prevents
+ silent heap corruption.
+
+ Enable SoftInvalidFreeMem to make FastMM return an error code (-1) instead
+ of raising a fatal exception in these cases. This allows the application to
+ continue running at the cost of masking potential real corruption errors.
+
+ Known scenarios where this is needed:
+ - Delphi/Linux: System.Internal.Icu.GetFncAddress calls TMarshal.FreeMem
+   for memory allocated by the ICU C shared library (issue #39). The glibc
+   chunk header is misinterpreted as a medium block with size 0.
+ - Any platform where third-party native libraries allocate memory via C
+   malloc and the Delphi RTL frees it through the Pascal memory manager.
+
+ You can enable this option in FastMM4Options.inc or pass it as a compiler
+ define: -dSoftInvalidFreeMem}
+
+{.$define SoftInvalidFreeMem}
+
+
 {----------------------------Lock Contention Logging--------------------------}
 
 {Define this to lock stack traces for all occasions where GetMem/FreeMem
