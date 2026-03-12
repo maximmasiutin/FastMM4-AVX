@@ -2300,11 +2300,6 @@ procedure FastMMDisableWaitPKG;
 implementation
 
 uses
-{$IFDEF LINUX}
-  {$IFNDEF FPC}
-System.SyncObjs,
-  {$ENDIF}
-{$ENDIF}
 {$IFNDEF POSIX}
   Windows,
   {$IFDEF _EventLog}
@@ -3040,27 +3035,29 @@ const
   {$IFNDEF FPC}
   {Delphi LLVM on Linux needs wrapper procedures for critical sections}
 type
-  TRtlCriticalSection = System.SyncObjs.TCriticalSection;
+  TRtlCriticalSection = record
+    FSync: TObject;
+  end;
 
 procedure InitializeCriticalSection(var CS: TRtlCriticalSection);
 begin
-  CS := TRtlCriticalSection.Create;
+  CS.FSync := TObject.Create;
 end;
 
 procedure DeleteCriticalSection(var CS: TRtlCriticalSection);
 begin
-  CS.Free;
-  CS := nil;
+  CS.FSync.Free;
+  CS.FSync := nil;
 end;
 
 procedure EnterCriticalSection(var CS: TRtlCriticalSection);
 begin
-  CS.Enter;
+  TMonitor.Enter(CS.FSync);
 end;
 
 procedure LeaveCriticalSection(var CS: TRtlCriticalSection);
 begin
-  CS.Leave;
+  TMonitor.Exit(CS.FSync);
 end;
   {$ENDIF}
 {$ENDIF}
@@ -20627,6 +20624,14 @@ begin
 {$ENDIF}
     end;
 
+  {$IFDEF LINUX}
+  {$IFNDEF FPC}
+  {$IFDEF DetectMMOperationsAfterUninstall}
+  SetMemoryManager(OldMemoryManager);
+  {$ENDIF}
+  {$ENDIF}
+  {$ENDIF}
+
   {$IFDEF MediumBlocksLockedCriticalSection}
   LargeBlocksLocked := CLockByteFinished;
   {$IFDEF fpc}DoneCriticalSection{$ELSE}DeleteCriticalSection{$ENDIF}(MediumBlocksLockedCS);
@@ -20650,6 +20655,14 @@ begin
   begin
     SmallBlockTypes[LInd].SmallBlockTypeLocked := CLockByteFinished;
   end;
+  {$ENDIF}
+
+  {$IFDEF LINUX}
+  {$IFNDEF FPC}
+  {$IFDEF DetectMMOperationsAfterUninstall}
+  SetMemoryManager(InvalidMemoryManager);
+  {$ENDIF}
+  {$ENDIF}
   {$ENDIF}
 
   end;
