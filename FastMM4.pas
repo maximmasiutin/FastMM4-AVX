@@ -12223,6 +12223,16 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   test dl, IsFreeBlockFlag + IsMediumBlockFlag + IsLargeBlockFlag
   {the test+jnz instructions are together to allow macro-op fusion}
   jnz @NotSmallBlockInUse
+{$IFDEF SoftInvalidFreeMem}
+  {Guard: validate pool pointer (edx) before dereferencing. A foreign pointer
+   has garbage in its header; when the low 3 bits are all clear, the header
+   value is used as a pool pointer. If this value is null or below 64KB
+   (always unmapped on Windows and Linux), dereferencing it causes an access
+   violation. This guard must run before ClearSmallAndMediumBlocksInFreeMem
+   since that code also dereferences the pool pointer. Issue #39.}
+  cmp edx, $10000
+  jb @InvalidSmallBlock
+{$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
   push edx
   push ecx
@@ -12233,16 +12243,6 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   call System.@FillChar
   pop ecx
   pop edx
-{$ENDIF}
-  {Do we need to lock the block type?}
-{$IFDEF SoftInvalidFreeMem}
-  {Guard: validate pool pointer (edx) before dereferencing. A foreign pointer
-   has garbage in its header; when the low 3 bits are all clear, the header
-   value is used as a pool pointer. If this value is null or below 64KB
-   (always unmapped on Windows and Linux), dereferencing it causes an access
-   violation. Issue #39.}
-  cmp edx, $10000
-  jb @InvalidSmallBlock
 {$ENDIF}
   {Get the small block type in ebx}
   mov ebx, TSmallBlockPoolHeader[edx].BlockType
@@ -12824,6 +12824,16 @@ asm
   test dl, IsFreeBlockFlag + IsMediumBlockFlag + IsLargeBlockFlag
   {put test+jnz together to allow macro-op fusion}
   jnz @NotSmallBlockInUse
+{$IFDEF SoftInvalidFreeMem}
+  {Guard: validate pool pointer (rdx) before dereferencing. A foreign pointer
+   has garbage in its header; when the low 3 bits are all clear, the header
+   value is used as a pool pointer. If this value is null or below 64KB
+   (always unmapped on Windows and Linux), dereferencing it causes an access
+   violation. This guard must run before ClearSmallAndMediumBlocksInFreeMem
+   since that code also dereferences the pool pointer. Issue #39.}
+  cmp rdx, $10000
+  jb @InvalidSmallBlock
+{$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
   mov rsi, rcx
   mov rdx, TSmallBlockPoolHeader[rdx].BlockType
@@ -12833,15 +12843,6 @@ asm
   call System.@FillChar
   mov rcx, rsi
   mov rdx, [rcx - BlockHeaderSize]
-{$ENDIF}
-{$IFDEF SoftInvalidFreeMem}
-  {Guard: validate pool pointer (rdx) before dereferencing. A foreign pointer
-   has garbage in its header; when the low 3 bits are all clear, the header
-   value is used as a pool pointer. If this value is null or below 64KB
-   (always unmapped on Windows and Linux), dereferencing it causes an access
-   violation. Issue #39.}
-  cmp rdx, $10000
-  jb @InvalidSmallBlock
 {$ENDIF}
   {Get the small block type in rbx}
   mov rbx, TSmallBlockPoolHeader[rdx].BlockType
