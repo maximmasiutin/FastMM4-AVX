@@ -28,6 +28,7 @@ program SoftInvalidFreeMemTest;
 uses
   {$IFDEF UNIX}
   cthreads,
+  BaseUnix,
   {$ENDIF}
   FastMM4 in '../../FastMM4.pas',
   FastMM4Messages in '../../FastMM4Messages.pas',
@@ -516,6 +517,6 @@ begin
   {$IFDEF MSWINDOWS}
   ExitProcess(Cardinal(GExitCode));
   {$ELSE}
-  Halt(GExitCode);
+  FpExit(cInt(GExitCode));
   {$ENDIF}
 end.
