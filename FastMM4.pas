@@ -12041,8 +12041,8 @@ begin
       else
       begin
 {$IFDEF SoftInvalidFreeMem}
-        {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
-         reInvalidPtr. See issue #39 for Delphi/Linux ICU case.}
+        {Invalid pointer or double-free detected (free/medium flag mismatch):
+         return 0 to avoid _FreeMem raising reInvalidPtr.}
         Result := 0;
 {$ELSE}
         {Double-free or invalid pointer detection (CWE-415): raise error

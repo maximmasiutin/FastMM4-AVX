@@ -687,10 +687,13 @@ Combine it with the two options below for further fine-tuning.}
  silent heap corruption.
 
  Enable SoftInvalidFreeMem to make FastMM return 0 (success) instead of
- raising a fatal exception in these cases. Must return 0 because Delphi
- _FreeMem checks "if Result <> 0 then Error(reInvalidPtr)", so returning
- -1 would still cause a fatal error. This allows the application to
- continue running at the cost of masking potential real corruption errors.
+ raising a fatal exception when it detects an invalid pointer. This applies
+ to all detection paths: invalid block headers in FreeMediumBlock, and
+ double-free or invalid-pointer detections in FastFreeMem (Pascal and ASM).
+ Must return 0 because Delphi _FreeMem checks
+ "if Result <> 0 then Error(reInvalidPtr)", so returning -1 would still
+ cause a fatal error. This allows the application to continue running at
+ the cost of masking potential real corruption errors.
 
  Known scenarios where this is needed:
  - Delphi/Linux: System.Internal.Icu.GetFncAddress calls TMarshal.FreeMem
