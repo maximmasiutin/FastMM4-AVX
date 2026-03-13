@@ -688,9 +688,10 @@ Combine it with the two options below for further fine-tuning.}
 
  Enable SoftInvalidFreeMem to make FastMM return 0 (success) instead of
  raising a fatal exception when it detects an invalid pointer. This applies
- to all detection paths: invalid block headers in FreeMediumBlock, and
- double-free or invalid-pointer detections in FastFreeMem (Pascal and ASM).
- Must return 0 because Delphi _FreeMem checks
+ to all detection paths: invalid or out-of-range block size in
+ FreeMediumBlock, foreign BlockType pointer in the small block path of
+ FastFreeMem, and double-free or invalid-pointer detections in FastFreeMem
+ (Pascal and ASM). Must return 0 because Delphi _FreeMem checks
  "if Result <> 0 then Error(reInvalidPtr)", so returning -1 would still
  cause a fatal error. This allows the application to continue running at
  the cost of masking potential real corruption errors.

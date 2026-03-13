@@ -11497,12 +11497,14 @@ begin
   LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
   {Get the medium block size}
   LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
-  {A valid medium block must be at least MinimumMediumBlockSize bytes.
-   A zero or undersized value indicates a corrupt block header, which
-   would cause an unsigned underflow in InsertMediumBlockIntoBin.
-   See issue #39 for a case where this occurs during Delphi/Linux
-   ICU initialization.}
-  if LBlockSize < MinimumMediumBlockSize then
+  {A valid medium block must be between MinimumMediumBlockSize and
+   MaximumMediumBlockSize + BlockHeaderSize. A value outside this range
+   indicates a corrupt or foreign block header. A zero or undersized
+   value would cause an unsigned underflow in InsertMediumBlockIntoBin;
+   an oversized value would corrupt the bin index. See issue #39 for a
+   case where this occurs during Delphi/Linux ICU initialization.}
+  if (LBlockSize < MinimumMediumBlockSize) or
+     (LBlockSize > (MaximumMediumBlockSize + BlockHeaderSize)) then
   begin
     {$IFDEF SoftInvalidFreeMem}
     {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
@@ -11815,6 +11817,20 @@ begin
     LPSmallBlockPool := PSmallBlockPoolHeader(LBlockHeader);
     {Get the block type}
     LPSmallBlockType := LPSmallBlockPool^.BlockType;
+{$IFDEF SoftInvalidFreeMem}
+    {Validate that BlockType points within the SmallBlockTypes array. A foreign
+     pointer (not allocated by FastMM) will have a garbage block header that is
+     misinterpreted as a pool pointer. Reading BlockType from it yields a value
+     outside the SmallBlockTypes array. Without this check, FastMM would try to
+     lock and manipulate a garbage SmallBlockType, corrupting internal state or
+     crashing. See issue #39 for the Delphi/Linux ICU case.}
+    if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or
+       (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) then
+    begin
+      Result := 0;
+      Exit;
+    end;
+{$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
     FillChar(APointer^, LPSmallBlockType^.BlockSize - BlockHeaderSize, 0);
 {$ENDIF}
@@ -12113,6 +12129,15 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   {Do we need to lock the block type?}
   {Get the small block type in ebx}
   mov ebx, TSmallBlockPoolHeader[edx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  {Validate that BlockType points within the SmallBlockTypes array}
+  lea eax, SmallBlockTypes
+  cmp ebx, eax
+  jb @InvalidSmallBlock
+  lea eax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp ebx, eax
+  jae @InvalidSmallBlock
+{$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
   test ebp, (UnsignedBit shl StateBitMultithreaded)
@@ -12576,6 +12601,14 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ENDIF}
 {$ENDIF}
   jmp @Exit
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallBlock:
+  {Foreign pointer detected in small block path: BlockType is outside the
+   SmallBlockTypes array. Return 0 to avoid corruption. See issue #39.}
+  xor eax, eax
+  jmp @Exit
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @Exit:
   pop ebx
@@ -12644,6 +12677,15 @@ asm
 {$ENDIF}
   {Get the small block type in rbx}
   mov rbx, TSmallBlockPoolHeader[rdx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  {Validate that BlockType points within the SmallBlockTypes array}
+  lea rax, SmallBlockTypes
+  cmp rbx, rax
+  jb @InvalidSmallBlock
+  lea rax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp rbx, rax
+  jae @InvalidSmallBlock
+{$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
   test r12b, (UnsignedBit shl StateBitMultithreaded)
@@ -13164,6 +13206,14 @@ but we don't need them at this point}
 {$ENDIF}
 {$ENDIF}
   jmp @Done
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallBlock:
+  {Foreign pointer detected in small block path: BlockType is outside the
+   SmallBlockTypes array. Return 0 to avoid corruption. See issue #39.}
+  xor eax, eax
+  jmp @Done
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @Done: {automatically restores registers from stack by implicitly inserting pop instructions (rbx, rsi and r12)}
 {$IFNDEF AllowAsmParams}
