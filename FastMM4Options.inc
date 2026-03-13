@@ -686,8 +686,10 @@ Combine it with the two options below for further fine-tuning.}
  an invalid block header. This is the safest behavior because it prevents
  silent heap corruption.
 
- Enable SoftInvalidFreeMem to make FastMM return an error code (-1) instead
- of raising a fatal exception in these cases. This allows the application to
+ Enable SoftInvalidFreeMem to make FastMM return 0 (success) instead of
+ raising a fatal exception in these cases. Must return 0 because Delphi
+ _FreeMem checks "if Result <> 0 then Error(reInvalidPtr)", so returning
+ -1 would still cause a fatal error. This allows the application to
  continue running at the cost of masking potential real corruption errors.
 
  Known scenarios where this is needed:
@@ -702,6 +704,30 @@ Combine it with the two options below for further fine-tuning.}
 
 {.$define SoftInvalidFreeMem}
 
+{Auto-enable SoftInvalidFreeMem on Delphi for Linux. The Delphi RTL on Linux
+ calls FreeMem on pointers allocated by the C runtime (e.g. ICU shared library
+ via System.Internal.Icu.GetFncAddress), which causes misinterpretation of
+ glibc chunk headers. FPC on Linux does not exhibit this issue. See issue #39.
+ To opt out of the auto-enable (e.g. for strict corruption detection during
+ debugging), define DisableAutoSoftInvalidFreeMem as a compiler flag or here:}
+
+{.$define DisableAutoSoftInvalidFreeMem}
+
+{$IFDEF LINUX}
+  {$IFNDEF FPC}
+    {$IFNDEF DisableAutoSoftInvalidFreeMem}
+      {$DEFINE SoftInvalidFreeMem}
+    {$ENDIF}
+  {$ENDIF}
+{$ENDIF}
+
+{When SoftInvalidFreeMem is active, FastMM must stay installed through process
+ shutdown to handle late FreeMem calls from units that finalize after FastMM
+ (e.g. System.Classes pulled in by System.SyncObjs). This is the same problem
+ as QC#14070 for BCB/IDE (see NeverUninstall documentation above).}
+{$IFDEF SoftInvalidFreeMem}
+  {$DEFINE NeverUninstall}
+{$ENDIF}
 
 {----------------------------Lock Contention Logging--------------------------}
 

@@ -11453,7 +11453,9 @@ end;
 {$ENDIF FastGetMemNeedAssemblerCode}
 
 {$IFNDEF FastFreememNeedAssemberCode}
-{Frees a medium block, returning 0 on success, -1 otherwise}
+{Frees a medium block, returning 0 on success, -1 otherwise.
+ When SoftInvalidFreeMem is defined, returns 0 for foreign pointers
+ (not allocated by FastMM) instead of raising reInvalidPtr.}
 function FreeMediumBlock(APointer: Pointer
   {$IFDEF UseReleaseStack}; ACleanupOperation: Boolean = false{$ENDIF}): Integer;
 var
@@ -11503,9 +11505,10 @@ begin
   if LBlockSize < MinimumMediumBlockSize then
   begin
     {$IFDEF SoftInvalidFreeMem}
-    {Return error instead of raising: the pointer was likely not allocated
-     by FastMM (e.g. foreign C allocator on Delphi/Linux, see issue #39).}
-    Result := -1;
+    {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
+     on Delphi/Linux, see issue #39). Return 0 instead of raising an error
+     because Delphi _FreeMem checks "if Result <> 0 then Error(reInvalidPtr)".}
+    Result := 0;
     Exit;
     {$ELSE}
     {$IFDEF BCB6OrDelphi7AndUp}
@@ -12037,6 +12040,11 @@ begin
         Result := FreeLargeBlock(APointer)
       else
       begin
+{$IFDEF SoftInvalidFreeMem}
+        {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
+         reInvalidPtr. See issue #39 for Delphi/Linux ICU case.}
+        Result := 0;
+{$ELSE}
         {Double-free or invalid pointer detection (CWE-415): raise error
          instead of silently returning -1.}
 {$IFDEF BCB6OrDelphi7AndUp}
@@ -12045,6 +12053,7 @@ begin
         System.RunError(reInvalidPtr);
 {$ENDIF}
         Result := CFastFreeMemReturnValueError;
+{$ENDIF}
       end;
     end;
   end;
@@ -12553,12 +12562,18 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jmp @Finish
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontFreeLargeBlock:
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
+   reInvalidPtr. See issue #39.}
+  xor eax, eax
+{$ELSE}
   {Double-free or invalid pointer detection (CWE-415)}
   mov eax, reInvalidPtr
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
   call System.RunError
+{$ENDIF}
 {$ENDIF}
   jmp @Exit
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
@@ -13135,12 +13150,18 @@ but we don't need them at this point}
   call FreeLargeBlock
   jmp @Done
 @DoubleFreeDetected:
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
+   reInvalidPtr. See issue #39.}
+  xor eax, eax
+{$ELSE}
   {Double-free or invalid pointer detection (CWE-415)}
   mov ecx, reInvalidPtr
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
   call System.RunError
+{$ENDIF}
 {$ENDIF}
   jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
@@ -15085,7 +15106,14 @@ begin
   AppendStringToModuleName(InvalidOperationTitle, LErrorMessageTitle, Length(InvalidOperationTitle), (SizeOf(LErrorMessageTitle) div SizeOf(LErrorMessageTitle[0])-1));
   ShowMessageBox(InvalidFreeMemMsg, LErrorMessageTitle);
 {$ENDIF}
+{$IFDEF SoftInvalidFreeMem}
+  {Return 0 so Delphi _FreeMem does not raise reInvalidPtr for late FreeMem
+   calls after FastMM is uninstalled (defense-in-depth; NeverUninstall is
+   also auto-defined when SoftInvalidFreeMem is active).}
+  Result := 0;
+{$ELSE}
   Result := {$IFDEF fpc}NativeUInt(-1){$ELSE}-1{$ENDIF};
+{$ENDIF}
 end;
 
 function InvalidReallocMem({$IFDEF fpc}var {$ENDIF}APointer: Pointer; ANewSize: {$IFDEF XE2AndUp}NativeInt{$ELSE}{$IFDEF fpc}NativeUInt{$ELSE}Integer{$ENDIF}{$ENDIF}): Pointer;

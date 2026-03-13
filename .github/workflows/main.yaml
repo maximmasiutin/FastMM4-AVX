@@ -121,10 +121,15 @@ jobs:
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -dDontUseASMVersion -O4 SimpleTest.dpr
 
-      - name: Compile with -dDontUseASMVersion
+      - name: Compile with -dSoftInvalidFreeMem
         run: |
           cd $GITHUB_WORKSPACE/Tests/Simple
-          fpc -B -Mdelphi -Tlinux -Px86_64 -dDontUseASMVersion -O4 SimpleTest.dpr
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dSoftInvalidFreeMem -O4 SimpleTest.dpr
+
+      - name: Compile with -dSoftInvalidFreeMem -dDontUseASMVersion
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dSoftInvalidFreeMem -dDontUseASMVersion -O4 SimpleTest.dpr
 
       - name: Compile with -dDisableMemoryLeakReporting
         run: |
@@ -405,6 +410,16 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseASMVersion', '-O4', 'SimpleTest.dpr')
+
+      - name: Compile by FreePascal 64-bit with -dSoftInvalidFreeMem
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dSoftInvalidFreeMem', '-O4', 'SimpleTest.dpr')
+
+      - name: Compile by FreePascal 32-bit with -dSoftInvalidFreeMem
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dSoftInvalidFreeMem', '-O4', 'SimpleTest.dpr')
 
       - name: Compile by FreePascal 64-bit with -dDisableMemoryLeakReporting
         run: |
