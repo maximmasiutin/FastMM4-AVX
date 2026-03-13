@@ -12,6 +12,7 @@ on:
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
+      - Tests/Simple/SoftInvalidFreeMemTest.dpr
 
   pull_request:
     branches:
@@ -24,6 +25,7 @@ on:
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
+      - Tests/Simple/SoftInvalidFreeMemTest.dpr
 
   workflow_dispatch:
 
@@ -121,10 +123,15 @@ jobs:
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -dDontUseASMVersion -O4 SimpleTest.dpr
 
-      - name: Compile with -dDontUseASMVersion
+      - name: Compile with -dSoftInvalidFreeMem
         run: |
           cd $GITHUB_WORKSPACE/Tests/Simple
-          fpc -B -Mdelphi -Tlinux -Px86_64 -dDontUseASMVersion -O4 SimpleTest.dpr
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dSoftInvalidFreeMem -O4 SimpleTest.dpr
+
+      - name: Compile with -dSoftInvalidFreeMem -dDontUseASMVersion
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dSoftInvalidFreeMem -dDontUseASMVersion -O4 SimpleTest.dpr
 
       - name: Compile with -dDisableMemoryLeakReporting
         run: |
@@ -242,6 +249,44 @@ jobs:
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -dIgnoreMemoryAllocatedBefore -O4 CriticalSectionTest.dpr
           ./CriticalSectionTest
+
+      # =========================================================================
+      # SoftInvalidFreeMem Tests - Linux
+      # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
+      # =========================================================================
+      - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, ASM, overflow+range checks)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
+          ./SoftInvalidFreeMemTest
+
+      - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, Pure Pascal, overflow+range checks)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
+          ./SoftInvalidFreeMemTest
+
+      # =========================================================================
+      # Overflow and Range Check Tests - Linux
+      # Verify that normal allocator operations work under strict checking.
+      # =========================================================================
+      - name: Compile and run AdvancedTest (Linux 64-bit, overflow+range checks, ASM)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Advanced
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
+          ./AdvancedTest
+
+      - name: Compile and run AdvancedTest (Linux 64-bit, overflow+range checks, Pure Pascal)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Advanced
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
+          ./AdvancedTest
+
+      - name: Compile and run AdvancedTest (Linux 64-bit, overflow+range checks, SoftInvalidFreeMem)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Advanced
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
+          ./AdvancedTest
 
   build_windows:
     runs-on: windows-latest
@@ -405,6 +450,16 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseASMVersion', '-O4', 'SimpleTest.dpr')
+
+      - name: Compile by FreePascal 64-bit with -dSoftInvalidFreeMem
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dSoftInvalidFreeMem', '-O4', 'SimpleTest.dpr')
+
+      - name: Compile by FreePascal 32-bit with -dSoftInvalidFreeMem
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dSoftInvalidFreeMem', '-O4', 'SimpleTest.dpr')
 
       - name: Compile by FreePascal 64-bit with -dDisableMemoryLeakReporting
         run: |
@@ -587,3 +642,65 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
           & '.\CriticalSectionTest.exe'
+
+      # =========================================================================
+      # SoftInvalidFreeMem Tests - Windows
+      # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
+      # =========================================================================
+      - name: Compile and run SoftInvalidFreeMemTest 64-bit (ASM, overflow+range checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 64-bit (Pure Pascal, overflow+range checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 32-bit (ASM, overflow+range checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 32-bit (Pure Pascal, overflow+range checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      # =========================================================================
+      # Overflow and Range Check Tests - Windows
+      # Verify that normal allocator operations work under strict checking.
+      # =========================================================================
+      - name: Compile and run AdvancedTest 64-bit (overflow+range checks, ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'
+
+      - name: Compile and run AdvancedTest 64-bit (overflow+range checks, Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'
+
+      - name: Compile and run AdvancedTest 32-bit (overflow+range checks, ASM)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'
+
+      - name: Compile and run AdvancedTest 32-bit (overflow+range checks, Pure Pascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'
+
+      - name: Compile and run AdvancedTest 64-bit (overflow+range checks, SoftInvalidFreeMem)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'

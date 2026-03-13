@@ -8260,21 +8260,41 @@ begin
    equal, they must point to the bin.}
   if LPreviousFreeBlock = LNextFreeBlock then
   begin
-    {Get the bin number for this block size}
-    LBinNumber := (UIntPtr(LNextFreeBlock) - UIntPtr(@MediumBlockBins)) shr MediumFreeBlockSizePowerOf2;
-    LBinGroupNumber := LBinNumber shr MediumBlockBinsPerGroupPowerOf2;
-    {Flag this bin as empty}
-    LShift := LBinNumber and (MediumBlockBinsPerGroup-1);
-    LMask := not (Cardinal(UnsignedBit) shl LShift);
-    MediumBlockBinBitmaps[LBinGroupNumber] := MediumBlockBinBitmaps[LBinGroupNumber] and LMask;
-    {Is the group now entirely empty?}
-    if MediumBlockBinBitmaps[LBinGroupNumber] = 0 then
+    {Guard: verify the bin pointer is within the MediumBlockBins array
+     and aligned to a bin boundary to prevent unsigned underflow in the
+     subtraction below and wrong-bin bitmap corruption (issue #39).}
+    if (UIntPtr(LNextFreeBlock) >= UIntPtr(@MediumBlockBins[0])) and
+       (UIntPtr(LNextFreeBlock) <= UIntPtr(@MediumBlockBins[MediumBlockBinCount - 1])) and
+       ((UIntPtr(LNextFreeBlock) - UIntPtr(@MediumBlockBins[0])) and ((1 shl MediumFreeBlockSizePowerOf2) - 1) = 0) then
     begin
-      LMask := not (Cardinal(UnsignedBit) shl LBinGroupNumber);
+      {Get the bin number for this block size}
+      LBinNumber := (UIntPtr(LNextFreeBlock) - UIntPtr(@MediumBlockBins)) shr MediumFreeBlockSizePowerOf2;
+      LBinGroupNumber := LBinNumber shr MediumBlockBinsPerGroupPowerOf2;
+      {Flag this bin as empty}
+      LShift := LBinNumber and (MediumBlockBinsPerGroup-1);
+      LMask := not (Cardinal(UnsignedBit) shl LShift);
+      MediumBlockBinBitmaps[LBinGroupNumber] := MediumBlockBinBitmaps[LBinGroupNumber] and LMask;
+      {Is the group now entirely empty?}
+      if MediumBlockBinBitmaps[LBinGroupNumber] = 0 then
+      begin
+        LMask := not (Cardinal(UnsignedBit) shl LBinGroupNumber);
 
-      {Flag this group as empty}
-      MediumBlockBinGroupBitmap := MediumBlockBinGroupBitmap and LMask;
-    end;
+        {Flag this group as empty}
+        MediumBlockBinGroupBitmap := MediumBlockBinGroupBitmap and LMask;
+      end;
+    end
+{$IFNDEF SoftInvalidFreeMem}
+    else
+    begin
+      {Corrupt free list: bin pointer outside MediumBlockBins array (issue #39)}
+      {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+      {$ELSE}
+      System.RunError(reInvalidPtr);
+      {$ENDIF}
+    end
+{$ENDIF}
+    ;
   end;
 end;
 {$ELSE}
@@ -8299,8 +8319,28 @@ asm
   jmp @Exit
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @BinIsNowEmpty:
+  {Guard: validate ecx (bin pointer) is within MediumBlockBins array (issue #39)}
+  cmp ecx, offset MediumBlockBins
+{$IFDEF SoftInvalidFreeMem}
+  jb @Done
+{$ELSE}
+  jb @CorruptBinPointer
+{$ENDIF}
+  cmp ecx, offset MediumBlockBins + (MediumBlockBinCount - 1) * (1 shl MediumFreeBlockSizePowerOf2)
+{$IFDEF SoftInvalidFreeMem}
+  ja @Done
+{$ELSE}
+  ja @CorruptBinPointer
+{$ENDIF}
   {Get the bin number for this block size in ecx}
   sub ecx, offset MediumBlockBins
+  {Check alignment to bin size boundary (issue #39)}
+  test ecx, (1 shl MediumFreeBlockSizePowerOf2) - 1
+{$IFDEF SoftInvalidFreeMem}
+  jnz @Done
+{$ELSE}
+  jnz @CorruptBinPointer
+{$ENDIF}
   mov edx, ecx
   shr ecx, MediumFreeBlockSizePowerOf2
   {Get the group number in edx}
@@ -8315,6 +8355,18 @@ asm
   mov ecx, edx
   rol eax, cl
   and MediumBlockBinGroupBitmap, eax
+  jmp @Exit
+{$IFNDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@CorruptBinPointer:
+  {Corrupt free list: bin pointer outside MediumBlockBins array (issue #39)}
+  mov eax, reInvalidPtr
+  {$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+  {$ELSE}
+  call System.RunError
+  {$ENDIF}
+{$ENDIF}
 @Exit:
 end;
 {$ELSE}
@@ -8337,9 +8389,30 @@ asm
   {Is this bin now empty? If the previous and next free block pointers are
    equal, they must point to the bin.}
   jne @Done
-  {Get the bin number for this block size in rcx}
+  {Guard: validate rcx (bin pointer) is within MediumBlockBins array (issue #39)}
   lea r8, MediumBlockBins
+  cmp rcx, r8
+{$IFDEF SoftInvalidFreeMem}
+  jb @Done
+{$ELSE}
+  jb @CorruptBinPointer
+{$ENDIF}
+  lea r9, [r8 + (MediumBlockBinCount - 1) * (1 shl MediumFreeBlockSizePowerOf2)]
+  cmp rcx, r9
+{$IFDEF SoftInvalidFreeMem}
+  ja @Done
+{$ELSE}
+  ja @CorruptBinPointer
+{$ENDIF}
+  {Get the bin number for this block size in rcx}
   sub rcx, r8
+  {Check alignment to bin size boundary (issue #39)}
+  test ecx, (1 shl MediumFreeBlockSizePowerOf2) - 1
+{$IFDEF SoftInvalidFreeMem}
+  jnz @Done
+{$ELSE}
+  jnz @CorruptBinPointer
+{$ENDIF}
   mov edx, ecx
   shr ecx, MediumFreeBlockSizePowerOf2
   {Get the group number in edx}
@@ -8355,6 +8428,18 @@ asm
   mov ecx, edx
   rol eax, cl
   and MediumBlockBinGroupBitmap, eax
+{$IFNDEF SoftInvalidFreeMem}
+  jmp @Done
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@CorruptBinPointer:
+  {Corrupt free list: bin pointer outside MediumBlockBins array (issue #39)}
+  mov ecx, reInvalidPtr
+  {$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+  {$ELSE}
+  call System.RunError
+  {$ENDIF}
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
 @Done:
 end;
@@ -11453,7 +11538,9 @@ end;
 {$ENDIF FastGetMemNeedAssemblerCode}
 
 {$IFNDEF FastFreememNeedAssemberCode}
-{Frees a medium block, returning 0 on success, -1 otherwise}
+{Frees a medium block, returning 0 on success, -1 otherwise.
+ When SoftInvalidFreeMem is defined, returns 0 for foreign pointers
+ (not allocated by FastMM) instead of raising reInvalidPtr.}
 function FreeMediumBlock(APointer: Pointer
   {$IFDEF UseReleaseStack}; ACleanupOperation: Boolean = false{$ENDIF}): Integer;
 var
@@ -11462,9 +11549,9 @@ var
   LPreviousMediumBlock: PMediumFreeBlock;
 {$ENDIF}
   LNextMediumBlockSizeAndFlags: NativeUInt;
-  LBlockSize: Cardinal;
+  LBlockSize: NativeUInt;
 {$IFNDEF FullDebugMode}
-  LPreviousMediumBlockSize: Cardinal;
+  LPreviousMediumBlockSize: NativeUInt;
 {$ENDIF}
 {$IFNDEF FullDebugMode}
   LPPreviousMediumBlockPoolHeader,
@@ -11495,17 +11582,21 @@ begin
   LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
   {Get the medium block size}
   LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
-  {A valid medium block must be at least MinimumMediumBlockSize bytes.
-   A zero or undersized value indicates a corrupt block header, which
-   would cause an unsigned underflow in InsertMediumBlockIntoBin.
-   See issue #39 for a case where this occurs during Delphi/Linux
-   ICU initialization.}
-  if LBlockSize < MinimumMediumBlockSize then
+  {A valid medium block must be between MinimumMediumBlockSize and the
+   maximum usable pool space (MediumBlockPoolSize - MediumBlockPoolHeaderSize).
+   Blocks can exceed MaximumMediumBlockSize when they absorb remainder space
+   from the sequential feed area. A value outside this range indicates a
+   corrupt or foreign block header. A zero or undersized value would cause
+   an unsigned underflow in InsertMediumBlockIntoBin. See issue #39 for a
+   case where this occurs during Delphi/Linux ICU initialization.}
+  if (LBlockSize < MinimumMediumBlockSize) or
+     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
   begin
     {$IFDEF SoftInvalidFreeMem}
-    {Return error instead of raising: the pointer was likely not allocated
-     by FastMM (e.g. foreign C allocator on Delphi/Linux, see issue #39).}
-    Result := -1;
+    {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
+     on Delphi/Linux, see issue #39). Return 0 instead of raising an error
+     because Delphi _FreeMem checks "if Result <> 0 then Error(reInvalidPtr)".}
+    Result := 0;
     Exit;
     {$ELSE}
     {$IFDEF BCB6OrDelphi7AndUp}
@@ -11565,11 +11656,16 @@ begin
   {$ENDIF}
     if (LNextMediumBlockSizeAndFlags and IsFreeBlockFlag) <> 0 then
     begin
-      {Increase the size of this block}
-      Inc(LBlockSize, LNextMediumBlockSizeAndFlags and DropMediumAndLargeFlagsMask);
-      {Remove the next block as well}
-      if LNextMediumBlockSizeAndFlags >= MinimumMediumBlockSize then
-        RemoveMediumFreeBlock(LNextMediumBlock);
+      {Guard: combined size must not exceed pool bounds (issue #39)}
+      if (LNextMediumBlockSizeAndFlags and DropMediumAndLargeFlagsMask) <=
+         (MediumBlockPoolSize - MediumBlockPoolHeaderSize) - LBlockSize then
+      begin
+        {Increase the size of this block}
+        Inc(LBlockSize, LNextMediumBlockSizeAndFlags and DropMediumAndLargeFlagsMask);
+        {Remove the next block as well}
+        if LNextMediumBlockSizeAndFlags >= MinimumMediumBlockSize then
+          RemoveMediumFreeBlock(LNextMediumBlock);
+      end;
     end
     else
     begin
@@ -11596,13 +11692,18 @@ begin
         System.RunError(reInvalidPtr);
       {$ENDIF}
     {$ENDIF}
-      {Set the new block size}
-      Inc(LBlockSize, LPreviousMediumBlockSize);
-      {This is the new current block}
-      APointer := LPreviousMediumBlock;
-      {Remove the previous block from the linked list}
-      if LPreviousMediumBlockSize >= MinimumMediumBlockSize then
-        RemoveMediumFreeBlock(LPreviousMediumBlock);
+      {Guard: combined size must not exceed pool bounds (issue #39)}
+      if LPreviousMediumBlockSize <=
+         (MediumBlockPoolSize - MediumBlockPoolHeaderSize) - LBlockSize then
+      begin
+        {Set the new block size}
+        Inc(LBlockSize, LPreviousMediumBlockSize);
+        {This is the new current block}
+        APointer := LPreviousMediumBlock;
+        {Remove the previous block from the linked list}
+        if LPreviousMediumBlockSize >= MinimumMediumBlockSize then
+          RemoveMediumFreeBlock(LPreviousMediumBlock);
+      end;
     end;
   {$IFDEF CheckHeapForCorruption}
     {Check that the previous block is currently flagged as in use}
@@ -11810,8 +11911,34 @@ begin
   begin
     {Get a pointer to the block pool}
     LPSmallBlockPool := PSmallBlockPoolHeader(LBlockHeader);
+{$IFDEF SoftInvalidFreeMem}
+    {Guard: validate pool pointer before dereferencing. A foreign pointer has
+     garbage in its header; when the low 3 bits are all clear, the header value
+     is used as a pool pointer. If this value is below 64KB (always unmapped on
+     Windows and Linux), dereferencing it causes an access violation. Issue #39.}
+    if NativeUInt(LPSmallBlockPool) < $10000 then
+    begin
+      Result := 0;
+      Exit;
+    end;
+{$ENDIF}
     {Get the block type}
     LPSmallBlockType := LPSmallBlockPool^.BlockType;
+{$IFDEF SoftInvalidFreeMem}
+    {Validate that BlockType points within the SmallBlockTypes array. A foreign
+     pointer (not allocated by FastMM) will have a garbage block header that is
+     misinterpreted as a pool pointer. Reading BlockType from it yields a value
+     outside the SmallBlockTypes array. Without this check, FastMM would try to
+     lock and manipulate a garbage SmallBlockType, corrupting internal state or
+     crashing. See issue #39 for the Delphi/Linux ICU case.}
+    if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or
+       (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or
+       ((NativeUInt(LPSmallBlockType) - NativeUInt(@SmallBlockTypes[0])) mod SmallBlockTypeRecSize <> 0) then
+    begin
+      Result := 0;
+      Exit;
+    end;
+{$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
     FillChar(APointer^, LPSmallBlockType^.BlockSize - BlockHeaderSize, 0);
 {$ENDIF}
@@ -12037,6 +12164,11 @@ begin
         Result := FreeLargeBlock(APointer)
       else
       begin
+{$IFDEF SoftInvalidFreeMem}
+        {Invalid pointer or double-free detected (free/medium flag mismatch):
+         return 0 to avoid _FreeMem raising reInvalidPtr.}
+        Result := 0;
+{$ELSE}
         {Double-free or invalid pointer detection (CWE-415): raise error
          instead of silently returning -1.}
 {$IFDEF BCB6OrDelphi7AndUp}
@@ -12045,6 +12177,7 @@ begin
         System.RunError(reInvalidPtr);
 {$ENDIF}
         Result := CFastFreeMemReturnValueError;
+{$ENDIF}
       end;
     end;
   end;
@@ -12102,8 +12235,34 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   pop edx
 {$ENDIF}
   {Do we need to lock the block type?}
+{$IFDEF SoftInvalidFreeMem}
+  {Guard: validate pool pointer (edx) before dereferencing. A foreign pointer
+   has garbage in its header; when the low 3 bits are all clear, the header
+   value is used as a pool pointer. If this value is null or below 64KB
+   (always unmapped on Windows and Linux), dereferencing it causes an access
+   violation. Issue #39.}
+  cmp edx, $10000
+  jb @InvalidSmallBlock
+{$ENDIF}
   {Get the small block type in ebx}
   mov ebx, TSmallBlockPoolHeader[edx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  {Validate that BlockType points within the SmallBlockTypes array and is
+   aligned to a SmallBlockTypeRecSize boundary. A foreign pointer will have
+   a garbage header yielding an out-of-range or misaligned BlockType.}
+  lea eax, SmallBlockTypes
+  cmp ebx, eax
+  jb @InvalidSmallBlock
+  lea eax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp ebx, eax
+  jae @InvalidSmallBlock
+  {Check alignment: (BlockType - base) must be a multiple of SmallBlockTypeRecSize}
+  lea eax, SmallBlockTypes
+  neg eax
+  add eax, ebx
+  test eax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallBlock
+{$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
   test ebp, (UnsignedBit shl StateBitMultithreaded)
@@ -12346,6 +12505,22 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ENDIF}
   {Drop the flags}
   and edx, DropMediumAndLargeFlagsMask
+  {Validate block size: must be between MinimumMediumBlockSize and the
+   maximum usable pool space. A foreign pointer (not allocated by FastMM)
+   will have a garbage header yielding a value outside this range. Without
+   this check, the code would read arbitrary memory offsets. Issue #39.}
+  cmp edx, MinimumMediumBlockSize
+{$IFDEF SoftInvalidFreeMem}
+  jb @InvalidMediumBlock
+{$ELSE}
+  jb @CorruptMediumBlockSize
+{$ENDIF}
+  cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize
+{$IFDEF SoftInvalidFreeMem}
+  ja @InvalidMediumBlock
+{$ELSE}
+  ja @CorruptMediumBlockSize
+{$ENDIF}
   {Free the medium block pointed to by eax, header in edx}
   {Block size in ebx}
   mov ebx, edx
@@ -12553,6 +12728,11 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jmp @Finish
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontFreeLargeBlock:
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
+   reInvalidPtr. See issue #39.}
+  xor eax, eax
+{$ELSE}
   {Double-free or invalid pointer detection (CWE-415)}
   mov eax, reInvalidPtr
 {$IFDEF BCB6OrDelphi7AndUp}
@@ -12560,7 +12740,34 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ELSE}
   call System.RunError
 {$ENDIF}
+{$ENDIF}
   jmp @Exit
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallBlock:
+  {Foreign pointer detected in small block path: BlockType is outside the
+   SmallBlockTypes array or misaligned. Return 0 to avoid corruption. See
+   issue #39.}
+  xor eax, eax
+  jmp @Exit
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidMediumBlock:
+  {Foreign pointer detected in medium block path: block size outside valid
+   range. Return 0 to avoid corruption. See issue #39.}
+  xor eax, eax
+  jmp @Exit
+{$ELSE}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@CorruptMediumBlockSize:
+  {Corrupt medium block size detected (issue #39)}
+  mov eax, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
+  jmp @Exit
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @Exit:
   pop ebx
@@ -12627,8 +12834,34 @@ asm
   mov rcx, rsi
   mov rdx, [rcx - BlockHeaderSize]
 {$ENDIF}
+{$IFDEF SoftInvalidFreeMem}
+  {Guard: validate pool pointer (rdx) before dereferencing. A foreign pointer
+   has garbage in its header; when the low 3 bits are all clear, the header
+   value is used as a pool pointer. If this value is null or below 64KB
+   (always unmapped on Windows and Linux), dereferencing it causes an access
+   violation. Issue #39.}
+  cmp rdx, $10000
+  jb @InvalidSmallBlock
+{$ENDIF}
   {Get the small block type in rbx}
   mov rbx, TSmallBlockPoolHeader[rdx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  {Validate that BlockType points within the SmallBlockTypes array and is
+   aligned to a SmallBlockTypeRecSize boundary. A foreign pointer will have
+   a garbage header yielding an out-of-range or misaligned BlockType.}
+  lea rax, SmallBlockTypes
+  cmp rbx, rax
+  jb @InvalidSmallBlock
+  lea rax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp rbx, rax
+  jae @InvalidSmallBlock
+  {Check alignment: (BlockType - base) must be a multiple of SmallBlockTypeRecSize}
+  lea rax, SmallBlockTypes
+  neg rax
+  add rax, rbx
+  test rax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallBlock
+{$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
   test r12b, (UnsignedBit shl StateBitMultithreaded)
@@ -12938,6 +13171,22 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ENDIF}
   {Drop the flags}
   and rdx, DropMediumAndLargeFlagsMask
+  {Validate block size: must be between MinimumMediumBlockSize and the
+   maximum usable pool space. A foreign pointer (not allocated by FastMM)
+   will have a garbage header yielding a value outside this range. Without
+   this check, the code would read arbitrary memory offsets. Issue #39.}
+  cmp rdx, MinimumMediumBlockSize
+{$IFDEF SoftInvalidFreeMem}
+  jb @InvalidMediumBlock
+{$ELSE}
+  jb @CorruptMediumBlockSize
+{$ENDIF}
+  cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize
+{$IFDEF SoftInvalidFreeMem}
+  ja @InvalidMediumBlock
+{$ELSE}
+  ja @CorruptMediumBlockSize
+{$ENDIF}
   {Free the medium block pointed to by eax, header in edx}
   {Block size in rbx}
   mov rbx, rdx
@@ -13135,6 +13384,11 @@ but we don't need them at this point}
   call FreeLargeBlock
   jmp @Done
 @DoubleFreeDetected:
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign pointer or double-free: return 0 to avoid _FreeMem raising
+   reInvalidPtr. See issue #39.}
+  xor eax, eax
+{$ELSE}
   {Double-free or invalid pointer detection (CWE-415)}
   mov ecx, reInvalidPtr
 {$IFDEF BCB6OrDelphi7AndUp}
@@ -13142,7 +13396,34 @@ but we don't need them at this point}
 {$ELSE}
   call System.RunError
 {$ENDIF}
+{$ENDIF}
   jmp @Done
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallBlock:
+  {Foreign pointer detected in small block path: BlockType is outside the
+   SmallBlockTypes array or misaligned. Return 0 to avoid corruption. See
+   issue #39.}
+  xor eax, eax
+  jmp @Done
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidMediumBlock:
+  {Foreign pointer detected in medium block path: block size outside valid
+   range. Return 0 to avoid corruption. See issue #39.}
+  xor eax, eax
+  jmp @Done
+{$ELSE}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@CorruptMediumBlockSize:
+  {Corrupt medium block size detected (issue #39)}
+  mov ecx, reInvalidPtr
+{$IFDEF BCB6OrDelphi7AndUp}
+  call System.Error
+{$ELSE}
+  call System.RunError
+{$ENDIF}
+  jmp @Done
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @Done: {automatically restores registers from stack by implicitly inserting pop instructions (rbx, rsi and r12)}
 {$IFNDEF AllowAsmParams}
@@ -15085,7 +15366,14 @@ begin
   AppendStringToModuleName(InvalidOperationTitle, LErrorMessageTitle, Length(InvalidOperationTitle), (SizeOf(LErrorMessageTitle) div SizeOf(LErrorMessageTitle[0])-1));
   ShowMessageBox(InvalidFreeMemMsg, LErrorMessageTitle);
 {$ENDIF}
+{$IFDEF SoftInvalidFreeMem}
+  {Return 0 so Delphi _FreeMem does not raise reInvalidPtr for late FreeMem
+   calls after FastMM is uninstalled (defense-in-depth; NeverUninstall is
+   also auto-defined when SoftInvalidFreeMem is active).}
+  Result := 0;
+{$ELSE}
   Result := {$IFDEF fpc}NativeUInt(-1){$ELSE}-1{$ENDIF};
+{$ENDIF}
 end;
 
 function InvalidReallocMem({$IFDEF fpc}var {$ENDIF}APointer: Pointer; ANewSize: {$IFDEF XE2AndUp}NativeInt{$ELSE}{$IFDEF fpc}NativeUInt{$ELSE}Integer{$ENDIF}{$ENDIF}): Pointer;
