@@ -1572,6 +1572,56 @@ begin
 end;
 
 // =============================================================================
+// Test: SoftInvalidFreeMem foreign pointer handling
+// =============================================================================
+{$IFDEF SoftInvalidFreeMem}
+procedure TestSoftInvalidFreeMemForeignPointer;
+const
+  TestName = 'SoftInvalidFreeMemForeignPointer';
+var
+  Buffer: PByte;
+  FakePtr: Pointer;
+  FakePoolAddr: PNativeUInt;
+  HeaderSlot: PNativeUInt;
+  Res: Integer;
+begin
+  {Simulate a foreign pointer whose header routes into the small block path.
+   We allocate a buffer, set up a fake pool structure at offset 0 whose
+   BlockType field (also at offset 0) holds an obviously invalid address,
+   then place a block header at offset 128 pointing to the fake pool.
+   FreeMem(FakePtr) reads the header, enters the small block path, reads
+   BlockType from the fake pool, and SoftInvalidFreeMem should detect it
+   as out-of-range and return 0.}
+  GetMem(Buffer, 256);
+  if Buffer = nil then
+  begin
+    TestFail(TestName, 'Buffer allocation failed');
+    Exit;
+  end;
+  try
+    FillChar(Buffer^, 256, 0);
+    {Set up fake pool at offset 0: BlockType (first field) = $DEADBEE0.
+     This value is far outside the SmallBlockTypes array.}
+    FakePoolAddr := PNativeUInt(Buffer);
+    FakePoolAddr^ := NativeUInt($DEADBEE0);
+    {Place block header at offset 128: must point to fake pool with bits 0-2
+     clear. Buffer is 8/16-byte aligned from GetMem, so bits 0-2 are clear.}
+    HeaderSlot := PNativeUInt(Buffer + 128);
+    HeaderSlot^ := NativeUInt(Buffer);
+    {FakePtr is just past the header; FreeMem subtracts BlockHeaderSize}
+    FakePtr := Pointer(Buffer + 128 + SizeOf(NativeUInt));
+    Res := FreeMem(FakePtr);
+    if Res = 0 then
+      TestPass(TestName)
+    else
+      TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+  finally
+    FreeMem(Buffer);
+  end;
+end;
+{$ENDIF}
+
+// =============================================================================
 // Main
 // =============================================================================
 begin
@@ -1621,6 +1671,13 @@ begin
     TestPowerOfTwoSizes;
     TestOddSizes;
     TestMixedSizeRandomPattern;
+
+    // SoftInvalidFreeMem test (only when compiled with -dSoftInvalidFreeMem)
+    {$IFDEF SoftInvalidFreeMem}
+    TestSoftInvalidFreeMemForeignPointer;
+    {$ELSE}
+    Log('[SKIP] SoftInvalidFreeMemForeignPointer (SoftInvalidFreeMem not defined)');
+    {$ENDIF}
 
     // Concurrent test (if not single-threaded)
     {$IFNDEF ForceSingleThreaded}

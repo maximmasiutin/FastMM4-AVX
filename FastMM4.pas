@@ -11464,7 +11464,7 @@ var
   LPreviousMediumBlock: PMediumFreeBlock;
 {$ENDIF}
   LNextMediumBlockSizeAndFlags: NativeUInt;
-  LBlockSize: Cardinal;
+  LBlockSize: NativeUInt;
 {$IFNDEF FullDebugMode}
   LPreviousMediumBlockSize: Cardinal;
 {$ENDIF}
@@ -11826,7 +11826,8 @@ begin
      lock and manipulate a garbage SmallBlockType, corrupting internal state or
      crashing. See issue #39 for the Delphi/Linux ICU case.}
     if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or
-       (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) then
+       (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or
+       ((NativeUInt(LPSmallBlockType) - NativeUInt(@SmallBlockTypes[0])) mod SmallBlockTypeRecSize <> 0) then
     begin
       Result := 0;
       Exit;
@@ -12131,13 +12132,21 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   {Get the small block type in ebx}
   mov ebx, TSmallBlockPoolHeader[edx].BlockType
 {$IFDEF SoftInvalidFreeMem}
-  {Validate that BlockType points within the SmallBlockTypes array}
+  {Validate that BlockType points within the SmallBlockTypes array and is
+   aligned to a SmallBlockTypeRecSize boundary. A foreign pointer will have
+   a garbage header yielding an out-of-range or misaligned BlockType.}
   lea eax, SmallBlockTypes
   cmp ebx, eax
   jb @InvalidSmallBlock
   lea eax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
   cmp ebx, eax
   jae @InvalidSmallBlock
+  {Check alignment: (BlockType - base) must be a multiple of SmallBlockTypeRecSize}
+  lea eax, SmallBlockTypes
+  neg eax
+  add eax, ebx
+  test eax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallBlock
 {$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
@@ -12606,7 +12615,8 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @InvalidSmallBlock:
   {Foreign pointer detected in small block path: BlockType is outside the
-   SmallBlockTypes array. Return 0 to avoid corruption. See issue #39.}
+   SmallBlockTypes array or misaligned. Return 0 to avoid corruption. See
+   issue #39.}
   xor eax, eax
   jmp @Exit
 {$ENDIF}
@@ -12679,13 +12689,21 @@ asm
   {Get the small block type in rbx}
   mov rbx, TSmallBlockPoolHeader[rdx].BlockType
 {$IFDEF SoftInvalidFreeMem}
-  {Validate that BlockType points within the SmallBlockTypes array}
+  {Validate that BlockType points within the SmallBlockTypes array and is
+   aligned to a SmallBlockTypeRecSize boundary. A foreign pointer will have
+   a garbage header yielding an out-of-range or misaligned BlockType.}
   lea rax, SmallBlockTypes
   cmp rbx, rax
   jb @InvalidSmallBlock
   lea rax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
   cmp rbx, rax
   jae @InvalidSmallBlock
+  {Check alignment: (BlockType - base) must be a multiple of SmallBlockTypeRecSize}
+  lea rax, SmallBlockTypes
+  neg rax
+  add rax, rbx
+  test rax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallBlock
 {$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
@@ -13211,7 +13229,8 @@ but we don't need them at this point}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @InvalidSmallBlock:
   {Foreign pointer detected in small block path: BlockType is outside the
-   SmallBlockTypes array. Return 0 to avoid corruption. See issue #39.}
+   SmallBlockTypes array or misaligned. Return 0 to avoid corruption. See
+   issue #39.}
   xor eax, eax
   jmp @Done
 {$ENDIF}
