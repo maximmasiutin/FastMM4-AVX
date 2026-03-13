@@ -11497,14 +11497,15 @@ begin
   LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
   {Get the medium block size}
   LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
-  {A valid medium block must be between MinimumMediumBlockSize and
-   MaximumMediumBlockSize + BlockHeaderSize. A value outside this range
-   indicates a corrupt or foreign block header. A zero or undersized
-   value would cause an unsigned underflow in InsertMediumBlockIntoBin;
-   an oversized value would corrupt the bin index. See issue #39 for a
+  {A valid medium block must be between MinimumMediumBlockSize and the
+   maximum usable pool space (MediumBlockPoolSize - MediumBlockPoolHeaderSize).
+   Blocks can exceed MaximumMediumBlockSize when they absorb remainder space
+   from the sequential feed area. A value outside this range indicates a
+   corrupt or foreign block header. A zero or undersized value would cause
+   an unsigned underflow in InsertMediumBlockIntoBin. See issue #39 for a
    case where this occurs during Delphi/Linux ICU initialization.}
   if (LBlockSize < MinimumMediumBlockSize) or
-     (LBlockSize > (MaximumMediumBlockSize + BlockHeaderSize)) then
+     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
   begin
     {$IFDEF SoftInvalidFreeMem}
     {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
