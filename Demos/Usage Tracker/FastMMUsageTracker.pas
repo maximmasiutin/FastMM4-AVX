@@ -506,7 +506,7 @@ var
       if AMemoryMap[LInd] = csExSysAllocated then
       begin
         {Get all the reserved memory blocks and windows allocated memory blocks, etc.}
-        VirtualQuery(Pointer(LInd * 65536), LMBI, SizeOf(LMBI));
+        VirtualQuery(Pointer({$ifdef WIN64}Int64{$endif}(LInd) * 65536), LMBI, SizeOf(LMBI));
         if LMBI.State = MEM_COMMIT then
         begin
           if (GetModuleFileName(DWord(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
