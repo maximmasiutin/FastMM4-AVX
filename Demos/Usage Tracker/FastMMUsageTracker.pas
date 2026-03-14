@@ -506,7 +506,7 @@ var
       if AMemoryMap[LInd] = csExSysAllocated then
       begin
         {Get all the reserved memory blocks and Windows allocated memory blocks, etc.}
-        VirtualQuery(Pointer(LInd * 65536), LMBI, SizeOf(LMBI));
+        VirtualQuery(Pointer(UIntPtr(LInd) shl 16), LMBI, SizeOf(LMBI));
         if LMBI.State = MEM_COMMIT then
         begin
           if (GetModuleFileName(DWord(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
@@ -522,7 +522,13 @@ var
           end;
           if LMBI.RegionSize > 65536 then
           begin
-            LIndTop := (Cardinal(LMBI.BaseAddress) + Cardinal(LMBI.RegionSize)) div 65536;
+            LIndTop := (NativeUInt(LMBI.BaseAddress) + LMBI.RegionSize) shr 16;
+            {Clamp to array bounds: on 64-bit, regions above 4GB produce
+             indices beyond High(TMemoryMapEx). Without this clamp, the loop
+             below would write past the array end, corrupting the stack
+             (or triggering a range check error under {$R+}).}
+            if LIndTop > High(AMemoryMap) then
+              LIndTop := High(AMemoryMap);
             // Fill up multiple tables
             for I1 := LInd to LIndTop do
               AMemoryMap[I1] := LChunkState;
