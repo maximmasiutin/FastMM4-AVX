@@ -3323,7 +3323,7 @@ var
 
   {The sequential feed medium block pool.}
   LastSequentiallyFedMediumBlock: Pointer;
-  MediumSequentialFeedBytesLeft: Cardinal;
+  MediumSequentialFeedBytesLeft: NativeUInt;
   {The medium block bins are divided into groups of 32 bins. If a bit
    is set in this group bitmap, then at least one bin in the group has free
    blocks.}
@@ -9178,8 +9178,12 @@ begin
      logical to assume that it may be enlarged again. Since reallocations are
      expensive, there is a minimum upsize percentage to avoid unnecessary
      future move operations.}
-    {Add 25% for large block upsizes}
-    LMinimumUpsize := LOldAvailableSize + (LOldAvailableSize shr 2);
+    {Add 25% for large block upsizes. Check before adding to avoid
+     unsigned overflow with corrupt large block headers.}
+    if LOldAvailableSize <= High(NativeUInt) - (LOldAvailableSize shr 2) then
+      LMinimumUpsize := LOldAvailableSize + (LOldAvailableSize shr 2)
+    else
+      LMinimumUpsize := ANewSize;
     if ANewSize < LMinimumUpsize then
       LNewAllocSize := LMinimumUpsize
     else
@@ -11692,9 +11696,12 @@ begin
         System.RunError(reInvalidPtr);
       {$ENDIF}
     {$ENDIF}
-      {Guard: combined size must not exceed pool bounds (issue #39)}
-      if LPreviousMediumBlockSize <=
-         (MediumBlockPoolSize - MediumBlockPoolHeaderSize) - LBlockSize then
+      {Guard: combined size must not exceed pool bounds (issue #39).
+       First check prevents unsigned underflow in the subtraction when
+       LBlockSize grew beyond pool max during next-block coalescence.}
+      if (LBlockSize <= (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) and
+         (LPreviousMediumBlockSize <=
+          (MediumBlockPoolSize - MediumBlockPoolHeaderSize) - LBlockSize) then
       begin
         {Set the new block size}
         Inc(LBlockSize, LPreviousMediumBlockSize);
@@ -11860,7 +11867,7 @@ end;
 function FastFreeMem(APointer: Pointer): {$IFDEF fpc}{$IFDEF CPU64}PtrUInt{$ELSE}NativeUInt{$ENDIF}{$ELSE}Integer{$ENDIF};
 {$IFNDEF FastFreememNeedAssemberCode}
 const
-  CFastFreeMemReturnValueError = {$IFDEF fpc}NativeUInt(-1){$ELSE}-1{$ENDIF};
+  CFastFreeMemReturnValueError = {$IFDEF fpc}High(NativeUInt){$ELSE}-1{$ENDIF};
 var
   LPSmallBlockPool: PSmallBlockPoolHeader;
 {$IFNDEF FullDebugMode}
@@ -11911,20 +11918,25 @@ begin
   begin
     {Get a pointer to the block pool}
     LPSmallBlockPool := PSmallBlockPoolHeader(LBlockHeader);
-{$IFDEF SoftInvalidFreeMem}
     {Guard: validate pool pointer before dereferencing. A foreign pointer has
      garbage in its header; when the low 3 bits are all clear, the header value
      is used as a pool pointer. If this value is below 64KB (always unmapped on
      Windows and Linux), dereferencing it causes an access violation. Issue #39.}
     if NativeUInt(LPSmallBlockPool) < $10000 then
     begin
+{$IFDEF SoftInvalidFreeMem}
       Result := 0;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+  {$ELSE}
+      System.RunError(reInvalidPtr);
+  {$ENDIF}
+{$ENDIF}
       Exit;
     end;
-{$ENDIF}
     {Get the block type}
     LPSmallBlockType := LPSmallBlockPool^.BlockType;
-{$IFDEF SoftInvalidFreeMem}
     {Validate that BlockType points within the SmallBlockTypes array. A foreign
      pointer (not allocated by FastMM) will have a garbage block header that is
      misinterpreted as a pool pointer. Reading BlockType from it yields a value
@@ -11935,10 +11947,17 @@ begin
        (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or
        ((NativeUInt(LPSmallBlockType) - NativeUInt(@SmallBlockTypes[0])) mod SmallBlockTypeRecSize <> 0) then
     begin
+{$IFDEF SoftInvalidFreeMem}
       Result := 0;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+  {$ELSE}
+      System.RunError(reInvalidPtr);
+  {$ENDIF}
+{$ENDIF}
       Exit;
     end;
-{$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
     FillChar(APointer^, LPSmallBlockType^.BlockSize - BlockHeaderSize, 0);
 {$ENDIF}
@@ -13300,7 +13319,7 @@ but we don't need them at this point}
    current sequential feed pool is not entirely free, we make this the new
    sequential feed pool.}
   lea r8, MediumSequentialFeedBytesLeft
-  cmp dword ptr [r8], MediumBlockPoolSize - MediumBlockPoolHeaderSize //workaround for QC99023
+  cmp qword ptr [r8], MediumBlockPoolSize - MediumBlockPoolHeaderSize //workaround for QC99023
   jne @MakeEmptyMediumPoolSequentialFeed
   {Point esi to the medium block pool header}
   sub rsi, MediumBlockPoolHeaderSize
@@ -13354,7 +13373,7 @@ but we don't need them at this point}
   mov qword ptr [rbx - BlockHeaderSize], IsMediumBlockFlag
   {Store the number of bytes available in the sequential feed chunk}
   lea rax, MediumSequentialFeedBytesLeft
-  mov dword ptr [rax], MediumBlockPoolSize - MediumBlockPoolHeaderSize //QC99023 workaround
+  mov qword ptr [rax], MediumBlockPoolSize - MediumBlockPoolHeaderSize //QC99023 workaround
   {Set the last sequentially fed block}
   mov LastSequentiallyFedMediumBlock, rbx
   {Success}
@@ -13456,6 +13475,7 @@ var
   LOldAvailableSize,
   LNewAllocSize,
   LNewBlockSize,
+  LOldBlockSize,
   LNewAvailableSize: NativeUInt;
   LPNextBlock: Pointer;
   LPNextBlockHeader: Pointer;
@@ -13481,7 +13501,7 @@ var
     LSum := LNewAvailableSize + BlockHeaderSize;
     if LSum <= LNewBlockSize then
     begin
-      LSecondSplitSize := NativeUInt(-1);
+      LSecondSplitSize := High(NativeUInt);
       {The block size is the full available size plus header}
       LNewBlockSize := LNewAvailableSize + BlockHeaderSize;
       {Grab the whole block: Mark it as used in the block following it}
@@ -13522,7 +13542,7 @@ var
     LNewBlockSize := ((NativeUInt(ANewSize) + (BlockHeaderSize + MediumBlockGranularity - 1 - MediumBlockSizeOffset))
       and MediumBlockGranularityMask) + MediumBlockSizeOffset;
     {Get the size of the second split}
-    LSecondSplitSize := (LOldAvailableSize + BlockHeaderSize) - LNewBlockSize;
+    LSecondSplitSize := LOldBlockSize - LNewBlockSize;
     {Lock the medium blocks}
 
 {$IFNDEF AssumeMultiThreaded}
@@ -13541,7 +13561,7 @@ var
       (PNativeUInt(PByte(APointer) - BlockHeaderSize)^ and ExtractMediumAndLargeFlagsMask)
       or LNewBlockSize;
     {Is the next block in use?}
-    LPNextBlock := PNativeUInt(PByte(APointer) + LOldAvailableSize + BlockHeaderSize);
+    LPNextBlock := PNativeUInt(PByte(APointer) + LOldBlockSize);
     LNextBlockSizeAndFlags := PNativeUInt(PByte(LPNextBlock) - BlockHeaderSize)^;
     if (LNextBlockSizeAndFlags and IsFreeBlockFlag) = 0 then
     begin
@@ -13623,8 +13643,42 @@ begin
   if ((LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag or IsLargeBlockFlag))) = 0 then
   begin
     {-----------------------------------Small block-------------------------------------}
-    {The block header is a pointer to the block pool: Get the block type}
+    {The block header is a pointer to the block pool. Validate the pool pointer
+     before dereferencing: a foreign pointer has garbage in its header, and when
+     the low 3 bits are clear it enters this path. If the header value is below
+     64KB (unmapped on Windows and Linux) or the BlockType falls outside the
+     SmallBlockTypes array, the block is invalid. Issue #39.}
+    if NativeUInt(LBlockHeader) < $10000 then
+    begin
+{$IFDEF SoftInvalidFreeMem}
+      Result := nil;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+  {$ELSE}
+      System.RunError(reInvalidPtr);
+  {$ENDIF}
+{$ENDIF}
+      Exit;
+    end;
+    {Get the block type}
     LPSmallBlockType := PSmallBlockPoolHeader(LBlockHeader)^.BlockType;
+    {Validate BlockType within SmallBlockTypes array}
+    if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or
+       (NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or
+       ((NativeUInt(LPSmallBlockType) - NativeUInt(@SmallBlockTypes[0])) mod SmallBlockTypeRecSize <> 0) then
+    begin
+{$IFDEF SoftInvalidFreeMem}
+      Result := nil;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+      System.Error(reInvalidPtr);
+  {$ELSE}
+      System.RunError(reInvalidPtr);
+  {$ENDIF}
+{$ENDIF}
+      Exit;
+    end;
     {Get the available size inside blocks of this type.}
     LOldAvailableSize := LPSmallBlockType^.BlockSize - BlockHeaderSize;
     {Is it an upsize or a downsize?}
@@ -13704,8 +13758,27 @@ begin
       {-------------------------------Medium block--------------------------------------}
       {What is the available size in the block being reallocated?}
       LOldAvailableSize := (LBlockHeader and DropMediumAndLargeFlagsMask);
+      {Validate medium block size (issue #39): must be within valid pool range.
+       A foreign or corrupt pointer produces a bogus size that can cause unsigned
+       underflow or out-of-bounds access in subsequent operations.}
+      if (LOldAvailableSize < MinimumMediumBlockSize) or
+         (LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
+      begin
+{$IFDEF SoftInvalidFreeMem}
+        Result := nil;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+        System.Error(reInvalidPtr);
+  {$ELSE}
+        System.RunError(reInvalidPtr);
+  {$ENDIF}
+{$ENDIF}
+        Exit;
+      end;
+      {Save the full block size before stripping the header}
+      LOldBlockSize := LOldAvailableSize;
       {Get a pointer to the next block}
-      LPNextBlock := PNativeUInt(PByte(APointer) + LOldAvailableSize);
+      LPNextBlock := PNativeUInt(PByte(APointer) + LOldBlockSize);
       {Subtract the block header size from the old available size}
       Dec(LOldAvailableSize, BlockHeaderSize);
       {Is it an upsize or a downsize?}
@@ -15373,7 +15446,7 @@ begin
    also auto-defined when SoftInvalidFreeMem is active).}
   Result := 0;
 {$ELSE}
-  Result := {$IFDEF fpc}NativeUInt(-1){$ELSE}-1{$ENDIF};
+  Result := {$IFDEF fpc}High(NativeUInt){$ELSE}-1{$ENDIF};
 {$ENDIF}
 end;
 

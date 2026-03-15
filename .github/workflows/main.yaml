@@ -255,12 +255,14 @@ jobs:
       # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
       # =========================================================================
       - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, ASM, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
           ./SoftInvalidFreeMemTest
 
       - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, Pure Pascal, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $GITHUB_WORKSPACE/Tests/Simple
           fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
@@ -298,6 +300,10 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
+
+      - name: Disable Windows Error Reporting dialogs
+        run: |
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f
 
       - name: Download FreePascal installer
         run: |
@@ -648,24 +654,28 @@ jobs:
       # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
       # =========================================================================
       - name: Compile and run SoftInvalidFreeMemTest 64-bit (ASM, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
           & '.\SoftInvalidFreeMemTest.exe'
 
       - name: Compile and run SoftInvalidFreeMemTest 64-bit (Pure Pascal, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
           & '.\SoftInvalidFreeMemTest.exe'
 
       - name: Compile and run SoftInvalidFreeMemTest 32-bit (ASM, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
           & '.\SoftInvalidFreeMemTest.exe'
 
       - name: Compile and run SoftInvalidFreeMemTest 32-bit (Pure Pascal, overflow+range checks)
+        timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
