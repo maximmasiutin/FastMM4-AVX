@@ -11636,11 +11636,7 @@ begin
    an unsigned underflow in InsertMediumBlockIntoBin. See issue #39 for a
    case where this occurs during Delphi/Linux ICU initialization.}
   if (LBlockSize < MinimumMediumBlockSize) or
-     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) or
-     {Valid medium blocks are allocated at MediumBlockGranularity boundaries
-      plus MediumBlockSizeOffset. A foreign pointer header will almost never
-      satisfy this alignment. Issue #39.}
-     ((LBlockSize - MediumBlockSizeOffset) and (MediumBlockGranularity - 1) <> 0) then
+     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
   begin
     {$IFDEF SoftInvalidFreeMem}
     {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
