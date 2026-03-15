@@ -37,6 +37,11 @@ uses
 {$IFDEF MSWINDOWS}
 { Import ExitProcess for clean shutdown after allocator corruption }
 procedure ExitProcess(uExitCode: Cardinal); stdcall; external 'kernel32' name 'ExitProcess';
+{ Suppress Windows Error Reporting crash dialogs in CI }
+function SetErrorMode(uMode: Cardinal): Cardinal; stdcall; external 'kernel32' name 'SetErrorMode';
+const
+  SEM_FAILCRITICALERRORS = $0001;
+  SEM_NOGPFAULTERRORBOX  = $0002;
 {$ENDIF}
 
 { Import C stdlib malloc/free }
@@ -399,7 +404,15 @@ end;
 // =============================================================================
 // Main
 // =============================================================================
+var
+  P: Pointer;
+  S: string;
+  I: Integer;
 begin
+{$IFDEF MSWINDOWS}
+  { Suppress crash dialogs that block CI runners }
+  SetErrorMode(SEM_FAILCRITICALERRORS or SEM_NOGPFAULTERRORBOX);
+{$ENDIF}
   Log('FastMM4-AVX SoftInvalidFreeMem Regression Test');
   Log('===============================================');
   Log('');
@@ -486,6 +499,45 @@ begin
   end;
   {$ENDIF}
 {$ENDIF}
+
+  { Phase 4: Post-foreign-pointer allocator health check (issue #39).
+    Reproduces the user's scenario: after SoftInvalidFreeMem handled a
+    foreign pointer, subsequent LEGITIMATE GetMem/FreeMem/ReallocMem
+    calls must still work without overflow or range check errors.
+    The user's crash was reRangeError in FastGetMem during string
+    allocation after ICU's GetFncAddress freed a foreign pointer. }
+  if not GAllocatorCorrupted then
+  try
+    { Small block allocations - the most common path }
+    GetMem(P, 64);
+    FillChar(P^, 64, $DD);
+    FreeMem(P);
+    { String operations - this is what crashed in the user's report:
+      NewAnsiString -> GetMem during the second GetFncAddress call }
+    S := '';
+    for I := 1 to 200 do
+      S := S + Chr(65 + (I mod 26));
+    S := '';
+    { Medium block alloc/free }
+    GetMem(P, 8192);
+    FillChar(P^, 8192, $EE);
+    FreeMem(P);
+    { ReallocMem - exercises the realloc validation guards }
+    GetMem(P, 100);
+    FillChar(P^, 100, $11);
+    ReallocMem(P, 4000);
+    FillChar(P^, 4000, $22);
+    ReallocMem(P, 50);
+    FreeMem(P);
+    { Large block }
+    GetMem(P, 500000);
+    FillChar(P^, 500000, $33);
+    FreeMem(P);
+    TestPass('PostForeignPointerAllocHealth');
+  except
+    on E: Exception do
+      TestFail('PostForeignPointerAllocHealth', E.ClassName + ': ' + E.Message);
+  end;
 
   { Use WriteLn with fixed strings to avoid FastMM allocations for
     result reporting, in case the allocator state was corrupted. }
