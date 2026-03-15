@@ -2488,6 +2488,10 @@ const
   MediumBlockGranularity = UnsignedBit shl MediumBlockGranularityPowerOf2;
   MediumBlockGranularityMask = NativeUInt(-NativeInt(MediumBlockGranularity));
 
+  {Minimum page size mask for page-alignment validation. VirtualAlloc/valloc
+   return at least 4KB-aligned memory on all supported platforms.}
+  MinimumPageSizeMask = $FFF;
+
   {The granularity of large blocks}
   LargeBlockGranularity = 65536;
   {The maximum size of a small block. Blocks larger than this are either
@@ -12218,7 +12222,31 @@ begin
       {Validate: Is this actually a Large block, or is it an attempt to free an
        already freed small block?}
       if (LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag)) = 0 then
-        Result := FreeLargeBlock(APointer)
+      begin
+        {Guard: validate large block before calling FreeLargeBlock.
+         Valid large blocks have: (1) size > 0, (2) size aligned to
+         LargeBlockGranularity (65536), (3) base pointer page-aligned
+         since VirtualAlloc/valloc returns page-aligned memory.
+         These checks catch most foreign pointers but cannot guarantee
+         detection of all invalid frees. Issue #39.}
+        if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or
+           ((LBlockHeader and DropMediumAndLargeFlagsMask) and (LargeBlockGranularity - 1) <> 0) or
+           ((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0) then
+        begin
+{$IFDEF SoftInvalidFreeMem}
+          Result := 0;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+          System.Error(reInvalidPtr);
+  {$ELSE}
+          System.RunError(reInvalidPtr);
+  {$ENDIF}
+          Result := CFastFreeMemReturnValueError;
+{$ENDIF}
+        end
+        else
+          Result := FreeLargeBlock(APointer);
+      end
       else
       begin
 {$IFDEF SoftInvalidFreeMem}
