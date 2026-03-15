@@ -8,8 +8,10 @@ Written by Maxim Masiutin <maxim@masiutin.com>
 
 Version 1.0.12 (5 March 2026)
 
-This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
-(see below for the original FastMM4 description)
+A fork of the Fast Memory Manager (FastMM) v4.993 by Pierre le Riche
+(see below for the original FastMM4 description).
+
+Supported compilers: Embarcadero Delphi, FreePascal (FPC/Lazarus).
 
 Changes in FastMM4-AVX compared to original FastMM4:
 

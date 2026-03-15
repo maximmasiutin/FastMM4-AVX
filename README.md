@@ -1,6 +1,9 @@
 # FastMM4-AVX
 
-FastMM4-AVX (efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support for FastMM4)
+A fork of [FastMM4](https://github.com/pleriche/FastMM4) by Pierre le Riche
+with efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM support.
+Compiles under Embarcadero Delphi and FreePascal (FPC/Lazarus).
+
  - Copyright (C) 2017-2020 Ritlabs, SRL. All rights reserved.
  - Copyright (C) 2020-2026 Maxim Masiutin. All rights reserved.
 
@@ -8,10 +11,14 @@ Written by Maxim Masiutin <maxim@masiutin.com>
 
 Version: 1.0.12 (5 March 2026)
 
-This is a fork of the "Fast Memory Manager" (FastMM) v4.993 by Pierre le Riche
-(see below for the original FastMM4 description)
+## Compiler Support
 
-Changes in FastMM4-AVX compared to original FastMM4:
+- Embarcadero Delphi (Win32, Win64, Linux 64-bit)
+- FreePascal / Lazarus (Win32, Win64, Linux 64-bit)
+
+Note: The original FastMM4 and FastMM5 do not support FreePascal.
+
+## Changes in FastMM4-AVX compared to original FastMM4
 
  - Efficient synchronization
    - improved synchronization between the threads. Proper synchronization
