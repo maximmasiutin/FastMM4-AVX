@@ -11632,7 +11632,11 @@ begin
    an unsigned underflow in InsertMediumBlockIntoBin. See issue #39 for a
    case where this occurs during Delphi/Linux ICU initialization.}
   if (LBlockSize < MinimumMediumBlockSize) or
-     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
+     (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) or
+     {Valid medium blocks are allocated at MediumBlockGranularity boundaries
+      plus MediumBlockSizeOffset. A foreign pointer header will almost never
+      satisfy this alignment. Issue #39.}
+     ((LBlockSize - MediumBlockSizeOffset) and (MediumBlockGranularity - 1) <> 0) then
   begin
     {$IFDEF SoftInvalidFreeMem}
     {The pointer was likely not allocated by FastMM (e.g. foreign C allocator
@@ -12219,11 +12223,15 @@ begin
        already freed small block?}
       if (LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag)) = 0 then
       begin
-        {Guard: large block base (APointer - LargeBlockHeaderSize) must be
-         page-aligned, since VirtualAlloc/valloc always returns page-aligned
-         memory. A foreign pointer (not allocated by FastMM) will produce a
-         non-aligned base address. Issue #39.}
-        if (NativeUInt(APointer) - LargeBlockHeaderSize) and $FFF <> 0 then
+        {Guard: validate large block before calling FreeLargeBlock.
+         Valid large blocks have: (1) size > 0, (2) size aligned to
+         LargeBlockGranularity (65536), (3) base pointer page-aligned
+         since VirtualAlloc/valloc returns page-aligned memory.
+         A foreign pointer (not allocated by FastMM) will fail at least
+         one of these checks. Issue #39.}
+        if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or
+           ((LBlockHeader and DropMediumAndLargeFlagsMask) and (LargeBlockGranularity - 1) <> 0) or
+           ((NativeUInt(APointer) - LargeBlockHeaderSize) and $FFF <> 0) then
         begin
 {$IFDEF SoftInvalidFreeMem}
           Result := 0;
