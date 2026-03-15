@@ -2704,10 +2704,12 @@ type
   {$ENDIF}
   ;
 
+{$IFDEF CONDITIONALEXPRESSIONS}
 {$IFDEF SynchroVar32bit}
   {$IF SizeOf(TSynchronizationVariable) <> 4}
     {$MESSAGE FATAL 'TSynchronizationVariable must be 4 bytes for atomic operations'}
   {$IFEND}
+{$ENDIF}
 {$ENDIF}
 
   {---------------Small block structures-------------}
@@ -2778,6 +2780,14 @@ type
      structure to 32 bytes for 32-bit}
     Reserved1: Cardinal;
 {$ENDIF}
+{$IFDEF SynchroVar32bit}
+  {$IFDEF 64bit}
+    {When SynchroVar32bit is defined, TSmallBlockType has a 4-byte lock field
+     plus Byte+Byte+Word+Word+Word = 12 bytes before NextPartiallyFreePool,
+     which aligns to offset 16. Add padding here to match that offset.}
+    ReservedPoolAlign: Pointer;
+  {$ENDIF}
+{$ENDIF}
     {The next and previous pool that has free blocks of this size. Do not
      change the position of these two fields: They must be at the same offsets
      as the fields in TSmallBlockType of the same name.}
@@ -2793,9 +2803,26 @@ type
     {The pool pointer and flags of the first block}
     FirstBlockPoolPointerAndFlags: NativeUInt;
 {$IFDEF 64bit}
+  {$IFDEF SynchroVar32bit}
+    Reserved3: Pointer; // One less reserved field to compensate for ReservedPoolAlign
+  {$ELSE}
     Reserved3, Reserved4: Pointer; // Align the structure to 64-bit size
+  {$ENDIF}
 {$ENDIF}
   end;
+
+{Compile-time struct size guards}
+{$IFDEF CONDITIONALEXPRESSIONS}
+{$IFDEF 64bit}
+  {$IF SizeOf(TSmallBlockPoolHeader) <> 64}
+    {$MESSAGE FATAL 'TSmallBlockPoolHeader must be 64 bytes on 64-bit'}
+  {$IFEND}
+{$ELSE}
+  {$IF SizeOf(TSmallBlockPoolHeader) <> 32}
+    {$MESSAGE FATAL 'TSmallBlockPoolHeader must be 32 bytes on 32-bit'}
+  {$IFEND}
+{$ENDIF}
+{$ENDIF}
 
   {Small block layout:
    At offset -SizeOf(Pointer) = Flags + address of the small block pool.
@@ -20000,6 +20027,19 @@ var
   {$ENDIF}
   {$ENDIF}
 begin
+
+  {Runtime struct layout verification: NextPartiallyFreePool must be at the
+   same offset in TSmallBlockType and TSmallBlockPoolHeader, otherwise the
+   partially-free pool linked list operations corrupt memory.}
+  if NativeUInt(@PSmallBlockType(nil)^.NextPartiallyFreePool) <>
+     NativeUInt(@PSmallBlockPoolHeader(nil)^.NextPartiallyFreePool) then
+  begin
+{$IFNDEF SystemRunError}
+    System.Error(reInvalidOp);
+{$ELSE}
+    System.RunError(reInvalidOp);
+{$ENDIF}
+  end;
 
 {$IFNDEF DisablePauseAndSwitchToThread}
 {$IFNDEF POSIX}
