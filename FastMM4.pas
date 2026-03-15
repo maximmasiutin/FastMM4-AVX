@@ -12218,7 +12218,27 @@ begin
       {Validate: Is this actually a Large block, or is it an attempt to free an
        already freed small block?}
       if (LBlockHeader and (IsFreeBlockFlag or IsMediumBlockFlag)) = 0 then
-        Result := FreeLargeBlock(APointer)
+      begin
+        {Guard: large block base (APointer - LargeBlockHeaderSize) must be
+         page-aligned, since VirtualAlloc/valloc always returns page-aligned
+         memory. A foreign pointer (not allocated by FastMM) will produce a
+         non-aligned base address. Issue #39.}
+        if (NativeUInt(APointer) - LargeBlockHeaderSize) and $FFF <> 0 then
+        begin
+{$IFDEF SoftInvalidFreeMem}
+          Result := 0;
+{$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+          System.Error(reInvalidPtr);
+  {$ELSE}
+          System.RunError(reInvalidPtr);
+  {$ENDIF}
+          Result := CFastFreeMemReturnValueError;
+{$ENDIF}
+        end
+        else
+          Result := FreeLargeBlock(APointer);
+      end
       else
       begin
 {$IFDEF SoftInvalidFreeMem}
