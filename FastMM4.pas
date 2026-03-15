@@ -1797,13 +1797,13 @@ of just one option: "Boolean short-circuit evaluation".}
 
 {$IFDEF FPC}
   {$IFDEF PurePascal}
-    {$define SynchroVarLongint}
+    {$define SynchroVar32bit}
   {$ENDIF}
 {$ENDIF}
 
 {$IFDEF LINUX}
   {$IFNDEF FPC}
-    {$define SynchroVarLongint}  // Delphi LLVM Linux needs Longint sync vars
+    {$define SynchroVar32bit}  // Delphi Linux: AtomicExchange needs at least 32-bit type
   {$ENDIF}
 {$ENDIF}
 
@@ -2689,8 +2689,12 @@ type
 {$ENDIF}
 
   TSynchronizationVariable =
-  {$IFDEF SynchroVarLongint}
-    LongInt
+  {$IFDEF SynchroVar32bit}
+    {$IFDEF FPC}
+    LongInt       // FPC: LongInt is always 4 bytes; matches InterlockedExchange signature
+    {$ELSE}
+    Integer       // Delphi: Integer is always 4 bytes (LongInt is 8 on Linux 64-bit LP64)
+    {$ENDIF}
   {$ELSE}
     {$IFDEF XE2AndUp}
       System.ShortInt
@@ -2699,6 +2703,12 @@ type
     {$ENDIF}
   {$ENDIF}
   ;
+
+{$IFDEF SynchroVar32bit}
+  {$IF SizeOf(TSynchronizationVariable) <> 4}
+    {$MESSAGE FATAL 'TSynchronizationVariable must be 4 bytes for atomic operations'}
+  {$IFEND}
+{$ENDIF}
 
   {---------------Small block structures-------------}
 
@@ -2717,7 +2727,7 @@ type
     {Bitmap indicating which of the first 8 medium block groups contain blocks
      of a suitable size for a block pool.}
     AllowedGroupsForBlockPoolBitmap: Byte;
-{$IFDEF SynchroVarLongint}
+{$IFDEF SynchroVar32bit}
     Reserved2: Byte;
 {$ENDIF}
     {The block size for this block type}
@@ -2744,7 +2754,7 @@ type
      that often) the variable size move routine is used.}
     UpsizeMoveProcedure: TMoveProc;
 {$ELSE}
-    {$IFNDEF SynchroVarLongint}
+    {$IFNDEF SynchroVar32bit}
     Reserved1: Pointer;
     {$ENDIF}
 {$ENDIF}
@@ -3697,7 +3707,7 @@ function InterlockedExchangeByte(var Target: TSynchronizationVariable; const Val
 {$IFNDEF ASMVersion}
 begin
   Result :=
-  {$IFDEF SynchroVarLongint}
+  {$IFDEF SynchroVar32bit}
   {$IFDEF LINUX}
     {$IFDEF FPC}
     InterlockedExchange
