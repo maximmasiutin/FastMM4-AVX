@@ -2488,6 +2488,10 @@ const
   MediumBlockGranularity = UnsignedBit shl MediumBlockGranularityPowerOf2;
   MediumBlockGranularityMask = NativeUInt(-NativeInt(MediumBlockGranularity));
 
+  {Minimum page size mask for page-alignment validation. VirtualAlloc/valloc
+   return at least 4KB-aligned memory on all supported platforms.}
+  MinimumPageSizeMask = $FFF;
+
   {The granularity of large blocks}
   LargeBlockGranularity = 65536;
   {The maximum size of a small block. Blocks larger than this are either
@@ -12227,11 +12231,11 @@ begin
          Valid large blocks have: (1) size > 0, (2) size aligned to
          LargeBlockGranularity (65536), (3) base pointer page-aligned
          since VirtualAlloc/valloc returns page-aligned memory.
-         A foreign pointer (not allocated by FastMM) will fail at least
-         one of these checks. Issue #39.}
+         These checks catch most foreign pointers but cannot guarantee
+         detection of all invalid frees. Issue #39.}
         if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or
            ((LBlockHeader and DropMediumAndLargeFlagsMask) and (LargeBlockGranularity - 1) <> 0) or
-           ((NativeUInt(APointer) - LargeBlockHeaderSize) and $FFF <> 0) then
+           ((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0) then
         begin
 {$IFDEF SoftInvalidFreeMem}
           Result := 0;
