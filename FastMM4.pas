@@ -2704,10 +2704,10 @@ type
   {$ENDIF}
   ;
 
-{$IFDEF CONDITIONALEXPRESSIONS}
+{$IFDEF OperatorsInDefinesSupported}
 {$IFDEF SynchroVar32bit}
   {$IF SizeOf(TSynchronizationVariable) <> 4}
-    {$MESSAGE FATAL 'TSynchronizationVariable must be 4 bytes for atomic operations'}
+    {$Message Fatal 'TSynchronizationVariable must be 4 bytes for atomic operations'}
   {$IFEND}
 {$ENDIF}
 {$ENDIF}
@@ -2812,16 +2812,16 @@ type
   end;
 
 {Compile-time struct size guards}
-{$IFDEF CONDITIONALEXPRESSIONS}
-{$IFDEF 64bit}
-  {$IF SizeOf(TSmallBlockPoolHeader) <> 64}
-    {$MESSAGE FATAL 'TSmallBlockPoolHeader must be 64 bytes on 64-bit'}
-  {$IFEND}
-{$ELSE}
-  {$IF SizeOf(TSmallBlockPoolHeader) <> 32}
-    {$MESSAGE FATAL 'TSmallBlockPoolHeader must be 32 bytes on 32-bit'}
-  {$IFEND}
-{$ENDIF}
+{$IFDEF OperatorsInDefinesSupported}
+  {$IFDEF 64bit}
+    {$if SizeOf(TSmallBlockPoolHeader) <> 64}
+      {$Message Fatal 'TSmallBlockPoolHeader must be 64 bytes on 64-bit'}
+    {$ifend}
+  {$ELSE}
+    {$if SizeOf(TSmallBlockPoolHeader) <> 32}
+      {$Message Fatal 'TSmallBlockPoolHeader must be 32 bytes on 32-bit'}
+    {$ifend}
+  {$ENDIF}
 {$ENDIF}
 
   {Small block layout:
