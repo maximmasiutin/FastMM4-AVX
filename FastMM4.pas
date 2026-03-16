@@ -9586,9 +9586,6 @@ var
   LMask: Cardinal;
 begin
 
-  LMediumBlocksLocked := False;
-  LSmallBlockWithoutLock := False;
-
 {$IFNDEF AssumeMultiThreaded}
   LWasMultiThread := False;
 {$ENDIF}
@@ -9638,6 +9635,7 @@ begin
       {$IFNDEF AssumeMultiThreaded}
       LWasMultiThread := True;
       {$ENDIF}
+      LSmallBlockWithoutLock := False;
       while True do
       begin
         {Try to lock the small block type (0)}
@@ -9765,6 +9763,7 @@ begin
       begin
         {Need to allocate a pool: Lock the medium blocks}
         {$IFNDEF AssumeMultiThreaded}
+        LMediumBlocksLocked := False;
         if IsMultiThread then
         {$ENDIF}
         begin
@@ -9885,22 +9884,17 @@ begin
                 {Unlock the medium blocks}
                 if LMediumBlocksLocked then
                 begin
-                  LMediumBlocksLocked := False;
                   UnlockMediumBlocks;
                 end;
                 {Unlock the block type}
                 if not LSmallBlockWithoutLock then
                 begin
                   ReleaseLockByte(LPSmallBlockType^.SmallBlockTypeLocked);
-                end else
-                begin
-                  LSmallBlockWithoutLock := False;
                 end;
                 {$IFDEF SmallBlocksLockedCriticalSection}
                 if LSmallBlockCriticalSectionIndex <> NativeUInt(MaxInt) then
                 begin
                   LeaveCriticalSection(SmallBlockCriticalSections[LSmallBlockCriticalSectionIndex]);
-                  LSmallBlockCriticalSectionIndex := NativeUInt(MaxInt);
                 end;
                 {$ENDIF}
               end;
@@ -9921,7 +9915,6 @@ begin
         begin
           if LMediumBlocksLocked then
           begin
-            LMediumBlocksLocked := False;
             UnlockMediumBlocks;
           end;
         end;
@@ -9957,15 +9950,11 @@ begin
       if not LSmallBlockWithoutLock then
       begin
         ReleaseLockByte(LPSmallBlockType^.SmallBlockTypeLocked);
-      end else
-      begin
-        LSmallBlockWithoutLock := False;
       end;
       {$IFDEF SmallBlocksLockedCriticalSection}
       if LSmallBlockCriticalSectionIndex <> NativeUInt(MaxInt) then
       begin
         LeaveCriticalSection(SmallBlockCriticalSections[LSmallBlockCriticalSectionIndex]);
-        LSmallBlockCriticalSectionIndex := NativeUInt(MaxInt);
       end;
       {$ENDIF}
     end;
@@ -9984,6 +9973,7 @@ begin
       LBinNumber := (LBlockSize - MinimumMediumBlockSize) shr MediumBlockGranularityPowerOf2;
       {Lock the medium blocks}
 {$IFNDEF AssumeMultiThreaded}
+      LMediumBlocksLocked := False;
       if IsMultiThread then
 {$ENDIF}
       begin
@@ -10070,7 +10060,6 @@ begin
           begin
             if LMediumBlocksLocked then
             begin
-              LMediumBlocksLocked := False;
               UnlockMediumBlocks;
             end;
           end;
@@ -10165,7 +10154,6 @@ begin
         if LMediumBlocksLocked then
         begin
           {Unlock the medium blocks}
-          LMediumBlocksLocked := False;
           UnlockMediumBlocks;
         end;
       end;
@@ -19868,7 +19856,6 @@ var
 var
   LMemoryManagerSet: Boolean;
 begin
-  LMemoryManagerSet := False;
   {Default to error}
   Result := False;
 {$IFDEF FullDebugMode}
