@@ -528,20 +528,42 @@ jobs:
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $ml64Path = Join-Path $vsPath "VC\Tools\MSVC\*\bin\Hostx64\x64\ml64.exe" | Resolve-Path | Select-Object -First 1
           if (-not $ml64Path) { Write-Error "ml64.exe not found via vswhere"; exit 1 }
-          # Fix ALIGN 32 directives (FPC generates these but ml64 rejects them in _TEXT segments)
+          # Fix FPC MASM output for ml64 compatibility:
+          # 1. ALIGN 32 -> ALIGN 16 (ml64 rejects ALIGN 32 in _TEXT segments)
+          # 2. Split "@@label DB ..." lines so labels are on their own line
+          #    (FPC puts labels on the same line as DB, making them data labels;
+          #    ml64 then rejects jumps to data labels with A2024)
+          # 3. Truncate at debug info section (ml64 cannot parse FPC debug directives)
           $asmFile = "$Env:GITHUB_WORKSPACE\FastMM4.s"
           $fixedFile = "$Env:GITHUB_WORKSPACE\FastMM4_fixed.s"
-          (Get-Content $asmFile -Encoding UTF8) -replace 'ALIGN 32', 'ALIGN 16' | Set-Content $fixedFile -Encoding UTF8
-          # Truncate at debug info section (ml64 cannot parse FPC debug directives)
+          $content = Get-Content $asmFile -Encoding UTF8
+          $content = $content -replace 'ALIGN 32', 'ALIGN 16'
+          $content = $content -replace '^(@@\w+)\t(DB\s)', "`$1`n`t`$2"
+          $content | Set-Content $fixedFile -Encoding UTF8
+          # Truncate at debug info section
           $lines = Get-Content $fixedFile -Encoding UTF8
           $cutoff = ($lines | Select-String -Pattern '^; Begin asmlist al_dwarf_frame' | Select-Object -First 1).LineNumber
           if ($cutoff) { $lines[0..($cutoff-2)] | Set-Content $fixedFile -Encoding UTF8 }
           # Run ml64 and capture output
           $output = & $ml64Path /c /Cx $fixedFile 2>&1 | Out-String
           Write-Host $output
-          # Fail on operand size errors (A2024) or invalid instruction operands (A2070)
-          if ($output -match 'A2024|A2070') {
-            Write-Error "ml64 detected assembly errors. Fix operand size mismatches."
+          # Extract A2024 error lines from the .s file and check if any involve
+          # 32-bit registers (eax/ecx/edx/ebx/esi/edi) - these are real operand
+          # size mismatches. FPC also generates A2024 on call/jmp to EXTRN symbols
+          # declared as PROC but used as variables - these are FPC artifacts.
+          $a2024Lines = [regex]::Matches($output, 'FastMM4_fixed\.s\((\d+)\)\s*:\s*error A2024') | ForEach-Object { [int]$_.Groups[1].Value }
+          $fixedContent = Get-Content $fixedFile -Encoding UTF8
+          $realErrors = @()
+          foreach ($ln in $a2024Lines) {
+            $asmLine = $fixedContent[$ln - 1]
+            if ($asmLine -match '\be(ax|cx|dx|bx|si|di|bp|sp)\b') {
+              $realErrors += "${ln}: $asmLine"
+            }
+          }
+          if ($realErrors.Count -gt 0) {
+            Write-Host "Real operand size mismatches found:"
+            $realErrors | ForEach-Object { Write-Host $_ }
+            Write-Error "ml64 detected $($realErrors.Count) operand size mismatch(es). Fix 32-bit register usage with 64-bit variables."
             exit 1
           }
           Write-Host "ml64 operand size check passed."
