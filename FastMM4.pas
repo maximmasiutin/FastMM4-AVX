@@ -19850,8 +19850,12 @@ var
   LErrorMessageTitle: array[0..MaxDisplayMessageLength-1] of AnsiChar;
 {$ENDIF}
 {$IFNDEF POSIX}
+{$IFNDEF FPC}
+{$IFNDEF IgnoreMemoryAllocatedBefore}
 var
   HeapTotalAllocated: NativeUInt;
+{$ENDIF}
+{$ENDIF}
 {$ENDIF}
 var
   LMemoryManagerSet: Boolean;
@@ -19908,7 +19912,11 @@ begin
   end;
 
 {$IFNDEF POSIX}
+{$IFNDEF FPC}
+{$IFNDEF IgnoreMemoryAllocatedBefore}
   HeapTotalAllocated := GetHeapStatus.TotalAllocated;
+{$ENDIF}
+{$ENDIF}
 { In FreePascal, we cannot rely on HeapTotalAllocated to check whether FastMM4
 is the first unit and no memory have been allocated before, by another memory
 manager, because the initialization section of the "system.pp" unit of
@@ -20015,7 +20023,7 @@ var
   CpuXCR0: Int64;
 {$ENDIF}
   MaxInputValueBasic: Cardinal;
-  LReg0, LReg1, LReg5, LReg7_0: TCpuIdRegisters;
+  LReg0, LReg1, {$IFDEF EnableWaitPKG}LReg5,{$ENDIF} LReg7_0: TCpuIdRegisters;
 {$ENDIF}
 
   LInd,
@@ -20090,7 +20098,9 @@ ENDQOTE}
 
     with LReg0   do begin RegEAX := 0; RegEBX := 0; RegECX := 0; RegEDX := 0; end;
     with LReg1   do begin RegEAX := 0; RegEBX := 0; RegECX := 0; RegEDX := 0; end;
+{$IFDEF EnableWaitPKG}
     with LReg5   do begin RegEAX := 0; RegEBX := 0; RegECX := 0; RegEDX := 0; end;
+{$ENDIF}
     with LReg7_0 do begin RegEAX := 0; RegEBX := 0; RegECX := 0; RegEDX := 0; end;
 
     GetCPUID(0, 0, LReg0);
