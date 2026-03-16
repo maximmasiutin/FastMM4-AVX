@@ -144,6 +144,28 @@ jobs:
           fpc -B -Mdelphi -Tlinux -Px86_64 -dRequireIDEPresenceForLeakReporting -O4 SimpleTest.dpr
 
       # =========================================================================
+      # PurePascal / SynchroVar32bit Tests - Linux
+      # Tests the Delphi Linux code path (SynchroVar32bit struct layout).
+      # =========================================================================
+      - name: Compile with -dPurePascal (SynchroVar32bit path)
+        run: cd $GITHUB_WORKSPACE/Tests/Simple && fpc -B -Mdelphi -Tlinux -Px86_64 -dPurePascal -dIgnoreMemoryAllocatedBefore -O4 SimpleTest.dpr
+
+      - name: Compile with -dPurePascal -dSoftInvalidFreeMem
+        run: cd $GITHUB_WORKSPACE/Tests/Simple && fpc -B -Mdelphi -Tlinux -Px86_64 -dPurePascal -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -O4 SimpleTest.dpr
+
+      - name: Compile and run AdvancedTest (PurePascal)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Advanced
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dPurePascal -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
+          ./AdvancedTest
+
+      - name: Compile and run AdvancedTest (PurePascal, overflow+range checks)
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Advanced
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dPurePascal -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
+          ./AdvancedTest
+
+      # =========================================================================
       # Security Tests - Linux
       # =========================================================================
       - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
@@ -476,6 +498,77 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dRequireIDEPresenceForLeakReporting', '-O4', 'SimpleTest.dpr')
+
+      # =========================================================================
+      # PurePascal / SynchroVar32bit Tests - Windows
+      # =========================================================================
+      - name: Compile by FreePascal 64-bit with -dPurePascal (SynchroVar32bit path)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dPurePascal', '-dIgnoreMemoryAllocatedBefore', '-O4', 'SimpleTest.dpr')
+
+      - name: Compile and run AdvancedTest 64-bit (PurePascal)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Advanced
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dPurePascal', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
+          & '.\AdvancedTest.exe'
+
+      # =========================================================================
+      # ml64 Assembly Operand Size Check - Windows
+      # FPC silently accepts operand size mismatches that Delphi dcc64 rejects.
+      # Generate MASM assembly via FPC, fix FPC-specific directives, then run
+      # ml64 to catch A2024 (invalid operand size) errors.
+      # =========================================================================
+      - name: Check assembly operand sizes via ml64
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          # Generate MASM assembly without assembling
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDisableAsmCodeAlign', '-Amasm', '-s', 'SimpleTest.dpr')
+          # Find ml64 via vswhere (faster and more reliable than recursive search)
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $ml64Path = Join-Path $vsPath "VC\Tools\MSVC\*\bin\Hostx64\x64\ml64.exe" | Resolve-Path | Select-Object -First 1
+          if (-not $ml64Path) { Write-Error "ml64.exe not found via vswhere"; exit 1 }
+          # Fix FPC MASM output for ml64 compatibility:
+          # 1. ALIGN 32 -> ALIGN 16 (ml64 rejects ALIGN 32 in _TEXT segments)
+          # 2. Split "@@label DB ..." lines so labels are on their own line
+          #    (FPC puts labels on the same line as DB, making them data labels;
+          #    ml64 then rejects jumps to data labels with A2024)
+          # 3. Truncate at debug info section (ml64 cannot parse FPC debug directives)
+          $asmFile = "$Env:GITHUB_WORKSPACE\FastMM4.s"
+          $fixedFile = "$Env:GITHUB_WORKSPACE\FastMM4_fixed.s"
+          $content = Get-Content $asmFile -Encoding UTF8
+          $content = $content -replace 'ALIGN 32', 'ALIGN 16'
+          $content = $content -replace '^(@@\w+)\t(DB\s)', "`$1`n`t`$2"
+          $content | Set-Content $fixedFile -Encoding UTF8
+          # Truncate at debug info section
+          $lines = Get-Content $fixedFile -Encoding UTF8
+          $cutoff = ($lines | Select-String -Pattern '^; Begin asmlist al_dwarf_frame' | Select-Object -First 1).LineNumber
+          if ($cutoff) { $lines[0..($cutoff-2)] | Set-Content $fixedFile -Encoding UTF8 }
+          # Run ml64 and capture output (ignore ml64 exit code; FPC generates
+          # A2101/A2070 artifacts that cause non-zero exit but are not real bugs)
+          $output = & $ml64Path /c /Cx $fixedFile 2>&1 | Out-String
+          $global:LASTEXITCODE = 0
+          Write-Host $output
+          # Extract A2024 error lines from the .s file and check if any involve
+          # 32-bit registers (eax/ecx/edx/ebx/esi/edi) - these are real operand
+          # size mismatches. FPC also generates A2024 on call/jmp to EXTRN symbols
+          # declared as PROC but used as variables - these are FPC artifacts.
+          $a2024Lines = [regex]::Matches($output, 'FastMM4_fixed\.s\((\d+)\)\s*:\s*error A2024') | ForEach-Object { [int]$_.Groups[1].Value }
+          $fixedContent = Get-Content $fixedFile -Encoding UTF8
+          $realErrors = @()
+          foreach ($ln in $a2024Lines) {
+            $asmLine = $fixedContent[$ln - 1]
+            if ($asmLine -match '\be(ax|cx|dx|bx|si|di|bp|sp)\b') {
+              $realErrors += "${ln}: $asmLine"
+            }
+          }
+          if ($realErrors.Count -gt 0) {
+            Write-Host "Real operand size mismatches found:"
+            $realErrors | ForEach-Object { Write-Host $_ }
+            Write-Error "ml64 detected $($realErrors.Count) operand size mismatch(es). Fix 32-bit register usage with 64-bit variables."
+            exit 1
+          }
+          Write-Host "ml64 operand size check passed."
 
       # =========================================================================
       # Security Tests - Windows

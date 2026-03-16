@@ -1314,11 +1314,11 @@ interface
   {$IFDEF ver180}
     {$define BDS2006}
   {$ENDIF}
-  {$define 32Bit}
+  {$define 32BIT}
   {$IFNDEF Delphi4or5}
     {$if SizeOf(Pointer) = 8}
-      {$define 64Bit}
-      {$undef 32Bit}
+      {$define 64BIT}
+      {$undef 32BIT}
     {$ifend}
     {$if CompilerVersion >= 23}
       {$define XE2AndUp}
@@ -1346,16 +1346,16 @@ interface
   {$asmmode intel}
   {$IFDEF CPUX64}
     {$asmmode intel}
-    {$define 64bit}
-    {$define fpc64bit}
-    {$undef 32bit}
+    {$define 64BIT}
+    {$define fpc64BIT}
+    {$undef 32BIT}
   {$ELSE}
-    {$define 32bit}
-    {$undef 64bit}
+    {$define 32BIT}
+    {$undef 64BIT}
   {$ENDIF}
 {$ENDIF}
 
-{$IFNDEF 64Bit}
+{$IFNDEF 64BIT}
   {do not support AVX unless we are in the 64-bit mode}
   {$undef EnableAVX}
 {$ENDIF}
@@ -1378,7 +1378,7 @@ interface
   {$undef FastGetMemNeedAssemblerCode}
   {$define FastGetMemNeedPascalCode}
 {$ELSE}
-  {$IFDEF 64bit}
+  {$IFDEF 64BIT}
     {$define AssumePauseAndSwitchToThreadAvailable}
   {$ENDIF}
   {$IFDEF AssumePauseAndSwitchToThreadAvailable}
@@ -1386,7 +1386,7 @@ interface
   {$ENDIF}
 {$ENDIF}
 
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 
   {$IFDEF EnableAVX}
     {Under 64 bit with AVX, memory blocks must always be 32-byte aligned,
@@ -1438,8 +1438,8 @@ interface
 
 {$IFDEF Linux}
   {$define POSIX}
-  {$IFDEF 64Bit}
-    {$define PIC}  // Linux 64bit ASM is PIC
+  {$IFDEF 64BIT}
+    {$define PIC}  // Linux 64BIT ASM is PIC
   {$ENDIF}
   {$IFNDEF FPC}
     {$define PurePascal}  // Delphi LLVM Linux needs PurePascal
@@ -1523,9 +1523,9 @@ interface
 {$ENDIF}
 
 {For BASM bits that are not implemented in 64-bit.}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {$IFDEF ASMVersion}
-    {$define Use32BitAsm}
+    {$define Use32BITAsm}
   {$ENDIF}
 {$ENDIF}
 
@@ -1589,7 +1589,7 @@ interface
 {$IFDEF UseReleaseStack}{$IFDEF DebugReleaseStack}{$define _EventLog}{$ENDIF}{$ENDIF}
 
 
-{$IFNDEF fpc64bit}
+{$IFNDEF fpc64BIT}
   {$IFNDEF unix}
     {$define AllowAsmNoframe}
   {$ENDIF}
@@ -1627,12 +1627,12 @@ interface
 {$define EnableAVX512}
 {$ENDIF}
 
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
   {$IFDEF FPC}
-    {$define 32bit_SSE}
+    {$define 32BIT_SSE}
   {$ENDIF}
   {$IFDEF XE2AndUp}
-    {$define 32bit_SSE}
+    {$define 32BIT_SSE}
   {$ENDIF}
 {$ENDIF}
 
@@ -1709,14 +1709,14 @@ of just one option: "Boolean short-circuit evaluation".}
 {$ENDIF}
 
 {$IFDEF fpc}
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 {$undef FastGetMemNeedAssemblerCode}
 {$define FastGetMemNeedPascalCode}
 {$ENDIF}
 {$ENDIF}
 
 {$IFDEF FPC}
-  {$IFDEF 64bit}
+  {$IFDEF 64BIT}
     {$undef ASMVersion}
     {Assembler is not yet supportd under 64-bit FreePascal,
     because it incorrectly encodes relative values wither with +RIP or without}
@@ -1761,16 +1761,16 @@ of just one option: "Boolean short-circuit evaluation".}
 {$define Use_GetEnabledXStateFeatures_WindowsAPICall}
 {$ENDIF}
 
-{$IFNDEF 64bit}
+{$IFNDEF 64BIT}
 {$undef EnableAVX512} // AVX-512 is only implemented in 64-bit
 {$ENDIF}
 
 
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
 {$define AuxAsmRoutines}
 {$ENDIF}
 
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 {$define AuxAsmRoutines}
 {$ENDIF}
 
@@ -1798,13 +1798,13 @@ of just one option: "Boolean short-circuit evaluation".}
 
 {$IFDEF FPC}
   {$IFDEF PurePascal}
-    {$define SynchroVar32bit}
+    {$define SynchroVar32BIT}
   {$ENDIF}
 {$ENDIF}
 
 {$IFDEF LINUX}
   {$IFNDEF FPC}
-    {$define SynchroVar32bit}  // Delphi Linux: AtomicExchange needs at least 32-bit type
+    {$define SynchroVar32BIT}  // Delphi Linux: AtomicExchange needs at least 32-bit type
   {$ENDIF}
 {$ENDIF}
 
@@ -2181,7 +2181,7 @@ const
   MaxFakeVMTEntries = 200;
   {The pattern used to fill unused memory}
   DebugFillByte = $80;
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   DebugFillPattern = $01010101 * Cardinal(DebugFillByte); // Default value $80808080
   {The address that is reserved so that accesses to the address of the fill
    pattern will result in an A/V. (Not used under 64-bit, since the upper half
@@ -2384,7 +2384,7 @@ function usleep(__useconds:dword):longint;cdecl;external clib name 'usleep';
 {$ENDIF}
 
 {Fixed size move procedures. The 64-bit versions assume 16-byte alignment.}
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 {$IFDEF Align32Bytes}
   {Used to exclude the procedures that we don't need, from compiling, to not
   rely on the "smart" linker to do this job for us}
@@ -2406,7 +2406,7 @@ procedure Move60(const ASource; var ADest; ACount: NativeInt); forward;
 procedure Move68(const ASource; var ADest; ACount: NativeInt); forward;
 {$ENDIF}
 
-{$IFDEF 64Bit}
+{$IFDEF 64BIT}
 {These are not needed and thus unimplemented under 32-bit}
 {$IFNDEF ExcludeSmallGranularMoves}
 procedure Move8(const ASource; var ADest; ACount: NativeInt); forward;
@@ -2503,7 +2503,7 @@ const
    The value is set conservatively below where malicious overflow values typically appear
    (e.g., $FFFFFFFFFFEFFFA9, $FFFFFFFFFFF00000 on 64-bit). These "attack" values are
    designed to wrap around when overhead is added.}
-  {$IFDEF 64bit}
+  {$IFDEF 64BIT}
   MaxSafeLargeBlockSize = NativeUInt($FFFFFFFFFFE00000); {~2MB below max, blocks overflow attack values}
   {$ELSE}
   MaxSafeLargeBlockSize = NativeUInt($FFFE0000); {Conservative estimate for 32-bit}
@@ -2634,10 +2634,10 @@ const
 {$ENDIF}
 
 {$IFDEF _StackTracer}
-{$IFDEF 32Bit}
-  FullDebugModeLibraryName = FullDebugModeLibraryName32Bit;
+{$IFDEF 32BIT}
+  FullDebugModeLibraryName = FullDebugModeLibraryName32BIT;
 {$ELSE}
-  FullDebugModeLibraryName = FullDebugModeLibraryName64Bit;
+  FullDebugModeLibraryName = FullDebugModeLibraryName64BIT;
 {$ENDIF}
 {$ENDIF}
 
@@ -2674,7 +2674,7 @@ type
   {The layout of a string allocation. Used to detect string leaks.}
   PStrRec = ^StrRec;
   StrRec = packed record
-{$IFDEF 64Bit}
+{$IFDEF 64BIT}
     _Padding: Integer;
 {$ENDIF}
 {$IFDEF BCB6OrDelphi6AndUp}
@@ -2694,7 +2694,7 @@ type
 {$ENDIF}
 
   TSynchronizationVariable =
-  {$IFDEF SynchroVar32bit}
+  {$IFDEF SynchroVar32BIT}
     {$IFDEF FPC}
     LongInt       // FPC: LongInt is always 4 bytes; matches InterlockedExchange signature
     {$ELSE}
@@ -2710,7 +2710,7 @@ type
   ;
 
 {$IFDEF OperatorsInDefinesSupported}
-{$IFDEF SynchroVar32bit}
+{$IFDEF SynchroVar32BIT}
   {$IF SizeOf(TSynchronizationVariable) <> 4}
     {$Message Fatal 'TSynchronizationVariable must be 4 bytes for atomic operations'}
   {$IFEND}
@@ -2734,7 +2734,7 @@ type
     {Bitmap indicating which of the first 8 medium block groups contain blocks
      of a suitable size for a block pool.}
     AllowedGroupsForBlockPoolBitmap: Byte;
-{$IFDEF SynchroVar32bit}
+{$IFDEF SynchroVar32BIT}
     Reserved2: Byte;
 {$ENDIF}
     {The block size for this block type}
@@ -2761,11 +2761,11 @@ type
      that often) the variable size move routine is used.}
     UpsizeMoveProcedure: TMoveProc;
 {$ELSE}
-    {$IFNDEF SynchroVar32bit}
+    {$IFNDEF SynchroVar32BIT}
     Reserved1: Pointer;
     {$ENDIF}
 {$ENDIF}
-    {$IFDEF 64bit}
+    {$IFDEF 64BIT}
     Reserved3: Pointer;
     {$ENDIF}
 {$IFDEF UseReleaseStack}
@@ -2780,14 +2780,14 @@ type
   TSmallBlockPoolHeader = record
     {BlockType}
     BlockType: PSmallBlockType;
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
     {Align the next fields to the same fields in TSmallBlockType and pad this
      structure to 32 bytes for 32-bit}
     Reserved1: Cardinal;
 {$ENDIF}
-{$IFDEF SynchroVar32bit}
-  {$IFDEF 64bit}
-    {When SynchroVar32bit is defined, TSmallBlockType has a 4-byte lock field
+{$IFDEF SynchroVar32BIT}
+  {$IFDEF 64BIT}
+    {When SynchroVar32BIT is defined, TSmallBlockType has a 4-byte lock field
      plus Byte+Byte+Word+Word+Word = 12 bytes before NextPartiallyFreePool,
      which aligns to offset 16. Add padding here to match that offset.}
     ReservedPoolAlign: Pointer;
@@ -2807,8 +2807,8 @@ type
     Reserved2: Cardinal;
     {The pool pointer and flags of the first block}
     FirstBlockPoolPointerAndFlags: NativeUInt;
-{$IFDEF 64bit}
-  {$IFDEF SynchroVar32bit}
+{$IFDEF 64BIT}
+  {$IFDEF SynchroVar32BIT}
     Reserved3: Pointer; // One less reserved field to compensate for ReservedPoolAlign
   {$ELSE}
     Reserved3, Reserved4: Pointer; // Align the structure to 64-bit size
@@ -2818,7 +2818,7 @@ type
 
 {Compile-time struct size guards}
 {$IFDEF OperatorsInDefinesSupported}
-  {$IFDEF 64bit}
+  {$IFDEF 64BIT}
     {$if SizeOf(TSmallBlockPoolHeader) <> 64}
       {$Message Fatal 'TSmallBlockPoolHeader must be 64 bytes on 64-bit'}
     {$ifend}
@@ -2847,7 +2847,7 @@ type
     NextMediumBlockPoolHeader: PMediumBlockPoolHeader;
     {Padding}
     Reserved1: NativeUInt;
-    {$IFDEF 32bit}
+    {$IFDEF 32BIT}
     {$IFDEF Align32Bytes}
     Reserved2, Reserved3, Reserved4, Reserved5: Pointer;
     {$ENDIF}
@@ -2880,7 +2880,7 @@ type
      list is used to track memory leaks on program shutdown.}
     PreviousLargeBlockHeader: PLargeBlockHeader;
     NextLargeBlockHeader: PLargeBlockHeader;
-    {$IFDEF 32bit}
+    {$IFDEF 32BIT}
     {$IFDEF Align32Bytes}
     Reserved1, Reserved2, Reserved3, Reserved4: Pointer;
     {$ENDIF}
@@ -2932,7 +2932,7 @@ type
 
 {-------------------------Private constants----------------------------}
 const
-  {$IFDEF 32bit}
+  {$IFDEF 32BIT}
   MediumFreeBlockSizePowerOf2 = 3;
   {$ELSE}
   MediumFreeBlockSizePowerOf2 = 4;
@@ -2953,10 +2953,10 @@ const
 {$ENDIF}
 
 {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
-  {$IFDEF 32bit}
+  {$IFDEF 32BIT}
     SmallBlockTypeRecSizePowerOf2 = 5;
   {$ENDIF}
-  {$IFDEF 64bit}
+  {$IFDEF 64BIT}
     SmallBlockTypeRecSizePowerOf2 = 6;
   {$ENDIF}
   SmallBlockTypeRecSize = Byte(UnsignedBit shl SmallBlockTypeRecSizePowerOf2);
@@ -2982,7 +2982,7 @@ const
   {The size of a small block pool header: 32 bytes for 32-bit, 64 bytes for 64-bit).}
   SmallBlockPoolHeaderSize = SizeOf(TSmallBlockPoolHeader);
   {$IFDEF OperatorsInDefinesSupported}
-    {$IFDEF 32bit}
+    {$IFDEF 32BIT}
     {$if SmallBlockPoolHeaderSize <> 32}
        {$Message Fatal 'SmallBlockPoolHeaderSize should be 32 bytes for 32-bit'}
     {$ifend}
@@ -2996,7 +2996,7 @@ const
   {The size of a medium block pool header: 16 bytes for 32-bit and 32 bytes for 64-bit.}
   MediumBlockPoolHeaderSize = SizeOf(TMediumBlockPoolHeader);
   {$IFDEF OperatorsInDefinesSupported}
-    {$IFDEF 32bit}
+    {$IFDEF 32BIT}
       {$IFDEF Align32Bytes}
         {$if MediumBlockPoolHeaderSize <> 32}
            {$Message Fatal 'MediumBlockPoolHeaderSize should be 32 bytes for 32-bit with 32-bytes alignment'}
@@ -3056,7 +3056,7 @@ const
 {$ENDIF}
 {$ENDIF}
 
-{$IFDEF 32bit_SSE}
+{$IFDEF 32BIT_SSE}
   {CPU supports xmm registers in 32-bit mode}
   FastMMCpuFeatureSSE                           = Byte(UnsignedBit shl 6);
 {$ENDIF}
@@ -3313,7 +3313,7 @@ var
    This table helps us to quickly access a corresponding TSmallBlockType entry in the
    SmallBlockTypes array.}
 
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {$IFNDEF LogLockContention}
     {$DEFINE AllocSize2SmallBlockTypesPrecomputedOffsets}
   {$ENDIF}
@@ -3506,7 +3506,7 @@ var
 {A copy of StrLen in order to avoid the SysUtils unit, which would have
  introduced overhead like exception handling code.}
 function StrLen(const AStr: PAnsiChar): NativeUInt;
-{$IFNDEF Use32BitAsm}
+{$IFNDEF Use32BITAsm}
 begin
   Result := 0;
   while AStr[Result] <> #0 do
@@ -3552,7 +3552,7 @@ end;
 {$IFDEF USE_CPUID}
 {Returns true if the CPUID instruction is supported}
 function CPUID_Supported: Boolean;
-{$IFDEF 32bit} assembler;
+{$IFDEF 32BIT} assembler;
 
 {QUOTE from the Intel 64 and IA-32 Architectures Software Developer's Manual
 
@@ -3578,18 +3578,18 @@ asm
   xor eax, edx
   setnz al
 end;
-{$ELSE 32bit}
+{$ELSE 32BIT}
 
 {$IFDEF FASTMM4_ALLOW_INLINES}inline;{$ENDIF}
 // CPUID is always supported on 64-bit platforms
 begin
   Result := True;
 end;
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 
 {Gets the CPUID}
 procedure GetCPUID(AEax, AEcx: Cardinal; var R: TCpuIdRegisters); assembler;
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
 asm
   push ebx
   push esi
@@ -3619,7 +3619,7 @@ asm
   pop esi
   pop ebx
 end;
-{$ELSE 32bit}
+{$ELSE 32BIT}
 asm
 {$IFDEF AllowAsmNoframe}
   .noframe
@@ -3678,7 +3678,7 @@ For Unix (Linux), we use "System V AMD64 ABI" calling convention. }
   mov TCpuIdRegisters[r10].RegEDX, edx
   mov rbx, r9
 end;
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 
 {$ENDIF USE_CPUID}
 
@@ -3701,7 +3701,7 @@ const
 {$IFDEF UseNormalLoadBeforeAcquireLock}
 function AcquireLockTryNormalLoadFirst(var Target: TSynchronizationVariable): TSynchronizationVariable; assembler;
 asm
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
   {On entry:
     eax = Target address}
   mov ecx, eax
@@ -3739,7 +3739,7 @@ function InterlockedExchangeByte(var Target: TSynchronizationVariable; const Val
 {$IFNDEF ASMVersion}
 begin
   Result :=
-  {$IFDEF SynchroVar32bit}
+  {$IFDEF SynchroVar32BIT}
   {$IFDEF LINUX}
     {$IFDEF FPC}
     InterlockedExchange
@@ -3757,14 +3757,14 @@ end;
 {$ELSE ASMVersion}
 assembler;
 asm
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
   {On entry:
     eax = Target address,
     dl  = NewVal}
   mov ecx, eax
   movzx eax, dl
   lock xchg [ecx], al
-{$ELSE 32bit}
+{$ELSE 32BIT}
   {$IFNDEF unix}
   {On entry:
     rcx = Target address
@@ -3783,7 +3783,7 @@ asm
   {$ENDIF}
 {$ENDIF}
 end;
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 {$ENDIF ASMVersion}
 
 {$ELSE !SimplifiedInterlockedExchangeByte}
@@ -3795,9 +3795,9 @@ of FastMM4 version 4.992. }
 {Compare [AAddress], CompareVal:
  If Equal: [AAddress] := NewVal and result = CompareVal
  If Unequal: Result := [AAddress]}
-function InterlockedCompareExchangeByte(const CompareVal, NewVal: TSynchronizationVariable; var Target: TSynchronizationVariable): TSynchronizationVariable; assembler; {$IFDEF fpc64bit}nostackframe;{$ENDIF}
+function InterlockedCompareExchangeByte(const CompareVal, NewVal: TSynchronizationVariable; var Target: TSynchronizationVariable): TSynchronizationVariable; assembler; {$IFDEF fpc64BIT}nostackframe;{$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {On entry:
     al = CompareVal,
     dl = NewVal,
@@ -3822,7 +3822,7 @@ loaded into byte ptr [ecx]. Else, clear ZF and load byte ptr [ecx] into AL.}
   {Workaround for Kylix compiler bug}
   db $F0, $0F, $B0, $11
   {$ENDIF unix}
-{$ELSE 32Bit}
+{$ELSE 32BIT}
 
 {Microsoft's Win64 "x64 ABI" calling convention.}
 
@@ -3857,7 +3857,7 @@ registers RDI, RSI, RDX, RCX; return value is stored in RAX and RDX.}
    xor rdi, rdi
    xor rdx, rdx
   {$ENDIF unix}
-{$ENDIF 32Bit}
+{$ENDIF 32BIT}
 end;
 
 {$ENDIF SimplifiedInterlockedExchangeByte}
@@ -3916,7 +3916,7 @@ procedure AcquireSpinLockMediumBlocks; assembler;
 { Note that the assembler version of AcquireSpinLockMediumBlocks is assumed to preserve all volate registers except eax for 32-bit / rax for 64-bit).}
 
 asm
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 
 // 64-bit code for AcquireSpinLockMediumBlocks
   {$IFDEF AllowAsmNoframe}
@@ -3936,7 +3936,7 @@ asm
    lock xchg [r8], al
    cmp  al, cLockByteLocked
    je   @DidntLockAtFirstAttempt
-   jmp  @Finish64Bit
+   jmp  @Finish64BIT
 @DidntLockAtFirstAttempt:
 
 {$IFDEF EnableWaitPKG}
@@ -3989,7 +3989,7 @@ asm
    pop  rdx
    pop  rcx
 
-   jmp  @Finish64Bit
+   jmp  @Finish64BIT
 @NoWaitPKG:
 
    mov  eax, cLockByteLocked
@@ -4009,7 +4009,7 @@ asm
    cmp  al, cLockByteLocked
    je   @DidntLockPause64
    pop  r9
-   jmp	@Finish64Bit
+   jmp	@Finish64BIT
 @SwitchToThreadPause64:
    push rcx
    push rdx
@@ -4025,10 +4025,10 @@ asm
    mov  eax, cLockByteLocked
    mov  r9d, cPauseSpinWaitLoopCount
    jmp  @NormalLoadLoopPause64
-@Finish64Bit:
+@Finish64BIT:
    pop  r8
 
-{$ELSE 64bit}
+{$ELSE 64BIT}
 
 // 32-bit code for AcquireSpinLockMediumBlocks
 
@@ -4048,13 +4048,13 @@ asm
    lock xchg [MediumBlocksLocked], al
    cmp  al, cLockByteLocked
    je   @DidntLockPause32
-   jmp	@Finish32Bit
+   jmp	@Finish32BIT
 @SwitchToThreadPause32:
    call SwitchToThreadIfSupported
    mov  edx, cPauseSpinWaitLoopCount
    mov  eax, cLockByteLocked
    jmp  @FirstComparePause32
-@Finish32Bit:
+@Finish32BIT:
 
 {$ENDIF}
 end;
@@ -4062,7 +4062,7 @@ end;
 
 procedure AcquireSpinLockByte(var Target: TSynchronizationVariable); assembler;
 asm
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
   {$IFDEF AllowAsmNoframe}
   .noframe
   {$ENDIF}
@@ -4425,9 +4425,9 @@ end;
 
 {$IFDEF UseCustomFixedSizeMoveRoutines}
 
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 
-procedure Move24Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move24Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   mov rax, [rcx + 0*8]
@@ -4446,7 +4446,7 @@ asm
   {$ENDIF}
 end;
 
-procedure Move32Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move32Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   mov rax, [rcx + 0*8]
@@ -4470,7 +4470,7 @@ asm
 end;
 
 
-procedure Move40Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move40Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   mov rax, [rcx + 0*8]
@@ -4498,7 +4498,7 @@ asm
 end;
 
 
-procedure Move48Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move48Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   mov rax, [rcx + 0*8]
@@ -4530,7 +4530,7 @@ asm
 end;
 
 
-procedure Move56Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move56Reg64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   mov rax, [rcx + 0*8]
@@ -4565,7 +4565,7 @@ asm
   {$ENDIF}
 end;
 
-{$ENDIF 64bit}
+{$ENDIF 64BIT}
 
 {$IFDEF EnableAVX}
 
@@ -4573,7 +4573,7 @@ end;
 
 {----------------------------AVX1 Move Procedures----------------------------}
 
-procedure Move24AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move24AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4597,7 +4597,7 @@ asm
 end;
 
 
-procedure Move56AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move56AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4625,7 +4625,7 @@ asm
   db $C5, $F8, $77           // vzeroupper
 end;
 
-procedure Move88AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move88AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4658,7 +4658,7 @@ asm
   db $C5, $F8, $77           // vzeroupper
 end;
 
-procedure Move120AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move120AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4703,7 +4703,7 @@ on most CPUs}
   db $C5, $F8, $77           // vzeroupper
 end;
 
-procedure Move152AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move152AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4759,7 +4759,7 @@ less, by "add rcx", but it pays up later}
   db $C5, $F8, $77           // vzeroupper
 end;
 
-procedure Move184AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move184AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4815,7 +4815,7 @@ be in range -127..+127, see explanation at the Move152AVX1 routine}
   db $C5, $F8, $77           // vzeroupper
 end;
 
-procedure Move216AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move216AVX1(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -4901,7 +4901,7 @@ end;
 
 {----------------------------AVX2 Move Procedures----------------------------}
 
-procedure Move24AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move24AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -4920,7 +4920,7 @@ asm
   db $C5, $F9, $EF, $C0 // vpxor xmm0,xmm0,xmm0
 end;
 
-procedure Move56AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move56AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -4944,7 +4944,7 @@ asm
   db $C5, $F1, $EF, $C9      // vpxor xmm1, xmm1, xmm1
 end;
 
-procedure Move88AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move88AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -4973,7 +4973,7 @@ asm
   db $C5, $E9, $EF, $D2      // vpxor xmm2,xmm2,xmm2
 end;
 
-procedure Move120AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move120AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5007,7 +5007,7 @@ asm
   db $C5, $E1, $EF, $DB      // vpxor xmm3,xmm3,xmm3
 end;
 
-procedure Move152AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move152AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5050,7 +5050,7 @@ asm
   db $C5, $D9, $EF, $E4      // vpxor xmm4,xmm4,xmm4
 end;
 
-procedure Move184AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move184AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5098,7 +5098,7 @@ asm
   db $C5, $D1, $EF, $ED      // vpxor xmm5,xmm5,xmm5
 end;
 
-procedure Move216AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move216AVX2(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5198,18 +5198,18 @@ procedure Move344AVX512(const ASource; var ADest; ACount: NativeInt); external;
 {$ENDIF EnableAVX512}
 
 {$ENDIF EnableAVX}
-{$ENDIF 64bit}
+{$ENDIF 64BIT}
 
 {--------------Register, FPU, MMX and SSE Move Procedures--------------}
 
 {$IFNDEF ExcludeSmallGranularMoves}
 
-procedure Move4(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move4(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   mov eax, [eax]
   mov [edx], eax
-{$ELSE 32Bit}
+{$ELSE 32BIT}
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -5220,11 +5220,11 @@ asm
   mov eax, [rdi]
   mov [rsi], eax
   {$ENDIF unix}
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 end;
 
-{$IFDEF 64Bit}
-procedure Move8(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 64BIT}
+procedure Move8(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5238,7 +5238,7 @@ asm
 {$ENDIF}
 end;
 
-procedure Move16(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move16(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -5257,7 +5257,7 @@ asm
 end;
 
 
-procedure Move32(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move32(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5294,11 +5294,11 @@ asm
     xorps xmm1, xmm1
 end;
 
-{$ENDIF 64bit}
+{$ENDIF 64BIT}
 
-procedure Move12(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move12(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   mov ecx, [eax]
   mov [edx], ecx
   mov ecx, [eax + 4]
@@ -5324,8 +5324,8 @@ asm
 end;
 
 
-{$IFDEF 32bit_SSE}
-procedure Move20_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move20_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -5340,11 +5340,11 @@ asm
 {$ENDIF}
   xorps xmm0, xmm0
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move20(const ASource; var ADest; ACount: NativeInt); assembler;{$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move20(const ASource; var ADest; ACount: NativeInt); assembler;{$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   mov ecx, [eax]
   mov [edx], ecx
   mov ecx, [eax + 4]
@@ -5388,14 +5388,14 @@ asm
   {$ENDIF}
 {$ENDIF}
   xorps xmm0, xmm0
-{$ENDIF 32Bit}
+{$ENDIF 32BIT}
 end;
 
 {$ENDIF ExcludeSmallGranularMoves}
 
 {$IFNDEF PurePascal}
-{$IFDEF 64bit}
-procedure Move24(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 64BIT}
+procedure Move24(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 
 {$IFDEF AlignAtLeast16Bytes}
@@ -5431,13 +5431,13 @@ asm
 {$ENDIF}
   xorps xmm0, xmm0
 end;
-{$ENDIF 64bit}
+{$ENDIF 64BIT}
 {$ENDIF PurePascal}
 
 {$IFNDEF ExcludeSmallGranularMoves}
 
-{$IFDEF 32bit_SSE}
-procedure Move28_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler;{$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move28_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler;{$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -5453,11 +5453,11 @@ asm
   xorps xmm0, xmm0
   xorps xmm1, xmm1
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move28(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move28(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   mov ecx, [eax]
   mov [edx], ecx
   mov ecx, [eax + 4]
@@ -5517,8 +5517,8 @@ asm
 {$ENDIF}
 end;
 
-{$IFDEF 32bit_SSE}
-procedure Move36_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move36_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -5538,11 +5538,11 @@ asm
   xorps xmm0, xmm0
   xorps xmm1, xmm1
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move36(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move36(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {Fixed pleriche/FastMM4 Issue #85: Replaced FPU-based copy with rep movsd.
    The previous fild/fistp sequence could cause FPU stack overflow if callers
    violated ABI by leaving values on FPU stack. rep movsd avoids FPU entirely,
@@ -5603,8 +5603,8 @@ asm
 {$ENDIF}
 end;
 
-{$IFDEF 64bit}
-procedure Move40(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 64BIT}
+procedure Move40(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5649,7 +5649,7 @@ asm
   xorps xmm1, xmm1
 end;
 
-procedure Move48(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move48(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5698,8 +5698,8 @@ end;
 
 {$ENDIF}
 
-{$IFDEF 32bit_SSE}
-procedure Move44_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move44_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -5720,11 +5720,11 @@ asm
   xorps xmm1, xmm1
   xorps xmm2, xmm2
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move44(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move44(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
   push esi
   push edi
@@ -5790,8 +5790,8 @@ asm
 end;
 
 
-{$IFDEF 32bit_SSE}
-procedure Move52_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move52_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -5816,11 +5816,11 @@ asm
   xorps xmm1, xmm1
   xorps xmm2, xmm2
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move52(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move52(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
   push esi
   push edi
@@ -5888,8 +5888,8 @@ end;
 {$ENDIF ExcludeSmallGranularMoves}
 
 {$IFNDEF PurePascal}
-{$IFDEF 64bit}
-procedure Move56(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 64BIT}
+procedure Move56(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5944,7 +5944,7 @@ asm
 end;
 
 
-procedure Move64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move64(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
@@ -5998,15 +5998,15 @@ asm
   xorps xmm2, xmm2
   xorps xmm3, xmm3
 end;
-{$ENDIF 64bit}
+{$ENDIF 64BIT}
 {$ENDIF PurePascal}
 
 
 
 {$IFNDEF ExcludeSmallGranularMoves}
 
-{$IFDEF 32bit_SSE}
-procedure Move60_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move60_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -6032,11 +6032,11 @@ asm
   xorps xmm2, xmm2
   xorps xmm3, xmm3
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move60(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move60(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
   push esi
   push edi
@@ -6109,8 +6109,8 @@ asm
 {$ENDIF}
 end;
 
-{$IFDEF 32bit_SSE}
-procedure Move68_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move68_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -6140,11 +6140,11 @@ asm
   xorps xmm2, xmm2
   xorps xmm3, xmm3
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-procedure Move68(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure Move68(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {Fixed pleriche/FastMM4 Issue #85 - see Move36 for explanation}
   push esi
   push edi
@@ -6155,7 +6155,7 @@ asm
   rep movsd
   pop edi
   pop esi
-{$ELSE 32Bit}
+{$ELSE 32BIT}
 {$IFDEF AlignAtLeast16Bytes}
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -6215,11 +6215,11 @@ asm
   xorps xmm1, xmm1
   xorps xmm2, xmm2
   xorps xmm3, xmm3
-{$ENDIF 32Bit}
+{$ENDIF 32BIT}
 end;
 
-{$IFDEF 32bit_SSE}
-procedure Move76_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move76_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -6250,10 +6250,10 @@ asm
   xorps xmm3, xmm3
   xorps xmm4, xmm4
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
-{$IFDEF 32bit_SSE}
-procedure Move84_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move84_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -6288,11 +6288,11 @@ asm
   xorps xmm3, xmm3
   xorps xmm4, xmm4
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
 
-{$IFDEF 32bit_SSE}
-procedure Move92_32bit_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF 32BIT_SSE}
+procedure Move92_32BIT_SSE(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF AlignAtLeast16Bytes}
   movaps xmm0, [eax]
@@ -6328,7 +6328,7 @@ asm
   xorps xmm4, xmm4
   xorps xmm5, xmm5
 end;
-{$ENDIF 32bit_SSE}
+{$ENDIF 32BIT_SSE}
 
 {$ENDIF ExcludeSmallGranularMoves}
 
@@ -6341,9 +6341,9 @@ procedure MoveWithErmsNoAVX(const ASource; var ADest; ACount: NativeInt); forwar
  SizeOf(Pointer). Important note: Always moves at least 16 - SizeOf(Pointer)
  bytes (the minimum small block size with 16 byte alignment), irrespective of
  ACount.}
-procedure MoveX16LP(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit}  nostackframe; {$ENDIF}
+procedure MoveX16LP(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT}  nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   test FastMMCpuFeaturesA, FastMMCpuFeatureERMS
   jz @NoERMS
   call MoveWithErmsNoAVX
@@ -6431,7 +6431,7 @@ asm
   pop esi
   jmp @Finish
 {$ENDIF ForceMMX}
-{$ELSE 32bit}
+{$ELSE 32BIT}
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -6500,7 +6500,7 @@ asm
   mov rcx, [rdi + rdx]
   mov [rsi + rdx], rcx
   {$ENDIF unix}
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 @Finish:
 end;
 
@@ -6512,7 +6512,7 @@ end;
 
 {$IFDEF EnableAVX}
 
-procedure MoveX32LpAvx1NoErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit}  nostackframe; {$ENDIF}
+procedure MoveX32LpAvx1NoErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT}  nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -6576,7 +6576,7 @@ asm
 @exit:
 end;
 
-procedure MoveX32LpAvx2NoErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit}  nostackframe; {$ENDIF}
+procedure MoveX32LpAvx2NoErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT}  nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -6643,7 +6643,7 @@ end;
 const
   cLeastErmsAdvantageLengh = 2048;
 
-procedure MoveX32LpAvx1WithErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure MoveX32LpAvx1WithErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -6730,7 +6730,7 @@ asm
 @exit:
 end;
 
-procedure MoveX32LpAvx2WithErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure MoveX32LpAvx2WithErms(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
@@ -6836,9 +6836,9 @@ const
 
   cRepMovsSmallBlock = Cardinal(cRoundErmsBlockSizeBoundary) * 3;
 
-procedure MoveWithErmsNoAVX(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure MoveWithErmsNoAVX(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 // Under 32-bit Windows or Unix, the call passes first parameter in EAX, second in EDX, third in ECX
 
   push    ebx
@@ -6898,7 +6898,7 @@ asm
   cmp     ecx, 8
   jb      @below8left
 
-{$IFDEF 32bit_SSE}
+{$IFDEF 32BIT_SSE}
   cmp     ecx, 32
   jb      @below32left
 
@@ -7100,7 +7100,7 @@ end;
 {$ENDIF EnableERMS}
 
 
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
 {$IFDEF EnableAVX512}
 {$IFNDEF DisableMoveX32LpAvx512}
 {$IFDEF unix}
@@ -7145,7 +7145,7 @@ begin
     {$IFDEF EnableERMS}
     if (F and FastMMCpuFeatureERMS) <> 0 then
     begin
-      {$IFDEF 64bit}
+      {$IFDEF 64BIT}
       {$IFDEF EnableAVX512}
       {$IFNDEF DisableMoveX32LpAvx512}
       if (F and FastMMCpuFeatureAVX512) <> 0 then
@@ -7199,9 +7199,9 @@ end;
  SizeOf(Pointer). Important note: Always moves at least 8 - SizeOf(Pointer)
  bytes (the minimum small block size with 8 byte alignment), irrespective of
  ACount.}
-procedure MoveX8LP(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64bit}  nostackframe; {$ENDIF}
+procedure MoveX8LP(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT}  nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   test FastMMCpuFeaturesA, FastMMCpuFeatureERMS
   jz @NoERMS
   call MoveWithErmsNoAVX
@@ -7401,9 +7401,9 @@ end;
 
 {Fills a block of memory with the given dword (32-bit) or qword (64-bit).
  Always fills a multiple of SizeOf(Pointer) bytes}
-procedure DebugFillMem(var AAddress; AByteCount: NativeInt; AFillValue: NativeUInt); assembler; {$IFDEF fpc64bit} nostackframe; {$ENDIF}
+procedure DebugFillMem(var AAddress; AByteCount: NativeInt; AFillValue: NativeUInt); assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {On Entry:
    eax = AAddress
    edx = AByteCount
@@ -7417,7 +7417,7 @@ asm
   add edx, 4
   js @FillLoop
 @Done:
-{$ELSE 32Bit}
+{$ELSE 32BIT}
   {$IFNDEF unix}
 
   {$IFDEF AllowAsmNoframe}
@@ -7452,7 +7452,7 @@ asm
   js @FillLoop
 @Done:
   {$ENDIF unix}
-{$ENDIF 32Bit}
+{$ENDIF 32BIT}
 end;
 {$ENDIF}
 
@@ -7543,7 +7543,7 @@ end;
                        in future (e.g. UTF-16), this will differ}
 
 function NativeUIntToStrBuf(ANum: NativeUInt; APBuffer: PAnsiChar; ABufferLengthChars: Cardinal): PAnsiChar;
-{$IFNDEF Use32BitAsm}
+{$IFNDEF Use32BITAsm}
 const
   MaxDigits = 20;
 var
@@ -7691,7 +7691,7 @@ end;
 {Converts an unsigned integer to a hexadecimal string at the buffer location,
  returning the new buffer position.}
 function NativeUIntToHexBuf(ANum: NativeUInt; APBuffer: PAnsiChar; ABufferLengthChars: Cardinal): PAnsiChar;
-{$IFNDEF Use32BitAsm}
+{$IFNDEF Use32BITAsm}
 const
   MaxDigits = 16;
 var
@@ -8096,7 +8096,7 @@ end;
 
 
 
-{$IFDEF Use32BitAsm}
+{$IFDEF Use32BITAsm}
   {$IFNDEF MediumBlocksLockedCriticalSection}
     {$define UseOriginalFastMM4_LockMediumBlocksAsm}
   {$ENDIF}
@@ -8340,7 +8340,7 @@ begin
   end;
 end;
 {$ELSE}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 asm
   {On entry: eax = APMediumFreeBlock}
@@ -8541,7 +8541,7 @@ begin
   end;
 end;
 {$ELSE}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 asm
   {On entry: eax = APMediumFreeBlock, edx = AMediumBlockSize}
@@ -8698,7 +8698,7 @@ begin
   end;
 end;
 {$ELSE}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 asm
   cmp MediumSequentialFeedBytesLeft, 0
@@ -8772,7 +8772,7 @@ asm
   .params 2
   {$ENDIF}
   xor eax, eax
-  cmp MediumSequentialFeedBytesLeft, eax
+  cmp MediumSequentialFeedBytesLeft, rax
   je @Done
   {Get a pointer to the last sequentially allocated medium block}
   mov rax, LastSequentiallyFedMediumBlock
@@ -8781,20 +8781,20 @@ asm
   jnz @LastBlockFedIsFree
   {Set the "previous block is free" flag in the last block fed}
   or qword ptr [rax - BlockHeaderSize], PreviousMediumBlockIsFreeFlag
-  {Get the remainder in edx}
-  mov edx, MediumSequentialFeedBytesLeft
-  {Point eax to the start of the remainder}
+  {Get the remainder in rdx}
+  mov rdx, MediumSequentialFeedBytesLeft
+  {Point rax to the start of the remainder}
   sub rax, rdx
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @BinTheRemainder:
-  {Status: rax = start of remainder, edx = size of remainder}
+  {Status: rax = start of remainder, rdx = size of remainder}
   {Store the size of the block as well as the flags}
   lea rcx, [rdx + IsMediumBlockFlag + IsFreeBlockFlag]
   mov [rax - BlockHeaderSize], rcx
   {Store the trailing size marker}
   mov [rax + rdx - 2 * BlockHeaderSize], rdx
   {Bin this medium block}
-  cmp edx, MinimumMediumBlockSize
+  cmp rdx, MinimumMediumBlockSize
   jb @Done
   mov rcx, rax
   call InsertMediumBlockIntoBin
@@ -8805,7 +8805,7 @@ asm
   mov rdx, DropMediumAndLargeFlagsMask
   and rdx, [rax - BlockHeaderSize]
   {Free the last block fed}
-  cmp edx, MinimumMediumBlockSize
+  cmp rdx, MinimumMediumBlockSize
   jb @DontRemoveLastFed
   {Last fed block is free - remove it from its size bin}
   mov rcx, rax
@@ -8816,12 +8816,12 @@ asm
   and rdx, [rax - BlockHeaderSize]
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontRemoveLastFed:
-  {Get the number of bytes left in ecx}
-  mov ecx, MediumSequentialFeedBytesLeft
+  {Get the number of bytes left in rcx}
+  mov rcx, MediumSequentialFeedBytesLeft
   {Point rax to the start of the remainder}
   sub rax, rcx
-  {edx = total size of the remainder}
-  add edx, ecx
+  {rdx = total size of the remainder}
+  add rdx, rcx
   jmp @BinTheRemainder
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
 @Done:
@@ -9352,7 +9352,7 @@ end;
 {$ELSE}
 assembler;
 asm
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
         neg     eax
 {$ELSE}
    {$IFDEF unix}
@@ -9380,7 +9380,7 @@ end;
 {$ELSE}
 assembler;
 asm
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
         neg     al
 {$ELSE}
    {$IFDEF unix}
@@ -9404,7 +9404,7 @@ end;
 {$ELSE}
 assembler;
 asm
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
         neg     eax
 {$ELSE}
    {$IFDEF unix}
@@ -9467,9 +9467,9 @@ begin
 end;
 {$ELSE ASMVersion}
 assembler;
-{$IFDEF fpc64bit} nostackframe; {$ENDIF}
+{$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
-{$IFDEF 64Bit}
+{$IFDEF 64BIT}
   {$IFNDEF unix}
   {$IFDEF AllowAsmNoframe}
   .noframe
@@ -10204,7 +10204,7 @@ end;
   function FastGetMemAssembler(ASize: {$IFDEF XE2AndUp}NativeInt{$ELSE}{$IFDEF fpc}NativeUInt{$ELSE}Integer{$ENDIF fpc}{$ENDIF XE2AndUp}{$IFDEF FullDebugMode}{$IFDEF LogLockContention}; var ACollector: PStaticCollector{$ENDIF}{$ENDIF}): Pointer;
 {$ENDIF}
 
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler; // FastGetMemAssembler begin 32-bit
 asm
   {On entry:
@@ -11272,22 +11272,22 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 @NoSuitableMediumBlocks:
   {Check the sequential feed medium block pool for space}
   movzx ecx, TSmallBlockType[rbx].MinimumBlockPoolSize
-  mov edi, MediumSequentialFeedBytesLeft
-  cmp edi, ecx
+  mov rdi, MediumSequentialFeedBytesLeft
+  cmp rdi, rcx
   jb @AllocateNewSequentialFeed
   {Get the address of the last block that was fed}
   mov rsi, LastSequentiallyFedMediumBlock
   {Enough sequential feed space: Will the remainder be usable?}
   movzx ecx, TSmallBlockType[rbx].OptimalBlockPoolSize
-  lea edx, [ecx + MinimumMediumBlockSize]
-  cmp edi, edx
+  lea rdx, [rcx + MinimumMediumBlockSize]
+  cmp rdi, rdx
   jb @NotMuchSpace
-  mov edi, ecx
+  mov rdi, rcx
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @NotMuchSpace:
   sub rsi, rdi
   {Update the sequential feed parameters}
-  sub MediumSequentialFeedBytesLeft, edi
+  sub MediumSequentialFeedBytesLeft, rdi
   mov LastSequentiallyFedMediumBlock, rsi
   {Get the block pointer}
   jmp @GotMediumBlock
@@ -11435,16 +11435,16 @@ but we rely on nonvolatile (callee-saved) registers ( RBX, RBP, RDI, RSI, R12)}
   jmp @GotBinAndGroup
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @TrySequentialFeedMedium:
-  mov ecx, MediumSequentialFeedBytesLeft
+  mov rcx, MediumSequentialFeedBytesLeft
   {Block can be fed sequentially?}
-  sub ecx, ebx
+  sub rcx, rbx
   jc @AllocateNewSequentialFeedForMedium
   {Get the block address}
   mov rax, LastSequentiallyFedMediumBlock
   sub rax, rbx
   mov LastSequentiallyFedMediumBlock, rax
   {Store the remaining bytes}
-  mov MediumSequentialFeedBytesLeft, ecx
+  mov MediumSequentialFeedBytesLeft, rcx
   {Set the flags for the block}
   or rbx, IsMediumBlockFlag
   mov [rax - BlockHeaderSize], rbx
@@ -12268,7 +12268,7 @@ begin
   end;
 end;
 {$ELSE FastFreememNeedAssemberCode}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 asm
   {$IFDEF fpc}
@@ -12862,7 +12862,7 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 @Finish:
 end;
 
-{$ELSE 32Bit}
+{$ELSE 32BIT}
 
 {---------------64-bit BASM FastFreeMem---------------}
 assembler;  // rcx = address
@@ -13520,7 +13520,7 @@ but we don't need them at this point}
    pop rbx
 {$ENDIF}
 end;
-{$ENDIF 32Bit}
+{$ENDIF 32BIT}
 {$ENDIF FastFreememNeedAssemberCode}
 
 
@@ -14050,7 +14050,7 @@ begin
 {$ENDIF}
 end;
 {$ELSE FastReallocMemNeedAssemberCode}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 {$IFNDEF AssumeMultiThreaded}
 const
@@ -15298,7 +15298,7 @@ begin
     FillChar(Result^, ASize, 0);
 end;
 {$ELSE}
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
 assembler;
 asm
   push ebx
@@ -15767,7 +15767,7 @@ end;
  If Unequal: Result := [AAddress]}
 function LockCmpxchg32(CompareVal, NewVal: Integer; AAddress: PInteger): Integer; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {On entry for 32-bit Windows:
     eax = CompareVal,
     edx = NewVal,
@@ -15826,7 +15826,7 @@ end;
 
 procedure DoneChangingFullDebugModeBlock; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   lock dec ThreadsInFullDebugModeRoutine
 {$ELSE}
 {$IFDEF AllowAsmNoframe}
@@ -15840,7 +15840,7 @@ end;
 {Increments the allocation number}
 procedure IncrementAllocationNumber; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   lock inc CurrentAllocationNumber
 {$ELSE}
 {$IFDEF AllowAsmNoframe}
@@ -15934,7 +15934,7 @@ end;
 function SumNativeUInts(AStartValue: NativeUInt; APointer: PNativeUInt;
   ACount: NativeUInt): NativeUInt; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {On entry: eax = AStartValue, edx = APointer; ecx = ACount}
   add edx, ecx
   neg ecx
@@ -15965,7 +15965,7 @@ end;
 function CheckFillPattern(APointer: Pointer; ACount: NativeUInt;
   AFillPattern: NativeUInt): Boolean; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   {On entry: eax = APointer; edx = ACount; ecx = AFillPattern}
   add eax, edx
   neg edx
@@ -16131,7 +16131,7 @@ end;
 {Rotates AValue ABitCount bits to the right}
 function RotateRight(AValue, ABitCount: NativeUInt): NativeUInt; assembler;
 asm
-{$IFDEF 32Bit}
+{$IFDEF 32BIT}
   mov ecx, edx
   ror eax, cl
 {$ELSE}
@@ -19794,7 +19794,7 @@ const
 it in bits 63-32 under 64-bit, although the xgetbv instruction only accepts
 32-bits from the ECX/RCX register even under 64-bit mode}
 
-{$IFDEF 64bit}
+{$IFDEF 64BIT}
   {$IFNDEF FPC}
   { The following compilers do not understand the XGETBV instruction:
     - The 32-bit Delphi Tokyo 10.2 assembler;
@@ -19809,7 +19809,7 @@ it in bits 63-32 under 64-bit, although the xgetbv instruction only accepts
 {$IFNDEF PurePascal}
 function GetCpuXCR(Arg: NativeUint): Int64; assembler;
 asm
- {$IFDEF 64bit}
+ {$IFDEF 64BIT}
 
 {$IFDEF unix}
 
@@ -19878,7 +19878,7 @@ begin
    available?}
   if ( FullDebugModeDLL = 0 )
       {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
-      AND ( MemoryResourceExists( {$IFNDEF 64Bit}'FastMM_FullDebugMode'{$ELSE}'FastMM_FullDebugMode64'{$ENDIF} ) = 0 )
+      AND ( MemoryResourceExists( {$IFNDEF 64BIT}'FastMM_FullDebugMode'{$ELSE}'FastMM_FullDebugMode64'{$ENDIF} ) = 0 )
       {$IFEND} then
     Exit;
     {$ENDIF}
@@ -20173,7 +20173,7 @@ This is because the operating system would not save the registers and the states
       end;
 {$ENDIF EnableMMX}
 
-{$IFDEF 32bit}
+{$IFDEF 32BIT}
       if
         ((LReg1.RegEDX and (UnsignedBit shl 25)) <> 0)
   {$IFDEF Use_GetEnabledXStateFeatures_WindowsAPICall}
@@ -20181,11 +20181,11 @@ This is because the operating system would not save the registers and the states
   {$ENDIF}
       then
       begin
-  {$IFDEF 32bit_SSE}
+  {$IFDEF 32BIT_SSE}
         FastMMCpuFeaturesA := FastMMCpuFeaturesA or FastMMCpuFeatureSSE;
   {$ENDIF}
       end;
-{$ENDIF 32bit}
+{$ENDIF 32BIT}
 
 { Here is the Intel algorithm to detext AVX }
 { QUOTE from the Intel 64 and IA-32 Architectures Optimization Reference Manual
@@ -20319,7 +20319,7 @@ ENDQUOTE}
     the old size.}
 
 
-    {$IFDEF 32bit_SSE}
+    {$IFDEF 32BIT_SSE}
     {$IFNDEF unix}
     {$IFDEF USE_CPUID}
     // if we have SSE, use SSE copy
@@ -20327,16 +20327,16 @@ ENDQUOTE}
     if ((FastMMCpuFeaturesA and FastMMCpuFeatureSSE) <> 0) then
     begin
       case SmallBlockTypes[LInd].BlockSize of
-        24: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move20_32bit_SSE;
-        32: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move28_32bit_SSE;
-        40: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move36_32bit_SSE;
-        48: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move44_32bit_SSE;
-        56: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move52_32bit_SSE;
-        64: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move60_32bit_SSE;
-        72: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move68_32bit_SSE;
-        80: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move76_32bit_SSE;
-        88: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move84_32bit_SSE;
-        96: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move92_32bit_SSE;
+        24: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move20_32BIT_SSE;
+        32: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move28_32BIT_SSE;
+        40: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move36_32BIT_SSE;
+        48: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move44_32BIT_SSE;
+        56: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move52_32BIT_SSE;
+        64: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move60_32BIT_SSE;
+        72: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move68_32BIT_SSE;
+        80: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move76_32BIT_SSE;
+        88: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move84_32BIT_SSE;
+        96: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move92_32BIT_SSE;
       end;
     end;
     {$ENDIF}
@@ -20346,39 +20346,39 @@ ENDQUOTE}
     if not Assigned(SmallBlockTypes[LInd].UpsizeMoveProcedure) then
     begin
       case SmallBlockTypes[LInd].BlockSize of
-        {$IFDEF 32bit}
+        {$IFDEF 32BIT}
         8: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}Move4;
         {$ENDIF}
         {$IFNDEF Align32Bytes}
-        16: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32Bit}Move12{$ELSE}Move8{$ENDIF};
+        16: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move12{$ELSE}Move8{$ENDIF};
         {$IFNDEF Align16Bytes}
-        24: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32bit}Move20{$ELSE}Move16{$ENDIF};
+        24: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move20{$ELSE}Move16{$ENDIF};
         {$ENDIF Align16Bytes}
         {$ENDIF Align32Bytes}
 
-        32: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32Bit}Move28{$ELSE}Move24{$ENDIF};
+        32: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move28{$ELSE}Move24{$ENDIF};
 
         {$IFNDEF Align32Bytes}
         {$IFNDEF Align16Bytes}
-        40: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32bit}Move36{$ELSE}Move32{$ENDIF};
+        40: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move36{$ELSE}Move32{$ENDIF};
         {$ENDIF}
-        48: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32Bit}Move44{$ELSE}Move40{$ENDIF};
+        48: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move44{$ELSE}Move40{$ENDIF};
         {$IFNDEF Align16Bytes}
-        56: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32Bit}Move52{$ELSE}Move48{$ENDIF};
+        56: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move52{$ELSE}Move48{$ENDIF};
         {$ENDIF}
         {$ENDIF}
 
-        64: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32Bit}Move60{$ELSE}Move56{$ENDIF};
+        64: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move60{$ELSE}Move56{$ENDIF};
 
         {$IFNDEF Align32Bytes}
         {$IFNDEF Align16Bytes}
-        72: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32bit}Move68{$ELSE}Move64{$ENDIF};
+        72: SmallBlockTypes[LInd].UpsizeMoveProcedure := {$IFDEF FPC}@{$ENDIF}{$IFDEF 32BIT}Move68{$ELSE}Move64{$ENDIF};
         {$ENDIF}
         {$ENDIF}
       end;
     end;
 
-    {$IFDEF 64bit}
+    {$IFDEF 64BIT}
     {$IFDEF EnableFSRM}
     {$IFDEF USE_CPUID}
     if (FastMMCpuFeaturesA and FastMMCpuFeatureFSRM) <> 0 then
@@ -20411,7 +20411,7 @@ ENDQUOTE}
     {$ENDIF}
 
 
-{$IFDEF 64Bit}
+{$IFDEF 64BIT}
 {$IFDEF EnableAVX}
 
   {$IFDEF EnableAVX512}
@@ -20719,7 +20719,7 @@ begin
   if not FastMMIsInstalled then
   begin
 {$IFDEF FullDebugMode}
-  {$IFDEF 32Bit}
+  {$IFDEF 32BIT}
     {Try to reserve the 64K block covering address $80808080 so pointers with DebugFillPattern will A/V}
     ReservedBlock := VirtualAlloc(Pointer(DebugReservedAddress), 65536, MEM_RESERVE, PAGE_NOACCESS);
     {Allocate the address space slack.}
@@ -21239,7 +21239,7 @@ begin
   {$ENDIF}
   end;
 
-  {$IFDEF 32bit}
+  {$IFDEF 32BIT}
   if (NegNativeUintMaskBit(0) <> 0) or
      (NegNativeUintMaskBit(1) <> $FFFFFFFF) or
      (NegNativeUintMaskBit(2) <> $FFFFFFFE) or
@@ -21273,7 +21273,7 @@ begin
     System.RunError(reInvalidPtr);
   {$ENDIF}
   end;
-  {$ELSE 32bit}
+  {$ELSE 32BIT}
   if (NegNativeUintMaskBit(NativeUInt(0)) <> NativeUInt(0)) or
      (NegNativeUintMaskBit(NativeUInt(1)) <> NativeUInt($FFFFFFFFFFFFFFFF)) or
      (NegNativeUintMaskBit(NativeUInt(2)) <> NativeUInt($FFFFFFFFFFFFFFFE)) or
@@ -21309,7 +21309,7 @@ begin
     System.RunError(reInvalidPtr);
   {$ENDIF}
   end;
-  {$ENDIF 32bit}
+  {$ENDIF 32BIT}
 end;
 {$ENDIF}
 
