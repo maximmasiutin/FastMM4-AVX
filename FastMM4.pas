@@ -8772,7 +8772,7 @@ asm
   .params 2
   {$ENDIF}
   xor eax, eax
-  cmp MediumSequentialFeedBytesLeft, eax
+  cmp MediumSequentialFeedBytesLeft, rax
   je @Done
   {Get a pointer to the last sequentially allocated medium block}
   mov rax, LastSequentiallyFedMediumBlock
