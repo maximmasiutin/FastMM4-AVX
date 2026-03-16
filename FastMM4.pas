@@ -8781,20 +8781,20 @@ asm
   jnz @LastBlockFedIsFree
   {Set the "previous block is free" flag in the last block fed}
   or qword ptr [rax - BlockHeaderSize], PreviousMediumBlockIsFreeFlag
-  {Get the remainder in edx}
-  mov edx, MediumSequentialFeedBytesLeft
-  {Point eax to the start of the remainder}
+  {Get the remainder in rdx}
+  mov rdx, MediumSequentialFeedBytesLeft
+  {Point rax to the start of the remainder}
   sub rax, rdx
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @BinTheRemainder:
-  {Status: rax = start of remainder, edx = size of remainder}
+  {Status: rax = start of remainder, rdx = size of remainder}
   {Store the size of the block as well as the flags}
   lea rcx, [rdx + IsMediumBlockFlag + IsFreeBlockFlag]
   mov [rax - BlockHeaderSize], rcx
   {Store the trailing size marker}
   mov [rax + rdx - 2 * BlockHeaderSize], rdx
   {Bin this medium block}
-  cmp edx, MinimumMediumBlockSize
+  cmp rdx, MinimumMediumBlockSize
   jb @Done
   mov rcx, rax
   call InsertMediumBlockIntoBin
@@ -8805,7 +8805,7 @@ asm
   mov rdx, DropMediumAndLargeFlagsMask
   and rdx, [rax - BlockHeaderSize]
   {Free the last block fed}
-  cmp edx, MinimumMediumBlockSize
+  cmp rdx, MinimumMediumBlockSize
   jb @DontRemoveLastFed
   {Last fed block is free - remove it from its size bin}
   mov rcx, rax
@@ -8816,12 +8816,12 @@ asm
   and rdx, [rax - BlockHeaderSize]
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @DontRemoveLastFed:
-  {Get the number of bytes left in ecx}
-  mov ecx, MediumSequentialFeedBytesLeft
+  {Get the number of bytes left in rcx}
+  mov rcx, MediumSequentialFeedBytesLeft
   {Point rax to the start of the remainder}
   sub rax, rcx
-  {edx = total size of the remainder}
-  add edx, ecx
+  {rdx = total size of the remainder}
+  add rdx, rcx
   jmp @BinTheRemainder
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
 @Done:
@@ -11272,22 +11272,22 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 @NoSuitableMediumBlocks:
   {Check the sequential feed medium block pool for space}
   movzx ecx, TSmallBlockType[rbx].MinimumBlockPoolSize
-  mov edi, MediumSequentialFeedBytesLeft
-  cmp edi, ecx
+  mov rdi, MediumSequentialFeedBytesLeft
+  cmp rdi, rcx
   jb @AllocateNewSequentialFeed
   {Get the address of the last block that was fed}
   mov rsi, LastSequentiallyFedMediumBlock
   {Enough sequential feed space: Will the remainder be usable?}
   movzx ecx, TSmallBlockType[rbx].OptimalBlockPoolSize
-  lea edx, [ecx + MinimumMediumBlockSize]
-  cmp edi, edx
+  lea rdx, [rcx + MinimumMediumBlockSize]
+  cmp rdi, rdx
   jb @NotMuchSpace
-  mov edi, ecx
+  mov rdi, rcx
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @NotMuchSpace:
   sub rsi, rdi
   {Update the sequential feed parameters}
-  sub MediumSequentialFeedBytesLeft, edi
+  sub MediumSequentialFeedBytesLeft, rdi
   mov LastSequentiallyFedMediumBlock, rsi
   {Get the block pointer}
   jmp @GotMediumBlock
@@ -11435,16 +11435,16 @@ but we rely on nonvolatile (callee-saved) registers ( RBX, RBP, RDI, RSI, R12)}
   jmp @GotBinAndGroup
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @TrySequentialFeedMedium:
-  mov ecx, MediumSequentialFeedBytesLeft
+  mov rcx, MediumSequentialFeedBytesLeft
   {Block can be fed sequentially?}
-  sub ecx, ebx
+  sub rcx, rbx
   jc @AllocateNewSequentialFeedForMedium
   {Get the block address}
   mov rax, LastSequentiallyFedMediumBlock
   sub rax, rbx
   mov LastSequentiallyFedMediumBlock, rax
   {Store the remaining bytes}
-  mov MediumSequentialFeedBytesLeft, ecx
+  mov MediumSequentialFeedBytesLeft, rcx
   {Set the flags for the block}
   or rbx, IsMediumBlockFlag
   mov [rax - BlockHeaderSize], rbx
