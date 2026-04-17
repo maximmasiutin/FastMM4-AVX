@@ -357,8 +357,11 @@ function fpmmap(addr: Pointer; len: PtrUInt; prot: Integer;
   external 'c' name 'mmap';
 function fpmunmap(addr: Pointer; len: PtrUInt): Integer; cdecl;
   external 'c' name 'munmap';
+function fpmprotect(addr: Pointer; len: PtrUInt; prot: Integer): Integer; cdecl;
+  external 'c' name 'mprotect';
 
 const
+  PROT_NONE  = 0;
   PROT_READ  = 1;
   PROT_WRITE = 2;
   MAP_PRIVATE   = $02;
@@ -402,6 +405,571 @@ end;
 {$ENDIF}
 
 // =============================================================================
+// Controlled exploit-shape vectors for issue #39 findings 1-5 (PRs #60-#64).
+//
+// Each vector constructs a guarded region (writable page + PAGE_NOACCESS /
+// PROT_NONE guard page), places a user pointer P at offset 8 so the fake
+// header at P-8 lives in the writable page, writes a specific header value
+// that triggers one finding's pre-patch failure mode, then calls FreeMem or
+// ReallocMem. On patched code the guard fires and returns 0/nil without
+// touching the guard page. On unpatched code FreeMem/ReallocMem would read
+// or write beyond the writable page (AV) or dereference an invalid pool /
+// BlockType pointer (AV) or execute an unbounded FillChar.
+//
+// These tests are deterministic: the header is caller-controlled, not a
+// function of CRT heap metadata. They cover the 32-bit ASM, 64-bit ASM, and
+// Pascal paths; the CI matrix compiles the same test under each variant.
+//
+// The test does NOT actually observe the would-be AV on unpatched code
+// (that would crash the CI runner). It observes two things on patched code:
+// (a) FreeMem/ReallocMem returns 0 / nil (SoftInvalidFreeMem path).
+// (b) The tripwire bytes inside the writable page at offset >= 16 stay at
+//     their initial $5A pattern, proving FillChar did not run.
+// A regression that removes a guard would manifest as AV (process crash,
+// recorded by CI as a test failure) or tripwire corruption.
+// =============================================================================
+
+const
+  GUARD_REGION_SIZE    = $2000; { 8KB writable + 4KB guard on Windows / 4KB + 4KB on Linux }
+  TRIPWIRE_PATTERN     = $5A;
+  TRIPWIRE_CHECK_START = 16;    { skip header+pointer bytes }
+  TRIPWIRE_CHECK_LEN   = 256;
+
+function AllocGuardedRegion(out Base: Pointer; out P: Pointer): Boolean;
+{$IFDEF MSWINDOWS}
+var
+  Region: Pointer;
+{$ENDIF}
+{$IFDEF UNIX}
+var
+  Region: Pointer;
+{$ENDIF}
+begin
+  Result := False;
+  Base := nil;
+  P := nil;
+{$IFDEF MSWINDOWS}
+  { Allocate 2 pages: first PAGE_READWRITE (usable), second PAGE_NOACCESS (guard). }
+  Region := VirtualAlloc(nil, GUARD_REGION_SIZE, MEM_COMMIT, PAGE_READWRITE);
+  if Region = nil then Exit;
+  { Protect the second page as no-access. }
+  if not VirtualFree(Pointer(PByte(Region) + (GUARD_REGION_SIZE shr 1)),
+                     GUARD_REGION_SIZE shr 1, $4000 { MEM_DECOMMIT }) then
+  begin
+    VirtualFree(Region, 0, MEM_RELEASE);
+    Exit;
+  end;
+  Base := Region;
+  P := Pointer(PByte(Region) + 8);
+  FillChar(Region^, GUARD_REGION_SIZE shr 1, TRIPWIRE_PATTERN);
+  Result := True;
+{$ENDIF}
+{$IFDEF UNIX}
+  Region := fpmmap(nil, GUARD_REGION_SIZE, PROT_READ or PROT_WRITE,
+    MAP_PRIVATE or MAP_ANONYMOUS, -1, 0);
+  if (Region = Pointer(-1)) or (Region = nil) then Exit;
+  if fpmprotect(Pointer(PByte(Region) + (GUARD_REGION_SIZE shr 1)),
+                GUARD_REGION_SIZE shr 1, PROT_NONE) <> 0 then
+  begin
+    fpmunmap(Region, GUARD_REGION_SIZE);
+    Exit;
+  end;
+  Base := Region;
+  P := Pointer(PByte(Region) + 8);
+  FillChar(Region^, GUARD_REGION_SIZE shr 1, TRIPWIRE_PATTERN);
+  Result := True;
+{$ENDIF}
+end;
+
+procedure FreeGuardedRegion(Base: Pointer);
+begin
+  if Base = nil then Exit;
+{$IFDEF MSWINDOWS}
+  VirtualFree(Base, 0, MEM_RELEASE);
+{$ENDIF}
+{$IFDEF UNIX}
+  fpmunmap(Base, GUARD_REGION_SIZE);
+{$ENDIF}
+end;
+
+function CheckTripwire(Base: Pointer): Boolean;
+var
+  I: NativeUInt;
+  B: PByte;
+begin
+  Result := True;
+  B := PByte(Base);
+  for I := TRIPWIRE_CHECK_START to TRIPWIRE_CHECK_START + TRIPWIRE_CHECK_LEN - 1 do
+    if B[I] <> TRIPWIRE_PATTERN then
+    begin
+      Result := False;
+      Exit;
+    end;
+end;
+
+procedure WriteFakeHeader(P: Pointer; Value: NativeUInt);
+begin
+  PNativeUInt(PByte(P) - SizeOf(Pointer))^ := Value;
+end;
+
+// -----------------------------------------------------------------------------
+// Finding 1 (PR #63, PR-SEC-04): ASM ReallocMem small-block foreign-pointer
+// guard. Header < $10000 routes to the small-block branch; unpatched code
+// dereferences TSmallBlockPoolHeader[$0080].BlockType = AV on page 0.
+// -----------------------------------------------------------------------------
+{ Helper: invoke ReallocMem and classify the outcome.
+  Under SoftInvalidFreeMem plus the PR #60-#64 guards, a foreign pointer is
+  rejected and FastReallocMem returns nil. FPC's RTL wrapper preserves the
+  caller's pointer when the memory manager returns nil (does not raise, does
+  not zero the var). So the observable outcome on patched code is:
+    NewP = OrigP (unchanged) AND no exception.
+  On unpatched code with a foreign pointer, the typical failure mode is
+  EAccessViolation from dereferencing invalid metadata; secondary failure
+  modes are returning a NEW valid pointer (treated foreign as valid) or
+  corruption-induced other exceptions. }
+type
+  TReallocOutcome = (roRejectedPreserved, roRejectedNil, roAccessViolation,
+                     roSucceeded, roOtherException);
+
+function DoReallocMemAndClassify(var P: Pointer; OrigP: Pointer;
+  NewSize: NativeUInt; out ExcClass: string): TReallocOutcome;
+begin
+  ExcClass := '';
+  try
+    ReallocMem(P, NewSize);
+    if P = nil then
+      Result := roRejectedNil
+    else if P = OrigP then
+      Result := roRejectedPreserved
+    else
+      Result := roSucceeded;
+  except
+    on E: EAccessViolation do
+    begin
+      ExcClass := E.ClassName;
+      Result := roAccessViolation;
+    end;
+    on E: Exception do
+    begin
+      ExcClass := E.ClassName;
+      Result := roOtherException;
+    end;
+  end;
+end;
+
+procedure TestFinding1_ReallocMemSmallForeign;
+const
+  TestName = 'Finding1_ReallocMemSmallForeign (PR #63)';
+var
+  Base, P, NewP: Pointer;
+  Outcome: TReallocOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    { Header $0080: flags bits 0,1,2 clear -> small-block branch.
+      Pool pointer = $0080, below $10000 -> unpatched AV, patched nil. }
+    WriteFakeHeader(P, $0080);
+    NewP := P;
+    Outcome := DoReallocMemAndClassify(NewP, P, 256, ExcClass);
+    case Outcome of
+      roRejectedPreserved, roRejectedNil: TestPass(TestName);
+      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
+      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// Finding 2 (PR #64, PR-SEC-05): ASM ReallocMem medium-block size validation.
+// Header $10000002 -> medium flag set, masked size = $10000000 (256MB).
+// Unpatched: lea rdi, [rsi + rcx] then read [rdi - 8] = AV at P+256MB.
+// -----------------------------------------------------------------------------
+procedure TestFinding2_ReallocMemMediumForeign;
+const
+  TestName = 'Finding2_ReallocMemMediumForeign (PR #64)';
+var
+  Base, P, NewP: Pointer;
+  Outcome: TReallocOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    { Header $10000002: IsMediumBlockFlag set, size after mask = $10000000. }
+    WriteFakeHeader(P, $10000002);
+    NewP := P;
+    Outcome := DoReallocMemAndClassify(NewP, P, 4096, ExcClass);
+    case Outcome of
+      roRejectedPreserved, roRejectedNil: TestPass(TestName);
+      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
+      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// Finding 3 (PR #62, PR-SEC-03): ASM FreeMem large-block foreign-pointer guard.
+// Header $04: IsLargeBlockFlag set, masked size = 0. Unpatched: calls
+// FreeLargeBlock which tries VirtualFree on (P - 16) with zero-size bookkeeping.
+// Patched: rejects because size must be non-zero and granularity-aligned.
+// -----------------------------------------------------------------------------
+{ Helper: invoke FreeMem and classify. On a foreign pointer under
+  SoftInvalidFreeMem with the PR #60-#64 guards, FreeMem returns 0 directly
+  (no exception). On unpatched code the typical failure is EAccessViolation
+  from dereferencing invalid metadata. }
+type
+  TFreeOutcome = (foSoftRejected, foAccessViolation, foReturnedNonZero,
+                  foOtherException);
+
+function DoFreeMemAndClassify(P: Pointer; out Res: Integer;
+  out ExcClass: string): TFreeOutcome;
+begin
+  ExcClass := '';
+  Res := 0;
+  try
+    Res := FreeMem(P);
+    if Res = 0 then
+      Result := foSoftRejected
+    else
+      Result := foReturnedNonZero;
+  except
+    on E: EAccessViolation do
+    begin
+      ExcClass := E.ClassName;
+      Result := foAccessViolation;
+    end;
+    on E: Exception do
+    begin
+      ExcClass := E.ClassName;
+      Result := foOtherException;
+    end;
+  end;
+end;
+
+procedure TestFinding3_FreeMemLargeForeign;
+const
+  TestName = 'Finding3_FreeMemLargeForeign (PR #62)';
+var
+  Base, P: Pointer;
+  Res: Integer;
+  Outcome: TFreeOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    { Header $04: IsLargeBlockFlag set, masked size = 0. }
+    WriteFakeHeader(P, $04);
+    Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    case Outcome of
+      foSoftRejected: TestPass(TestName);
+      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
+      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// Finding 4 (PR #61, PR-SEC-01): ASM FreeMem ClearSmall FillChar guard ordering.
+// Header = address of a mapped HeapAlloc block Q. Q's first 8 bytes contain
+// garbage that the ASM reads as SmallBlockType pointer, then dereferences its
+// BlockSize field and passes it to FillChar. Unpatched: unbounded FillChar
+// overwrites the guard page tripwire or AVs. Patched: SmallBlockType range
+// check fires before FillChar.
+//
+// Only active when -dAlwaysClearFreedMemory is defined (otherwise the guard
+// code path is not compiled and there is nothing to test on this config).
+// -----------------------------------------------------------------------------
+{$IFDEF AlwaysClearFreedMemory}
+{$IFDEF MSWINDOWS}
+procedure TestFinding4_FreeMemSmallBlockTypeClearFillChar;
+const
+  TestName = 'Finding4_FreeMemSmallBlockTypeClearFillChar (PR #61)';
+var
+  Base, P, Q: Pointer;
+  Res: Integer;
+  Heap: THandle;
+  Outcome: TFreeOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  Heap := GetProcessHeap;
+  Q := HeapAlloc(Heap, 0, 64);
+  if Q = nil then
+  begin
+    FreeGuardedRegion(Base);
+    TestFail(TestName, 'HeapAlloc returned nil');
+    Exit;
+  end;
+  try
+    { Header = address of Q (>= $10000, low 3 bits clear because HeapAlloc
+      returns 16-byte aligned addresses). Bypasses the pool-pointer guard
+      but has an invalid BlockType when the ASM reads [Q + BlockType_offset]. }
+    WriteFakeHeader(P, NativeUInt(Q));
+    Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    case Outcome of
+      foSoftRejected:
+        if CheckTripwire(Base) then
+          TestPass(TestName)
+        else
+          TestFail(TestName, 'Tripwire corrupted (FillChar overran - guard missing)');
+      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
+      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    HeapFree(Heap, 0, Q);
+    FreeGuardedRegion(Base);
+  end;
+end;
+{$ENDIF}
+{$ENDIF}
+
+// -----------------------------------------------------------------------------
+// Finding 5 (PR #60, PR-SEC-02): FreeMem ClearSmallAndMedium FillChar runs
+// before the medium-block size check. Header $00100002: IsMediumBlockFlag set,
+// masked size = $00100000 (1MB). Unpatched: FillChar(P, 1MB - 8, 0) writes
+// past the 4KB writable region into the guard page. Patched: size check
+// rejects before FillChar ($100000 > MediumBlockPoolSize - header size).
+//
+// This finding affects Pascal too (not only ASM), so the test must pass under
+// every config including PurePascal.
+// -----------------------------------------------------------------------------
+{$IFDEF AlwaysClearFreedMemory}
+procedure TestFinding5_FreeMemMediumSizeClearFillChar;
+const
+  TestName = 'Finding5_FreeMemMediumSizeClearFillChar (PR #60)';
+var
+  Base, P: Pointer;
+  Res: Integer;
+  Outcome: TFreeOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    { Header $10000002: IsMediumBlockFlag set, size after mask = $10000000
+      (256MB) which exceeds MediumBlockPoolSize ($13FFF0). The pre-FillChar
+      size guard must reject this before FillChar runs. }
+    WriteFakeHeader(P, $10000002);
+    Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    case Outcome of
+      foSoftRejected:
+        if CheckTripwire(Base) then
+          TestPass(TestName)
+        else
+          TestFail(TestName, 'Tripwire corrupted (FillChar overran - guard missing)');
+      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
+      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+
+procedure TestFinding5b_FreeMemMediumUndersized;
+const
+  TestName = 'Finding5b_FreeMemMediumUndersized (PR #60)';
+var
+  Base, P: Pointer;
+  Res: Integer;
+  Outcome: TFreeOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    { Header $00000042: IsMediumBlockFlag set, masked size = $40 = 64,
+      below MinimumMediumBlockSize. }
+    WriteFakeHeader(P, $00000042);
+    Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    case Outcome of
+      foSoftRejected:
+        if CheckTripwire(Base) then
+          TestPass(TestName)
+        else
+          TestFail(TestName, 'Tripwire corrupted (guard missing)');
+      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
+      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+{$ENDIF}
+
+procedure TestFinding3b_FreeMemLargeNonGranularity;
+const
+  TestName = 'Finding3b_FreeMemLargeNonGranularity (PR #62)';
+var
+  Base, P: Pointer;
+  Res: Integer;
+  Outcome: TFreeOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  try
+    WriteFakeHeader(P, $00008004);
+    Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    case Outcome of
+      foSoftRejected: TestPass(TestName);
+      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
+      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    FreeGuardedRegion(Base);
+  end;
+end;
+
+// -----------------------------------------------------------------------------
+// Finding 1 extra: pool-pointer mapped but garbage BlockType. Header points
+// to a second HeapAlloc region Q2 whose first 8 bytes are garbage read as
+// SmallBlockType pointer. Patched: SmallBlockType bounds check rejects.
+// -----------------------------------------------------------------------------
+{$IFDEF MSWINDOWS}
+procedure TestFinding1b_ReallocMemSmallMappedGarbageBlockType;
+const
+  TestName = 'Finding1b_ReallocMemSmallMappedGarbageBlockType (PR #63)';
+var
+  Base, P, NewP, Q2: Pointer;
+  Heap: THandle;
+  Outcome: TReallocOutcome;
+  ExcClass: string;
+begin
+  if not AllocGuardedRegion(Base, P) then
+  begin
+    TestFail(TestName, 'AllocGuardedRegion failed');
+    Exit;
+  end;
+  Heap := GetProcessHeap;
+  Q2 := HeapAlloc(Heap, 0, 64);
+  if Q2 = nil then
+  begin
+    FreeGuardedRegion(Base);
+    TestFail(TestName, 'HeapAlloc returned nil');
+    Exit;
+  end;
+  try
+    { Header = Q2 address (>= $10000, low bits clear). Bypasses pool-pointer
+      guard but Q2's first 8 bytes are garbage, read as SmallBlockType pointer. }
+    WriteFakeHeader(P, NativeUInt(Q2));
+    NewP := P;
+    Outcome := DoReallocMemAndClassify(NewP, P, 256, ExcClass);
+    case Outcome of
+      roRejectedPreserved, roRejectedNil: TestPass(TestName);
+      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
+      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
+      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+    end;
+  finally
+    HeapFree(Heap, 0, Q2);
+    FreeGuardedRegion(Base);
+  end;
+end;
+{$ENDIF}
+
+// -----------------------------------------------------------------------------
+// Regression vector: normal ReallocMem cycle must still work.
+// -----------------------------------------------------------------------------
+procedure TestReallocMemRegression;
+const
+  TestName = 'ReallocMemRegression';
+var
+  P: Pointer;
+begin
+  GetMem(P, 64);
+  PByte(P)[0] := $77;
+  ReallocMem(P, 32);
+  if (P = nil) or (PByte(P)[0] <> $77) then
+  begin
+    if P <> nil then FreeMem(P);
+    TestFail(TestName, 'content not preserved on downsize');
+    Exit;
+  end;
+  ReallocMem(P, 4096);
+  if (P = nil) or (PByte(P)[0] <> $77) then
+  begin
+    if P <> nil then FreeMem(P);
+    TestFail(TestName, 'content not preserved on medium upsize');
+    Exit;
+  end;
+  ReallocMem(P, 524288);
+  if (P = nil) or (PByte(P)[0] <> $77) then
+  begin
+    if P <> nil then FreeMem(P);
+    TestFail(TestName, 'content not preserved on large upsize');
+    Exit;
+  end;
+  FreeMem(P);
+  TestPass(TestName);
+end;
+
+procedure RunExploitShapeVectors;
+begin
+  try TestFinding1_ReallocMemSmallForeign except on E: Exception do
+    TestFail('Finding1_ReallocMemSmallForeign', E.ClassName + ': ' + E.Message); end;
+  {$IFDEF MSWINDOWS}
+  try TestFinding1b_ReallocMemSmallMappedGarbageBlockType except on E: Exception do
+    TestFail('Finding1b_ReallocMemSmallMappedGarbageBlockType', E.ClassName + ': ' + E.Message); end;
+  {$ENDIF}
+  try TestFinding2_ReallocMemMediumForeign except on E: Exception do
+    TestFail('Finding2_ReallocMemMediumForeign', E.ClassName + ': ' + E.Message); end;
+  try TestFinding3_FreeMemLargeForeign except on E: Exception do
+    TestFail('Finding3_FreeMemLargeForeign', E.ClassName + ': ' + E.Message); end;
+  try TestFinding3b_FreeMemLargeNonGranularity except on E: Exception do
+    TestFail('Finding3b_FreeMemLargeNonGranularity', E.ClassName + ': ' + E.Message); end;
+  {$IFDEF AlwaysClearFreedMemory}
+  {$IFDEF MSWINDOWS}
+  try TestFinding4_FreeMemSmallBlockTypeClearFillChar except on E: Exception do
+    TestFail('Finding4_FreeMemSmallBlockTypeClearFillChar', E.ClassName + ': ' + E.Message); end;
+  {$ENDIF}
+  try TestFinding5_FreeMemMediumSizeClearFillChar except on E: Exception do
+    TestFail('Finding5_FreeMemMediumSizeClearFillChar', E.ClassName + ': ' + E.Message); end;
+  try TestFinding5b_FreeMemMediumUndersized except on E: Exception do
+    TestFail('Finding5b_FreeMemMediumUndersized', E.ClassName + ': ' + E.Message); end;
+  {$ENDIF}
+  try TestReallocMemRegression except on E: Exception do
+    TestFail('ReallocMemRegression', E.ClassName + ': ' + E.Message); end;
+end;
+
+// =============================================================================
 // Main
 // =============================================================================
 var
@@ -429,6 +997,13 @@ begin
       TestFail('NormalAllocFreeWithChecks', E.ClassName + ': ' + E.Message);
     end;
   end;
+
+  { Phase 1b: Exploit-shape vectors for issue #39 findings 1-5 (PRs #60-#64).
+    Controlled fake-header vectors exercising small, medium, and large-block
+    foreign-pointer guards in FreeMem and ReallocMem. Covered paths:
+    32-bit ASM, 64-bit ASM, and Pure Pascal - CI matrix compiles the same
+    program under each target. }
+  RunExploitShapeVectors;
 
   { Phase 2: Controlled foreign pointer tests (deterministic fill patterns) }
   {$IFDEF MSWINDOWS}

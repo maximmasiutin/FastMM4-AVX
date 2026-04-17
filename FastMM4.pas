@@ -20334,6 +20334,16 @@ ENDQOTE}
 {$ENDIF}
     with LReg7_0 do begin RegEAX := 0; RegEBX := 0; RegECX := 0; RegEDX := 0; end;
 
+{$IFNDEF EnableWaitPKG}
+    {Explicit zero-initialization to silence FPC "read but nowhere assigned"
+     warnings when EnableWaitPKG is not defined. These fields are read by
+     GetFastMMCpuFeatures and GetFastMMCpuUserModeMonitorLineSizes but only
+     written inside the EnableWaitPKG detection path.}
+    FastMMCpuFeaturesB := 0;
+    FastMMCpuSmallestMonitorLineSize := 0;
+    FastMMCpuLargestMonitorLineSize := 0;
+{$ENDIF}
+
     GetCPUID(0, 0, LReg0);
     MaxInputValueBasic := LReg0.RegEax;
     if MaxInputValueBasic > 0 then
