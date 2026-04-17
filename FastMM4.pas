@@ -14376,7 +14376,7 @@ asm // FastReallocMemAssembler begin 32-bit
   and ecx, DropMediumAndLargeFlagsMask
 {$IFDEF SoftInvalidFreeMem}
   {Medium-block size validation: mirrors Pascal FastReallocMem check at
-   FastMM4.pas:13830-13844. Without this, a foreign pointer whose header
+   FastMM4.pas:13924-13940. Without this, a foreign pointer whose header
    encodes IsMediumBlockFlag with garbage upper bits lets the lea below
    compute an attacker-controlled next-block pointer, which subsequent
    code dereferences to read flags and sometimes write through its
@@ -15046,7 +15046,7 @@ asm
   and ecx, DropMediumAndLargeFlagsMask
 {$IFDEF SoftInvalidFreeMem}
   {Medium-block size validation: mirrors Pascal FastReallocMem check at
-   FastMM4.pas:13830-13844. Without this, a foreign pointer whose header
+   FastMM4.pas:13924-13940. Without this, a foreign pointer whose header
    encodes IsMediumBlockFlag with garbage upper bits lets the lea below
    compute an attacker-controlled next-block pointer, which subsequent
    code dereferences to read flags and sometimes write through its
