@@ -1587,8 +1587,15 @@ interface
  also undef EnableMemoryLeakReporting: BCB undefs it because of the IDE DLL
  unload path, which does not apply on Linux. Shutdown leak reporting via
  CheckBlocksOnShutdown runs independently of NeverUninstall and is still
- desired on Linux Delphi; do not "unify" these two auto-define blocks.}
-{$IFDEF LINUX}{$IFNDEF FPC}{$DEFINE NeverUninstall}{$ENDIF}{$ENDIF}
+ desired on Linux Delphi; do not "unify" these two auto-define blocks.
+
+ Library-unload safety: this auto-define targets applications (.dpr programs)
+ that run until process exit. In a shared library (.so) that gets dlclose()'d
+ before the host process ends, keeping FastMM installed would leave the host's
+ MemoryManager pointer referencing code/data being unmapped. Library authors
+ on Linux Delphi who need to uninstall FastMM on unload should define
+ DisableAutoNeverUninstallLinux in their project options.}
+{$IFDEF LINUX}{$IFNDEF FPC}{$IFNDEF DisableAutoNeverUninstallLinux}{$DEFINE NeverUninstall}{$ENDIF}{$ENDIF}{$ENDIF}
 
 {Stack tracer is needed for LogLockContention and for FullDebugMode.}
 {$undef _StackTracer}
@@ -21072,11 +21079,11 @@ begin
   {Restore the old memory manager if FastMM has been installed}
   if FastMMIsInstalled then
   begin
+{$IFNDEF NeverUninstall}
 {$IFDEF UseReleaseStack}
   DestroyCleanupThread;
   CleanupReleaseStacks;
 {$ENDIF}
-{$IFNDEF NeverUninstall}
     {Uninstall FastMM}
     UninstallMemoryManager;
 {$ENDIF}
