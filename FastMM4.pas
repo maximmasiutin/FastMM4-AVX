@@ -12352,18 +12352,12 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   cmp edx, $10000
   jb @InvalidSmallBlock
 {$ENDIF}
-{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-  push edx
-  push ecx
-  mov edx, TSmallBlockPoolHeader[edx].BlockType
-  movzx edx, TSmallBlockType(edx).BlockSize
-  sub edx, BlockHeaderSize
-  xor ecx, ecx
-  call System.@FillChar
-  pop ecx
-  pop edx
-{$ENDIF}
-  {Get the small block type in ebx}
+  {Load BlockType ONCE from the pool header into ebx (callee-saved)
+   BEFORE the ClearSmallAndMediumBlocksInFreeMem FillChar so the bounds
+   and alignment check below can run before any dereference of BlockType.
+   Without this ordering, a foreign pointer with a mapped-but-garbage pool
+   pointer would let FillChar read garbage BlockType.BlockSize and zero
+   an attacker-influenced length. Issue #39.}
   mov ebx, TSmallBlockPoolHeader[edx].BlockType
 {$IFDEF SoftInvalidFreeMem}
   {Validate that BlockType points within the SmallBlockTypes array and is
@@ -12381,6 +12375,22 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
   add eax, ebx
   test eax, (SmallBlockTypeRecSize - 1)
   jnz @InvalidSmallBlock
+{$ENDIF}
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  {BlockType validated; safe to read BlockSize and clear the user region.
+   ebx holds the validated BlockType across the call (callee-saved in x86).
+   EAX was clobbered by the SmallBlockTypes range/alignment check (lea/neg
+   etc.) so restore it from ECX (APointer) before the FillChar register
+   convention (EAX=Dest, EDX=Count, CL=Value).}
+  push edx
+  push ecx
+  mov eax, ecx
+  movzx edx, TSmallBlockType(ebx).BlockSize
+  sub edx, BlockHeaderSize
+  xor ecx, ecx
+  call System.@FillChar
+  pop ecx
+  pop edx
 {$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
@@ -12958,17 +12968,12 @@ asm
   cmp rdx, $10000
   jb @InvalidSmallBlock
 {$ENDIF}
-{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-  mov rsi, rcx
-  mov rdx, TSmallBlockPoolHeader[rdx].BlockType
-  movzx edx, TSmallBlockType(rdx).BlockSize
-  sub edx, BlockHeaderSize
-  xor r8, r8
-  call System.@FillChar
-  mov rcx, rsi
-  mov rdx, [rcx - BlockHeaderSize]
-{$ENDIF}
-  {Get the small block type in rbx}
+  {Load BlockType ONCE from the pool header into rbx (callee-saved)
+   BEFORE the ClearSmallAndMediumBlocksInFreeMem FillChar so the bounds
+   and alignment check below can run before any dereference of BlockType.
+   Without this ordering, a foreign pointer with a mapped-but-garbage pool
+   pointer would let FillChar read garbage BlockType.BlockSize and zero
+   an attacker-influenced length. Issue #39.}
   mov rbx, TSmallBlockPoolHeader[rdx].BlockType
 {$IFDEF SoftInvalidFreeMem}
   {Validate that BlockType points within the SmallBlockTypes array and is
@@ -12986,6 +12991,18 @@ asm
   add rax, rbx
   test rax, (SmallBlockTypeRecSize - 1)
   jnz @InvalidSmallBlock
+{$ENDIF}
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  {BlockType validated; safe to read BlockSize and clear the user region.
+   rsi preserves APointer across the call; rbx is callee-saved so it
+   survives FillChar without explicit save.}
+  mov rsi, rcx
+  movzx edx, TSmallBlockType(rbx).BlockSize
+  sub edx, BlockHeaderSize
+  xor r8, r8
+  call System.@FillChar
+  mov rcx, rsi
+  mov rdx, [rcx - BlockHeaderSize]
 {$ENDIF}
   {Do we need to lock the block type?}
 {$IFNDEF AssumeMultiThreaded}
