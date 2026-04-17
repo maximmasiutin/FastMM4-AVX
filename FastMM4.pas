@@ -11924,6 +11924,9 @@ var
   LPSmallBlockType: PSmallBlockType;
   LOldFirstFreeBlock: Pointer;
   LBlockHeader: NativeUInt;
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  LBlockSize: NativeUInt;
+{$ENDIF}
 {$IFDEF LogLockContention}
   LDidSleep: Boolean;
   LStackTrace: TStackTrace;
@@ -12214,12 +12217,39 @@ begin
     if (LBlockHeader and (IsFreeBlockFlag or IsLargeBlockFlag)) = 0 then
     begin
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-      {Get the block header, extract the block size and clear the block it.}
+      {Guard: validate medium block size BEFORE the ClearSmallAndMedium
+       FillChar call. A foreign pointer (not allocated by FastMM) can have
+       a garbage header whose masked size either underflows below
+       BlockHeaderSize or exceeds the pool, causing FillChar to zero
+       arbitrary memory. When clearing is disabled this extra pre-check is
+       skipped because FreeMediumBlock's internal bounds check runs before
+       the block dereferences its neighbours and suffices on its own.
+       Issue #39.}
       LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
-      FillChar(APointer^,
-        (LBlockHeader and DropMediumAndLargeFlagsMask) - BlockHeaderSize, 0);
-{$ENDIF}
+      LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
+      if (LBlockSize < MinimumMediumBlockSize) or
+         (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
+      begin
+  {$IFDEF SoftInvalidFreeMem}
+        Result := 0;
+  {$ELSE}
+    {$IFDEF BCB6OrDelphi7AndUp}
+        System.Error(reInvalidPtr);
+    {$ELSE}
+        System.RunError(reInvalidPtr);
+    {$ENDIF}
+        Result := CFastFreeMemReturnValueError;
+  {$ENDIF}
+      end
+      else
+      begin
+        {Block size validated; safe to clear before freeing.}
+        FillChar(APointer^, LBlockSize - BlockHeaderSize, 0);
+        Result := FreeMediumBlock(APointer);
+      end;
+{$ELSE}
       Result := FreeMediumBlock(APointer);
+{$ENDIF}
     end
     else
     begin
@@ -12582,17 +12612,11 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jnz @NotASmallOrMediumBlock
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @FreeMediumBlock:
-{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-  push eax
-  push edx
-  and edx, DropMediumAndLargeFlagsMask
-  sub edx, BlockHeaderSize
-  xor ecx, ecx
-  call System.@FillChar
-  pop edx
-  pop eax
-{$ENDIF}
-  {Drop the flags}
+  {Drop the flags BEFORE any FillChar so size validation runs first.
+   Moving the size check ahead of ClearSmallAndMediumBlocksInFreeMem
+   prevents a foreign-pointer header with a garbage masked size from
+   driving FillChar into unrelated memory or an unsigned underflow.
+   Issue #39.}
   and edx, DropMediumAndLargeFlagsMask
   {Validate block size: must be between MinimumMediumBlockSize and the
    maximum usable pool space. A foreign pointer (not allocated by FastMM)
@@ -12610,7 +12634,18 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ELSE}
   ja @CorruptMediumBlockSize
 {$ENDIF}
-  {Free the medium block pointed to by eax, header in edx}
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  {Size now validated: safe to clear. edx holds size without flags;
+   FillChar takes size - BlockHeaderSize.}
+  push eax
+  push edx
+  sub edx, BlockHeaderSize
+  xor ecx, ecx
+  call System.@FillChar
+  pop edx
+  pop eax
+{$ENDIF}
+  {Free the medium block pointed to by eax, header (size without flags) in edx}
   {Block size in ebx}
   mov ebx, edx
   {Save registers}
@@ -13250,16 +13285,11 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jnz @NotASmallOrMediumBlock
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNodot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @FreeMediumBlock:
-{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-  mov rsi, rcx
-  and rdx, DropMediumAndLargeFlagsMask
-  sub rdx, BlockHeaderSize
-  xor r8, r8
-  call System.@FillChar
-  mov rcx, rsi
-  mov rdx, [rcx - BlockHeaderSize]
-{$ENDIF}
-  {Drop the flags}
+  {Drop the flags BEFORE any FillChar so size validation runs first.
+   Moving the size check ahead of ClearSmallAndMediumBlocksInFreeMem
+   prevents a foreign-pointer header with a garbage masked size from
+   driving FillChar into unrelated memory or an unsigned underflow.
+   Issue #39.}
   and rdx, DropMediumAndLargeFlagsMask
   {Validate block size: must be between MinimumMediumBlockSize and the
    maximum usable pool space. A foreign pointer (not allocated by FastMM)
@@ -13277,7 +13307,18 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$ELSE}
   ja @CorruptMediumBlockSize
 {$ENDIF}
-  {Free the medium block pointed to by eax, header in edx}
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  {Size validated; safe to clear. rsi preserves APointer across the call
+   because FillChar destroys volatile regs (rcx, rdx, r8-r11).}
+  mov rsi, rcx
+  sub rdx, BlockHeaderSize
+  xor r8, r8
+  call System.@FillChar
+  mov rcx, rsi
+  mov rdx, [rcx - BlockHeaderSize]
+  and rdx, DropMediumAndLargeFlagsMask
+{$ENDIF}
+  {Free the medium block pointed to by rcx, size (without flags) in rdx}
   {Block size in rbx}
   mov rbx, rdx
   {Pointer in rsi}
