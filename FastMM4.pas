@@ -14374,6 +14374,19 @@ asm // FastReallocMemAssembler begin 32-bit
   mov ebx, ecx
   {Drop the flags from the header}
   and ecx, DropMediumAndLargeFlagsMask
+{$IFDEF SoftInvalidFreeMem}
+  {Medium-block size validation: mirrors Pascal FastReallocMem check at
+   FastMM4.pas:13830-13844. Without this, a foreign pointer whose header
+   encodes IsMediumBlockFlag with garbage upper bits lets the lea below
+   compute an attacker-controlled next-block pointer, which subsequent
+   code dereferences to read flags and sometimes write through its
+   NextFreeBlock/PreviousFreeBlock fields (unsafe-unlink primitive).
+   Issue #39.}
+  cmp ecx, MinimumMediumBlockSize
+  jb @InvalidMediumReallocPtr
+  cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize
+  ja @InvalidMediumReallocPtr
+{$ENDIF}
   {Save edi}
   push edi
   {Get a pointer to the next block in edi}
@@ -14794,6 +14807,14 @@ asm // FastReallocMemAssembler begin 32-bit
    Return nil via the standard 2-register epilogue. Issue #39.}
   xor eax, eax
   jmp @Exit2Reg
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidMediumReallocPtr:
+  {Foreign pointer detected in ASM FastReallocMem medium-block path
+   (size below MinimumMediumBlockSize or above the pool usable space).
+   Stack at this point has only ebx/esi + local var pushed (edi is saved
+   later), so the 2-register epilogue is correct. Issue #39.}
+  xor eax, eax
+  jmp @Exit2Reg
 {$ENDIF}
 
 {Don't need alignment here since all instructions are just one-byte}
@@ -15023,6 +15044,19 @@ asm
   mov rbx, rcx
   {Drop the flags from the header}
   and ecx, DropMediumAndLargeFlagsMask
+{$IFDEF SoftInvalidFreeMem}
+  {Medium-block size validation: mirrors Pascal FastReallocMem check at
+   FastMM4.pas:13830-13844. Without this, a foreign pointer whose header
+   encodes IsMediumBlockFlag with garbage upper bits lets the lea below
+   compute an attacker-controlled next-block pointer, which subsequent
+   code dereferences to read flags and sometimes write through its
+   NextFreeBlock/PreviousFreeBlock fields (unsafe-unlink primitive).
+   Issue #39.}
+  cmp ecx, MinimumMediumBlockSize
+  jb @InvalidMediumReallocPtr
+  cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize
+  ja @InvalidMediumReallocPtr
+{$ENDIF}
   {Get a pointer to the next block in rdi}
   lea rdi, [rsi + rcx]
   {Subtract the block header size from the old available size}
@@ -15433,6 +15467,13 @@ so ew save RCX and RDX}
 @InvalidSmallReallocPtr:
   {Foreign pointer detected in ASM FastReallocMem small-block path
    (pool pointer below 64 KiB or BlockType outside SmallBlockTypes).
+   Return nil via @Done. Issue #39.}
+  xor eax, eax
+  jmp @Done
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidMediumReallocPtr:
+  {Foreign pointer detected in ASM FastReallocMem medium-block path
+   (size below MinimumMediumBlockSize or above the pool usable space).
    Return nil via @Done. Issue #39.}
   xor eax, eax
   jmp @Done
