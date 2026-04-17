@@ -21136,7 +21136,7 @@ begin
     end;
 
   {$IFDEF MediumBlocksLockedCriticalSection}
-  LargeBlocksLocked := CLockByteFinished;
+  MediumBlocksLocked := CLockByteFinished;
   {$IFDEF fpc}DoneCriticalSection{$ELSE}DeleteCriticalSection{$ENDIF}(MediumBlocksLockedCS);
   {$ENDIF MediumBlocksLockedCriticalSection}
 
