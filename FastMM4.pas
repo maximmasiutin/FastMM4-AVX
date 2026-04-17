@@ -14485,7 +14485,12 @@ asm // FastReallocMemAssembler begin 32-bit
   and eax, MediumBlockGranularityMask
   add eax, MediumBlockSizeOffset
   {Calculate the size of the second split}
+{$IFDEF FPC}
+  mov edx, ebp
+  add edx, BlockHeaderSize
+{$ELSE}
   lea edx, [ebp + BlockHeaderSize]
+{$ENDIF}
   sub edx, eax
   {Does it fit?}
   ja @MediumInPlaceUpsizeSplit
@@ -17646,7 +17651,7 @@ function GetRegisteredMemoryLeaks: TRegisteredMemoryLeaks;
   begin
     while AEntry <> nil do
     begin
-      LInd := Length(Result);
+      LInd := Integer(Length(Result));
       SetLength(Result, LInd + 1);
       {Add the entry}
 {$IFNDEF FullDebugMode}
@@ -18202,13 +18207,13 @@ begin
           LPMsg := @(LMsgBuffer[0]);
           LPInitialMsgPtr := LPMsg;
           LInitialSize := (SizeOf(LMsgBuffer) div SizeOf(LMsgBuffer[0]))-1;
-          LPMsg := AppendStringToBuffer(LogStateHeaderMsg, LPMsg, Length(LogStateHeaderMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := NativeUIntToStrBuf(LMemoryManagerUsageSummary.AllocatedBytes shr 10, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := AppendStringToBuffer(LogStateAllocatedMsg, LPMsg, Length(LogStateAllocatedMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := NativeUIntToStrBuf(LMemoryManagerUsageSummary.OverheadBytes shr 10, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := AppendStringToBuffer(LogStateOverheadMsg, LPMsg, Length(LogStateOverheadMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := NativeUIntToStrBuf(Round(LMemoryManagerUsageSummary.EfficiencyPercentage), LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-          LPMsg := AppendStringToBuffer(LogStateEfficiencyMsg, LPMsg, Length(LogStateEfficiencyMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+          LPMsg := AppendStringToBuffer(LogStateHeaderMsg, LPMsg, Length(LogStateHeaderMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := NativeUIntToStrBuf(LMemoryManagerUsageSummary.AllocatedBytes shr 10, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := AppendStringToBuffer(LogStateAllocatedMsg, LPMsg, Length(LogStateAllocatedMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := NativeUIntToStrBuf(LMemoryManagerUsageSummary.OverheadBytes shr 10, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := AppendStringToBuffer(LogStateOverheadMsg, LPMsg, Length(LogStateOverheadMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := NativeUIntToStrBuf(Round(LMemoryManagerUsageSummary.EfficiencyPercentage), LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := AppendStringToBuffer(LogStateEfficiencyMsg, LPMsg, Length(LogStateEfficiencyMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           {Log the allocation detail}
           for LInd := LPLogInfo^.NodeCount - 1 downto 0 do
           begin
@@ -18216,29 +18221,29 @@ begin
             {Add the allocated size}
             LPMsg^ := ' ';
             Inc(LPMsg);
-            LPMsg := NativeUIntToStrBuf(LPNode^.TotalMemoryUsage, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-            LPMsg := AppendStringToBuffer(BytesMessage, LPMsg, Length(BytesMessage), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+            LPMsg := NativeUIntToStrBuf(LPNode^.TotalMemoryUsage, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+            LPMsg := AppendStringToBuffer(BytesMessage, LPMsg, Length(BytesMessage), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
             {Add the class type}
             case NativeUInt(LPNode^.ClassPtr) of
               {Unknown}
               0:
               begin
-                LPMsg := AppendStringToBuffer(UnknownClassNameMsg, LPMsg, Length(UnknownClassNameMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+                LPMsg := AppendStringToBuffer(UnknownClassNameMsg, LPMsg, Length(UnknownClassNameMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
               end;
               {AnsiString}
               1:
               begin
-                LPMsg := AppendStringToBuffer(AnsiStringBlockMessage, LPMsg, Length(AnsiStringBlockMessage), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+                LPMsg := AppendStringToBuffer(AnsiStringBlockMessage, LPMsg, Length(AnsiStringBlockMessage), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
               end;
               {UnicodeString}
               2:
               begin
-                LPMsg := AppendStringToBuffer(UnicodeStringBlockMessage, LPMsg, Length(UnicodeStringBlockMessage), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+                LPMsg := AppendStringToBuffer(UnicodeStringBlockMessage, LPMsg, Length(UnicodeStringBlockMessage), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
               end;
               {Classes}
             else
               begin
-                LPMsg := AppendClassNameToBuffer(LPNode^.ClassPtr, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+                LPMsg := AppendClassNameToBuffer(LPNode^.ClassPtr, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
               end;
             end;
             {Add the count}
@@ -18248,16 +18253,16 @@ begin
             Inc(LPMsg);
             LPMsg^ := ' ';
             Inc(LPMsg);
-            LPMsg := NativeUIntToStrBuf(LPNode^.InstanceCount, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-            LPMsg := AppendStringToBuffer(AverageSizeLeadText, LPMsg, Length(AverageSizeLeadText), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-            LPMsg := NativeUIntToStrBuf(LPNode^.TotalMemoryUsage div LPNode^.InstanceCount, LPMsg, LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
-            LPMsg := AppendStringToBuffer(AverageSizeTrailingText, LPMsg, Length(AverageSizeTrailingText), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+            LPMsg := NativeUIntToStrBuf(LPNode^.InstanceCount, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+            LPMsg := AppendStringToBuffer(AverageSizeLeadText, LPMsg, Length(AverageSizeLeadText), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+            LPMsg := NativeUIntToStrBuf(LPNode^.TotalMemoryUsage div LPNode^.InstanceCount, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+            LPMsg := AppendStringToBuffer(AverageSizeTrailingText, LPMsg, Length(AverageSizeTrailingText), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
             {Flush the buffer?}
             LUMsg := NativeUInt(LPMsg);
             LUBuf := NativeUInt(@LMsgBuffer);
             if LUMsg > LUBuf then
             begin
-              LBufferSpaceUsed := LUMsg - LUBuf;
+              LBufferSpaceUsed := Cardinal(LUMsg - LUBuf);
               if LBufferSpaceUsed > (MsgBufferSize - MaxLineLength) then
               begin
                 LBytesWritten := 0;
@@ -18268,14 +18273,14 @@ begin
           end;
           if AAdditionalDetails <> '' then
           begin
-            LPMsg := AppendStringToBuffer(LogStateAdditionalInfoMsg, LPMsg, Length(LogStateAdditionalInfoMsg), LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr));
+            LPMsg := AppendStringToBuffer(LogStateAdditionalInfoMsg, LPMsg, Length(LogStateAdditionalInfoMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           end;
           {Flush any remaining bytes}
           LUMsg := NativeUInt(LPMsg);
           LUBuf := NativeUInt(@LMsgBuffer);
           if LUMsg > LUBuf then
           begin
-            LBufferSpaceUsed :=  LUMsg - LUBuf;
+            LBufferSpaceUsed := Cardinal(LUMsg - LUBuf);
             WriteFile(LFileHandle, LMsgBuffer, LBufferSpaceUsed, LBytesWritten, nil);
           end;
           {Write the additional info}
@@ -18439,13 +18444,13 @@ var
     Dec(LSmallBlockSize, FullDebugBlockOverhead);
   {$ENDIF}
     {Get the block type index}
-    LBlockTypeIndex := (UIntPtr(APSmallBlockPool^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
+    LBlockTypeIndex := Cardinal((UIntPtr(APSmallBlockPool^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
 {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
       shr SmallBlockTypeRecSizePowerOf2
 {$ELSE}
       div SmallBlockTypeRecSize
 {$ENDIF}
-    ;
+    );
     LPLeakedClasses := @LSmallBlockLeaks[LBlockTypeIndex];
     {Get the first and last pointer for the pool}
     LCurPtr := nil;
@@ -18726,7 +18731,7 @@ begin
             {Need to add the header?}
             if not LSmallLeakHeaderAdded then
             begin
-              LMsgPtr := AppendStringToBuffer(SmallLeakDetail, LMsgPtr, Length(SmallLeakDetail), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+              LMsgPtr := AppendStringToBuffer(SmallLeakDetail, LMsgPtr, Length(SmallLeakDetail), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               LSmallLeakHeaderAdded := True;
             end;
             {Need to add the size header?}
@@ -18736,15 +18741,15 @@ begin
               Inc(LMsgPtr);
               LMsgPtr^ := #10;
               Inc(LMsgPtr);
-              LMsgPtr := NativeUIntToStrBuf(LPreviousBlockSize + 1, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+              LMsgPtr := NativeUIntToStrBuf(LPreviousBlockSize + 1, LMsgPtr, Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               LMsgPtr^ := ' ';
               Inc(LMsgPtr);
               LMsgPtr^ := '-';
               Inc(LMsgPtr);
               LMsgPtr^ := ' ';
               Inc(LMsgPtr);
-              LMsgPtr := NativeUIntToStrBuf(LThisBlockSize, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
-              LMsgPtr := AppendStringToBuffer(BytesMessage, LMsgPtr, Length(BytesMessage), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+              LMsgPtr := NativeUIntToStrBuf(LThisBlockSize, LMsgPtr, Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
+              LMsgPtr := AppendStringToBuffer(BytesMessage, LMsgPtr, Length(BytesMessage), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               LBlockSizeHeaderAdded := True;
             end
             else
@@ -18759,17 +18764,17 @@ begin
               {Unknown}
               0:
               begin
-                LMsgPtr := AppendStringToBuffer(UnknownClassNameMsg, LMsgPtr, Length(UnknownClassNameMsg), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+                LMsgPtr := AppendStringToBuffer(UnknownClassNameMsg, LMsgPtr, Length(UnknownClassNameMsg), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               end;
               {AnsiString}
               1:
               begin
-                LMsgPtr := AppendStringToBuffer(AnsiStringBlockMessage, LMsgPtr, Length(AnsiStringBlockMessage), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+                LMsgPtr := AppendStringToBuffer(AnsiStringBlockMessage, LMsgPtr, Length(AnsiStringBlockMessage), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               end;
               {UnicodeString}
               2:
               begin
-                LMsgPtr := AppendStringToBuffer(UnicodeStringBlockMessage, LMsgPtr, Length(UnicodeStringBlockMessage), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+                LMsgPtr := AppendStringToBuffer(UnicodeStringBlockMessage, LMsgPtr, Length(UnicodeStringBlockMessage), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
               end;
               {Classes}
             else
@@ -18788,7 +18793,7 @@ begin
                 else
                 begin
                 {$ENDIF}
-                  LMsgPtr := AppendClassNameToBuffer(LSmallBlockLeaks[LBlockTypeInd][LClassInd].ClassPointer, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+                  LMsgPtr := AppendClassNameToBuffer(LSmallBlockLeaks[LBlockTypeInd][LClassInd].ClassPointer, LMsgPtr, Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
                 {$IFDEF CheckCppObjectTypeEnabled}
                 end;
                 {$ENDIF}
@@ -18801,7 +18806,7 @@ begin
             Inc(LMsgPtr);
             LMsgPtr^ := ' ';
             Inc(LMsgPtr);
-            LMsgPtr := NativeUIntToStrBuf(LSmallBlockLeaks[LBlockTypeInd][LClassInd].NumLeaks, LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+            LMsgPtr := NativeUIntToStrBuf(LSmallBlockLeaks[LBlockTypeInd][LClassInd].NumLeaks, LMsgPtr, Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
           end;
         end;
         LPreviousBlockSize := LThisBlockSize;
@@ -18822,7 +18827,7 @@ begin
           Inc(LMsgPtr);
         end;
         {Add the medium/large block leak message}
-        LMsgPtr := AppendStringToBuffer(LargeLeakDetail, LMsgPtr, Length(LargeLeakDetail), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+        LMsgPtr := AppendStringToBuffer(LargeLeakDetail, LMsgPtr, Length(LargeLeakDetail), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
         {List all the blocks}
         for LBlockInd := 0 to LNumMediumAndLargeLeaks - 1 do
         begin
@@ -18833,7 +18838,7 @@ begin
             LMsgPtr^ :=  ' ';
             Inc(LMsgPtr);
           end;
-          LMsgPtr := NativeUIntToStrBuf(LMediumAndLargeBlockLeaks[LBlockInd], LMsgPtr, LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+          LMsgPtr := NativeUIntToStrBuf(LMediumAndLargeBlockLeaks[LBlockInd], LMsgPtr, Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
           {Is there still space in the message buffer? Reserve space for the
            message footer.}
           if LMsgPtr > @LLeakMessage[High(LLeakMessage) - MaxFileNameLengthDouble] then
@@ -18842,12 +18847,12 @@ begin
       end;
   {$IFDEF LogErrorsToFile}
        {Set the message footer}
-        LMsgPtr := AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+        LMsgPtr := AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
         {Append the message to the memory errors file}
         AppendEventLog(@LLeakMessage[0], UIntPtr(LMsgPtr) - UIntPtr(@LLeakMessage[1]));
   {$ELSE}
       {Set the message footer}
-      AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr));
+      AppendStringToBuffer(LeakMessageFooter, LMsgPtr, Length(LeakMessageFooter), Cardinal(LInitialSize-NativeUInt(LMsgPtr-LPInitialPtr)));
   {$ENDIF}
   {$IFDEF UseOutputDebugString}
       OutputDebugStringA(LLeakMessage);
@@ -18932,17 +18937,17 @@ begin
       if (LMediumBlockHeader and IsFreeBlockFlag) = 0 then
       begin
         {Get the block size}
-        LMediumBlockSize := LMediumBlockHeader and DropMediumAndLargeFlagsMask;
+        LMediumBlockSize := Cardinal(LMediumBlockHeader and DropMediumAndLargeFlagsMask);
         if (LMediumBlockHeader and IsSmallBlockPoolInUseFlag) <> 0 then
         begin
           {Get the block type index}
-          LBlockTypeIndex := (UIntPtr(PSmallBlockPoolHeader(LPMediumBlock)^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
+          LBlockTypeIndex := Cardinal((UIntPtr(PSmallBlockPoolHeader(LPMediumBlock)^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
     {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
           shr SmallBlockTypeRecSizePowerOf2
     {$ELSE}
           div SmallBlockTypeRecSize
     {$ENDIF}
-          ;
+          );
           {Subtract from medium block usage}
           Dec(AMemoryManagerState.ReservedMediumBlockAddressSpace, LMediumBlockSize);
           {Add it to the reserved space for the block size}
@@ -19255,13 +19260,13 @@ begin
         if (LMediumBlockHeader and IsSmallBlockPoolInUseFlag) <> 0 then
         begin
           {Get the block type index}
-          LBlockTypeIndex := (UIntPtr(PSmallBlockPoolHeader(LPMediumBlock)^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
+          LBlockTypeIndex := Cardinal((UIntPtr(PSmallBlockPoolHeader(LPMediumBlock)^.BlockType) - UIntPtr(@SmallBlockTypes[0]))
     {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
           shr SmallBlockTypeRecSizePowerOf2
     {$ELSE}
           div SmallBlockTypeRecSize
     {$ENDIF}
-          ;
+          );
           {Get the usage in the block}
           LSmallBlockUsage := PSmallBlockPoolHeader(LPMediumBlock)^.BlocksInUse
             * SmallBlockTypes[LBlockTypeIndex].BlockSize;
@@ -20547,12 +20552,12 @@ ENDQUOTE}
     SmallBlockTypes[LInd].PreviousPartiallyFreePool := LPSmallBlockPoolHeader;
     SmallBlockTypes[LInd].NextPartiallyFreePool := LPSmallBlockPoolHeader;
     {Set the block size to block type index translation table}
-    for LSizeInd := (LPreviousBlockSize div SmallBlockGranularity) to (NativeUInt(SmallBlockTypes[LInd].BlockSize - 1) shr SmallBlockGranularityPowerOf2) do
+    for LSizeInd := (LPreviousBlockSize div SmallBlockGranularity) to Cardinal(NativeUInt(SmallBlockTypes[LInd].BlockSize - 1) shr SmallBlockGranularityPowerOf2) do
     begin
    {$IFDEF AllocSize2SmallBlockTypesPrecomputedOffsets}
       AllocSz2SmlBlkTypOfsDivSclFctr[LSizeInd] := LInd shl (SmallBlockTypeRecSizePowerOf2 - MaximumCpuScaleFactorPowerOf2);
    {$ELSE}
-      AllocSize2SmallBlockTypesIdx[LSizeInd] := LInd;
+      AllocSize2SmallBlockTypesIdx[LSizeInd] := Byte(LInd);
    {$ENDIF}
     end;
     {Cannot sequential feed yet: Ensure that the next address is greater than
@@ -20561,16 +20566,16 @@ ENDQUOTE}
     SmallBlockTypes[LInd].NextSequentialFeedBlockAddress := Pointer(1);
     {Get the mask to use for finding a medium block suitable for a block pool}
     LMinimumPoolSize :=
-      ((SmallBlockTypes[LInd].BlockSize * MinimumSmallBlocksPerPool
+      Cardinal(((SmallBlockTypes[LInd].BlockSize * MinimumSmallBlocksPerPool
         + SmallBlockPoolHeaderSize + MediumBlockGranularity - 1 - MediumBlockSizeOffset)
-      and MediumBlockGranularityMask) + MediumBlockSizeOffset;
+      and MediumBlockGranularityMask) + MediumBlockSizeOffset);
     if LMinimumPoolSize < MinimumMediumBlockSize then
     begin
       LMinimumPoolSize := MinimumMediumBlockSize;
     end;
     {Get the closest group number for the minimum pool size}
-    LGroupNumber := (LMinimumPoolSize - MinimumMediumBlockSize + MediumBlockBinsPerGroup * MediumBlockGranularity div 2)
-      shr (MediumBlockBinsPerGroupPowerOf2 + MediumBlockGranularityPowerOf2);
+    LGroupNumber := Cardinal((LMinimumPoolSize - MinimumMediumBlockSize + MediumBlockBinsPerGroup * MediumBlockGranularity div 2)
+      shr (MediumBlockBinsPerGroupPowerOf2 + MediumBlockGranularityPowerOf2));
     {Too large?}
     if LGroupNumber > 7 then
     begin
@@ -20578,14 +20583,14 @@ ENDQUOTE}
     end;
 
     {Set the bitmap}
-    LByte := Byte(UnsignedBit) shl LGroupNumber;
+    LByte := Byte(Byte(UnsignedBit) shl LGroupNumber);
     SmallBlockTypes[LInd].AllowedGroupsForBlockPoolBitmap := NegByteMaskBit(LByte);
     {Set the minimum pool size}
-    SmallBlockTypes[LInd].MinimumBlockPoolSize := MinimumMediumBlockSize + (LGroupNumber shl (MediumBlockGranularityPowerOf2 + MediumBlockBinsPerGroupPowerOf2));
+    SmallBlockTypes[LInd].MinimumBlockPoolSize := Word(MinimumMediumBlockSize + (LGroupNumber shl (MediumBlockGranularityPowerOf2 + MediumBlockBinsPerGroupPowerOf2)));
     {Get the optimal block pool size}
-    LOptimalPoolSize := ((SmallBlockTypes[LInd].BlockSize * TargetSmallBlocksPerPool
+    LOptimalPoolSize := Cardinal(((SmallBlockTypes[LInd].BlockSize * TargetSmallBlocksPerPool
         + SmallBlockPoolHeaderSize + MediumBlockGranularity - 1 - MediumBlockSizeOffset)
-      and MediumBlockGranularityMask) + MediumBlockSizeOffset;
+      and MediumBlockGranularityMask) + MediumBlockSizeOffset);
     {Limit the optimal pool size to within range}
     if LOptimalPoolSize < OptimalSmallBlockPoolSizeLowerLimit then
     begin
@@ -20600,7 +20605,7 @@ ENDQUOTE}
     {Recalculate the optimal pool size to minimize wastage due to a partial
      last block.}
     SmallBlockTypes[LInd].OptimalBlockPoolSize :=
-      ((LBlocksPerPool * SmallBlockTypes[LInd].BlockSize + SmallBlockPoolHeaderSize + MediumBlockGranularity - 1 - MediumBlockSizeOffset) and MediumBlockGranularityMask) + MediumBlockSizeOffset;
+      Word(((LBlocksPerPool * SmallBlockTypes[LInd].BlockSize + SmallBlockPoolHeaderSize + MediumBlockGranularity - 1 - MediumBlockSizeOffset) and MediumBlockGranularityMask) + MediumBlockSizeOffset);
 {$IFDEF UseReleaseStack}
     for LSlot := 0 to NumStacksPerBlock - 1 do
       SmallBlockTypes[LInd].ReleaseStack[LSlot].Initialize(ReleaseStackSize, SizeOf(Pointer));
@@ -21316,7 +21321,7 @@ var
   W: Word;
 begin
   W := FastMMCpuFeaturesB;
-  Result := (W shl 8) or FastMMCpuFeaturesA;
+  Result := Word((W shl 8) or FastMMCpuFeaturesA);
 end;
 
 function GetFastMMCpuFeaturesA: Byte;
