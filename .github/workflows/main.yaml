@@ -290,6 +290,23 @@ jobs:
           fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
           ./SoftInvalidFreeMemTest
 
+      # SoftInvalidFreeMem + AlwaysClearFreedMemory. On Linux only Finding 5
+      # (medium-block FillChar guard, PR #61) runs; Finding 4 is MSWINDOWS-only.
+      # ClearSmallAndMediumBlocksInFreeMem is enabled by AlwaysClearFreedMemory.
+      - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, ASM, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dAlwaysClearFreedMemory -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
+          ./SoftInvalidFreeMemTest
+
+      - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, Pure Pascal, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dAlwaysClearFreedMemory -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
+          ./SoftInvalidFreeMemTest
+
       # =========================================================================
       # Overflow and Range Check Tests - Linux
       # Verify that normal allocator operations work under strict checking.
@@ -772,6 +789,39 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      # SoftInvalidFreeMem + AlwaysClearFreedMemory variants. Exercise the
+      # ClearSmall / ClearMedium FillChar guard ordering (issue #39 findings
+      # 4 and 5, PRs #60 / #61). These code paths only compile when
+      # ClearSmallAndMediumBlocksInFreeMem is active. Covers 32-bit ASM,
+      # 64-bit ASM, and Pure Pascal paths.
+      - name: Compile and run SoftInvalidFreeMemTest 64-bit (ASM, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 64-bit (Pure Pascal, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dAlwaysClearFreedMemory', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 32-bit (ASM, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dAlwaysClearFreedMemory', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
+          & '.\SoftInvalidFreeMemTest.exe'
+
+      - name: Compile and run SoftInvalidFreeMemTest 32-bit (Pure Pascal, AlwaysClearFreedMemory)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dAlwaysClearFreedMemory', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'SoftInvalidFreeMemTest.dpr')
           & '.\SoftInvalidFreeMemTest.exe'
 
       # =========================================================================
