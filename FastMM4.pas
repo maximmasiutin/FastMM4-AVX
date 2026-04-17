@@ -19253,7 +19253,7 @@ begin
       {Get the block header}
       LMediumBlockHeader := PNativeUInt(PByte(LPMediumBlock) - BlockHeaderSize)^;
       {Get the block size}
-      LMediumBlockSize := LMediumBlockHeader and DropMediumAndLargeFlagsMask;
+      LMediumBlockSize := Cardinal(LMediumBlockHeader and DropMediumAndLargeFlagsMask);
       {Is the block in use?}
       if (LMediumBlockHeader and IsFreeBlockFlag) = 0 then
       begin
