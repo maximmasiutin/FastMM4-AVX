@@ -1581,6 +1581,15 @@ interface
   {$ENDIF}
 {$ENDIF}
 
+{Delphi on Linux finalizes System.Classes (pulled in via System.SyncObjs) after
+ FastMM, producing late FreeMem/GetMem calls into a torn-down allocator. Same
+ QC#14070 family as BCB. See issue #55. Unlike the BCB branch above, we do NOT
+ also undef EnableMemoryLeakReporting: BCB undefs it because of the IDE DLL
+ unload path, which does not apply on Linux. Shutdown leak reporting via
+ CheckBlocksOnShutdown runs independently of NeverUninstall and is still
+ desired on Linux Delphi; do not "unify" these two auto-define blocks.}
+{$IFDEF LINUX}{$IFNDEF FPC}{$DEFINE NeverUninstall}{$ENDIF}{$ENDIF}
+
 {Stack tracer is needed for LogLockContention and for FullDebugMode.}
 {$undef _StackTracer}
 {$undef _EventLog}
@@ -21140,6 +21149,7 @@ begin
 {$ENDIF}
     end;
 
+{$IFNDEF NeverUninstall}
   {$IFDEF MediumBlocksLockedCriticalSection}
   MediumBlocksLocked := CLockByteFinished;
   {$IFDEF fpc}DoneCriticalSection{$ELSE}DeleteCriticalSection{$ENDIF}(MediumBlocksLockedCS);
@@ -21163,7 +21173,8 @@ begin
   begin
     SmallBlockTypes[LInd].SmallBlockTypeLocked := CLockByteFinished;
   end;
-  {$ENDIF}
+  {$ENDIF SmallBlocksLockedCriticalSection}
+{$ENDIF NeverUninstall}
 
   end;
 end;
