@@ -12856,7 +12856,7 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
   jnz @DontFreeLargeBlock
   {Large-block foreign pointer guard: size non-zero, aligned to
    LargeBlockGranularity, base page-aligned. Mirrors the Pascal path
-   guard at FastMM4.pas:12213-12232. Without this, FreeLargeBlock would
+   guard at FastMM4.pas:12260-12268. Without this, FreeLargeBlock would
    read the large-block linked-list header from an attacker-influenced
    address and call VirtualFree on a non-VirtualAlloc pointer.
    ecx holds a copy of APointer, no longer live here, so use it as a
@@ -13549,7 +13549,7 @@ but we don't need them at this point}
   jnz @DoubleFreeDetected
   {Large-block foreign pointer guard: size non-zero, aligned to
    LargeBlockGranularity, base page-aligned. Mirrors the Pascal path
-   guard at FastMM4.pas:12213-12232. Without this, FreeLargeBlock would
+   guard at FastMM4.pas:12260-12268. Without this, FreeLargeBlock would
    read the large-block linked-list header from an attacker-influenced
    address and call VirtualFree on a non-VirtualAlloc pointer. rax is
    volatile in Win64 ABI so it can be used as scratch without save.
