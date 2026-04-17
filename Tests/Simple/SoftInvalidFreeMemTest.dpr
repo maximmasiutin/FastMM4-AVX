@@ -733,8 +733,8 @@ begin
   FillChar(Q^, 64, $A5);
   try
     { Header = address of Q (>= $10000, low 3 bits clear because HeapAlloc
-      returns 16-byte aligned addresses). Bypasses the pool-pointer guard
-      but has an invalid BlockType when the ASM reads [Q + BlockType_offset]. }
+      returns at least 8-byte aligned addresses). Bypasses the pool-pointer
+      guard but has an invalid BlockType when the ASM reads [Q + BlockType_offset]. }
     WriteFakeHeader(P, NativeUInt(Q));
     Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
     case Outcome of
