@@ -290,9 +290,9 @@ jobs:
           fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dDontUseASMVersion -dIgnoreMemoryAllocatedBefore -O4 SoftInvalidFreeMemTest.dpr
           ./SoftInvalidFreeMemTest
 
-      # SoftInvalidFreeMem + AlwaysClearFreedMemory. Exercises the ClearSmall
-      # and ClearMedium FillChar guard ordering (findings 4 and 5, PRs #60/#61)
-      # which are only compiled when ClearSmallAndMediumBlocksInFreeMem is on.
+      # SoftInvalidFreeMem + AlwaysClearFreedMemory. On Linux only Finding 5
+      # (medium-block FillChar guard, PR #61) runs; Finding 4 is MSWINDOWS-only.
+      # ClearSmallAndMediumBlocksInFreeMem is enabled by AlwaysClearFreedMemory.
       - name: Compile and run SoftInvalidFreeMemTest (Linux 64-bit, ASM, AlwaysClearFreedMemory)
         timeout-minutes: 2
         run: |

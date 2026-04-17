@@ -407,14 +407,14 @@ end;
 // =============================================================================
 // Controlled exploit-shape vectors for issue #39 findings 1-5 (PRs #60-#64).
 //
-// Each vector constructs a guarded region (writable page + PAGE_NOACCESS /
-// PROT_NONE guard page), places a user pointer P at offset 8 so the fake
-// header at P-8 lives in the writable page, writes a specific header value
-// that triggers one finding's pre-patch failure mode, then calls FreeMem or
-// ReallocMem. On patched code the guard fires and returns 0/nil without
-// touching the guard page. On unpatched code FreeMem/ReallocMem would read
-// or write beyond the writable page (AV) or dereference an invalid pool /
-// BlockType pointer (AV) or execute an unbounded FillChar.
+// Each vector constructs a guarded region (writable page + decommitted /
+// PROT_NONE guard page), places a user pointer P so the fake header at
+// P-SizeOf(Pointer) lives in the writable page, writes a specific header
+// value that triggers one finding's pre-patch failure mode, then calls
+// FreeMem or ReallocMem. On patched code the guard fires and returns 0/nil
+// without touching the guard page. On unpatched code FreeMem/ReallocMem
+// would read or write beyond the writable page (AV) or dereference an
+// invalid pool / BlockType pointer (AV) or execute an unbounded FillChar.
 //
 // These tests are deterministic: the header is caller-controlled, not a
 // function of CRT heap metadata. They cover the 32-bit ASM, 64-bit ASM, and
@@ -430,7 +430,7 @@ end;
 // =============================================================================
 
 const
-  GUARD_REGION_SIZE    = $2000; { 8KB writable + 4KB guard on Windows / 4KB + 4KB on Linux }
+  GUARD_REGION_SIZE    = $2000; { split in half: 4KB writable + 4KB guard on both Windows and Linux }
   TRIPWIRE_PATTERN     = $5A;
   TRIPWIRE_CHECK_START = 16;    { skip header+pointer bytes }
   TRIPWIRE_CHECK_LEN   = 256;
@@ -449,10 +449,12 @@ begin
   Base := nil;
   P := nil;
 {$IFDEF MSWINDOWS}
-  { Allocate 2 pages: first PAGE_READWRITE (usable), second PAGE_NOACCESS (guard). }
+  { Allocate 2 pages: first PAGE_READWRITE (usable), second decommitted.
+    Decommitted pages raise an AV on access, which is the property we need
+    to detect unbounded FillChar. They are not strictly PAGE_NOACCESS but
+    serve the same purpose for this test. }
   Region := VirtualAlloc(nil, GUARD_REGION_SIZE, MEM_COMMIT, PAGE_READWRITE);
   if Region = nil then Exit;
-  { Protect the second page as no-access. }
   if not VirtualFree(Pointer(PByte(Region) + (GUARD_REGION_SIZE shr 1)),
                      GUARD_REGION_SIZE shr 1, $4000 { MEM_DECOMMIT }) then
   begin
@@ -519,14 +521,15 @@ end;
 // -----------------------------------------------------------------------------
 { Helper: invoke ReallocMem and classify the outcome.
   Under SoftInvalidFreeMem plus the PR #60-#64 guards, a foreign pointer is
-  rejected and FastReallocMem returns nil. FPC's RTL wrapper preserves the
-  caller's pointer when the memory manager returns nil (does not raise, does
-  not zero the var). So the observable outcome on patched code is:
-    NewP = OrigP (unchanged) AND no exception.
-  On unpatched code with a foreign pointer, the typical failure mode is
-  EAccessViolation from dereferencing invalid metadata; secondary failure
-  modes are returning a NEW valid pointer (treated foreign as valid) or
-  corruption-induced other exceptions. }
+  rejected and FastReallocMem returns nil. System.ReallocMem in FPC is
+  implemented as `p := MemoryManager.ReallocMem(p, size)` so in principle p
+  should become nil on rejection, but the observed behavior with FastMM
+  installed is that the caller's pointer is preserved (no raise, no zero).
+  Both outcomes - p = nil and p = OrigP - are accepted as rejection.
+  On unpatched code the typical failure mode is EAccessViolation from
+  dereferencing invalid metadata; secondary failure modes are returning a
+  NEW valid pointer (treated foreign as valid) or corruption-induced
+  other exceptions. }
 type
   TReallocOutcome = (roRejectedPreserved, roRejectedNil, roAccessViolation,
                      roSucceeded, roOtherException);
@@ -725,6 +728,9 @@ begin
     TestFail(TestName, 'HeapAlloc returned nil');
     Exit;
   end;
+  { Deterministic fill: ensures [Q + BlockType_offset] is reliably outside
+    SmallBlockTypes regardless of heap state. }
+  FillChar(Q^, 64, $A5);
   try
     { Header = address of Q (>= $10000, low 3 bits clear because HeapAlloc
       returns 16-byte aligned addresses). Bypasses the pool-pointer guard
@@ -751,10 +757,11 @@ end;
 
 // -----------------------------------------------------------------------------
 // Finding 5 (PR #60, PR-SEC-02): FreeMem ClearSmallAndMedium FillChar runs
-// before the medium-block size check. Header $00100002: IsMediumBlockFlag set,
-// masked size = $00100000 (1MB). Unpatched: FillChar(P, 1MB - 8, 0) writes
-// past the 4KB writable region into the guard page. Patched: size check
-// rejects before FillChar ($100000 > MediumBlockPoolSize - header size).
+// before the medium-block size check. Header $10000002: IsMediumBlockFlag set,
+// masked size = $10000000 (256MB), which vastly exceeds MediumBlockPoolSize
+// (~$13FFF0). Unpatched: FillChar(P, 256MB - 8, 0) writes past the 4KB
+// writable region into the guard page. Patched: size check rejects before
+// FillChar fires.
 //
 // This finding affects Pascal too (not only ASM), so the test must pass under
 // every config including PurePascal.
@@ -886,9 +893,10 @@ begin
     TestFail(TestName, 'HeapAlloc returned nil');
     Exit;
   end;
+  FillChar(Q2^, 64, $A5);
   try
     { Header = Q2 address (>= $10000, low bits clear). Bypasses pool-pointer
-      guard but Q2's first 8 bytes are garbage, read as SmallBlockType pointer. }
+      guard but Q2's first 8 bytes are $A5..., read as SmallBlockType pointer. }
     WriteFakeHeader(P, NativeUInt(Q2));
     NewP := P;
     Outcome := DoReallocMemAndClassify(NewP, P, 256, ExcClass);
