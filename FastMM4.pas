@@ -12378,9 +12378,13 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
 {$ENDIF}
 {$IFDEF ClearSmallAndMediumBlocksInFreeMem}
   {BlockType validated; safe to read BlockSize and clear the user region.
-   ebx holds the validated BlockType across the call (callee-saved in x86).}
+   ebx holds the validated BlockType across the call (callee-saved in x86).
+   EAX was clobbered by the SmallBlockTypes range/alignment check (lea/neg
+   etc.) so restore it from ECX (APointer) before the FillChar register
+   convention (EAX=Dest, EDX=Count, CL=Value).}
   push edx
   push ecx
+  mov eax, ecx
   movzx edx, TSmallBlockType(ebx).BlockSize
   sub edx, BlockHeaderSize
   xor ecx, ecx
