@@ -14217,8 +14217,37 @@ asm // FastReallocMemAssembler begin 32-bit
   test cl, IsFreeBlockFlag + IsMediumBlockFlag + IsLargeBlockFlag
   jnz @NotASmallBlock {test+jnz provides macro-op fusion}
   {-----------------------------------Small block-------------------------------------}
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign-pointer guards mirroring Pascal FastReallocMem at FastMM4.pas:
+   13814-13844. (1) Pool pointer (ecx, which equals the raw header for
+   small blocks) must be >= 64 KiB because anything below is unmapped on
+   Windows and Linux. (2) BlockType loaded from the pool header must fall
+   within the SmallBlockTypes array and be SmallBlockTypeRecSize-aligned.
+   Without these, the unvalidated TSmallBlockType[ebx].BlockSize read
+   could return an attacker-influenced length fed to the Move procedure.
+   Issue #39.}
+  cmp ecx, $10000
+  jb @InvalidSmallReallocPtr
+{$ENDIF}
   {Get the block type in ebx}
   mov ebx, TSmallBlockPoolHeader[ecx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  {Validate BlockType bounds and alignment. eax is clobbered by the range
+   check; restored to esi (APointer) afterwards so the in-place downsize
+   path at @Exit2Reg still returns the original pointer.}
+  lea eax, SmallBlockTypes
+  cmp ebx, eax
+  jb @InvalidSmallReallocPtr
+  lea eax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp ebx, eax
+  jae @InvalidSmallReallocPtr
+  lea eax, SmallBlockTypes
+  neg eax
+  add eax, ebx
+  test eax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallReallocPtr
+  mov eax, esi
+{$ENDIF}
   {Get the available size inside blocks of this type.}
   movzx ecx, TSmallBlockType[ebx].BlockSize
   sub ecx, 4
@@ -14757,6 +14786,16 @@ asm // FastReallocMemAssembler begin 32-bit
   jmp @FpcExitStrackRestored
 {$ENDIF}
 
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallReallocPtr:
+  {Foreign pointer detected in ASM FastReallocMem small-block path
+   (pool pointer below 64 KiB or BlockType outside SmallBlockTypes).
+   Return nil via the standard 2-register epilogue. Issue #39.}
+  xor eax, eax
+  jmp @Exit2Reg
+{$ENDIF}
+
 {Don't need alignment here since all instructions are just one-byte}
 @Exit4Reg: {return, restoring 4 registers from the stack and one local variable}
   pop ebp
@@ -14828,8 +14867,34 @@ asm
   test cl, IsFreeBlockFlag + IsMediumBlockFlag + IsLargeBlockFlag
   jnz @NotASmallBlock
   {-----------------------------------Small block-------------------------------------}
+{$IFDEF SoftInvalidFreeMem}
+  {Foreign-pointer guards mirroring Pascal FastReallocMem at FastMM4.pas:
+   13814-13844. (1) Pool pointer (rcx, which equals the raw header for
+   small blocks) must be >= 64 KiB because anything below is unmapped on
+   Windows and Linux. (2) BlockType loaded from the pool header must fall
+   within the SmallBlockTypes array and be SmallBlockTypeRecSize-aligned.
+   Without these, the unvalidated TSmallBlockType[rbx].BlockSize read
+   could return an attacker-influenced length fed to the Move procedure.
+   rax is volatile per Win64 ABI so it can serve as scratch without save.
+   Issue #39.}
+  cmp rcx, $10000
+  jb @InvalidSmallReallocPtr
+{$ENDIF}
   {Get the block type in rbx}
   mov rbx, TSmallBlockPoolHeader[rcx].BlockType
+{$IFDEF SoftInvalidFreeMem}
+  lea rax, SmallBlockTypes
+  cmp rbx, rax
+  jb @InvalidSmallReallocPtr
+  lea rax, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]
+  cmp rbx, rax
+  jae @InvalidSmallReallocPtr
+  lea rax, SmallBlockTypes
+  neg rax
+  add rax, rbx
+  test rax, (SmallBlockTypeRecSize - 1)
+  jnz @InvalidSmallReallocPtr
+{$ENDIF}
   {Get the available size inside blocks of this type.}
   movzx ecx, TSmallBlockType[rbx].BlockSize
   sub ecx, BlockHeaderSize
@@ -15363,6 +15428,15 @@ so ew save RCX and RDX}
   call ReallocateLargeBlock
   jmp @Done
   {-----------------------Invalid block------------------------------}
+{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+@InvalidSmallReallocPtr:
+  {Foreign pointer detected in ASM FastReallocMem small-block path
+   (pool pointer below 64 KiB or BlockType outside SmallBlockTypes).
+   Return nil via @Done. Issue #39.}
+  xor eax, eax
+  jmp @Done
+{$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @Error:
   xor eax, eax
