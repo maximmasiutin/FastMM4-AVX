@@ -1581,6 +1581,22 @@ interface
   {$ENDIF}
 {$ENDIF}
 
+{Delphi on Linux finalizes System.Classes (pulled in via System.SyncObjs) after
+ FastMM, producing late FreeMem/GetMem calls into a torn-down allocator. Same
+ QC#14070 family as BCB. See issue #55. Unlike the BCB branch above, we do NOT
+ also undef EnableMemoryLeakReporting: BCB undefs it because of the IDE DLL
+ unload path, which does not apply on Linux. Shutdown leak reporting via
+ CheckBlocksOnShutdown runs independently of NeverUninstall and is still
+ desired on Linux Delphi; do not "unify" these two auto-define blocks.
+
+ Library-unload safety: this auto-define targets applications (.dpr programs)
+ that run until process exit. In a shared library (.so) that gets dlclose()'d
+ before the host process ends, keeping FastMM installed would leave the host's
+ MemoryManager pointer referencing code/data being unmapped. Library authors
+ on Linux Delphi who need to uninstall FastMM on unload should define
+ DisableAutoNeverUninstallLinux in their project options.}
+{$IFDEF LINUX}{$IFNDEF FPC}{$IFNDEF DisableAutoNeverUninstallLinux}{$DEFINE NeverUninstall}{$ENDIF}{$ENDIF}{$ENDIF}
+
 {Stack tracer is needed for LogLockContention and for FullDebugMode.}
 {$undef _StackTracer}
 {$undef _EventLog}
@@ -21063,11 +21079,21 @@ begin
   {Restore the old memory manager if FastMM has been installed}
   if FastMMIsInstalled then
   begin
+  {Caveat: when NeverUninstall is defined together with UseReleaseStack
+   (e.g. Linux Delphi default, BCB IDE DLL, SoftInvalidFreeMem), the block
+   below is skipped: DestroyCleanupThread and CleanupReleaseStacks do not run.
+   This keeps release-stack buffers alive for late FreeMem pushes (their
+   Finalize would free the buffer), but it also means any blocks still sitting
+   on the release stacks at shutdown are not drained into the pool metadata
+   and so can be reported as leaks by CheckBlocksOnShutdown. For NeverUninstall
+   builds that want accurate leak reports, drain release stacks from
+   application code before process exit, or avoid combining UseReleaseStack
+   with EnableMemoryLeakReporting.}
+{$IFNDEF NeverUninstall}
 {$IFDEF UseReleaseStack}
   DestroyCleanupThread;
   CleanupReleaseStacks;
 {$ENDIF}
-{$IFNDEF NeverUninstall}
     {Uninstall FastMM}
     UninstallMemoryManager;
 {$ENDIF}
@@ -21140,6 +21166,7 @@ begin
 {$ENDIF}
     end;
 
+{$IFNDEF NeverUninstall}
   {$IFDEF MediumBlocksLockedCriticalSection}
   MediumBlocksLocked := CLockByteFinished;
   {$IFDEF fpc}DoneCriticalSection{$ELSE}DeleteCriticalSection{$ENDIF}(MediumBlocksLockedCS);
@@ -21163,7 +21190,8 @@ begin
   begin
     SmallBlockTypes[LInd].SmallBlockTypeLocked := CLockByteFinished;
   end;
-  {$ENDIF}
+  {$ENDIF SmallBlocksLockedCriticalSection}
+{$ENDIF NeverUninstall}
 
   end;
 end;
