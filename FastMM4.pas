@@ -20583,7 +20583,7 @@ ENDQUOTE}
     end;
 
     {Set the bitmap}
-    LByte := Byte(Byte(UnsignedBit) shl LGroupNumber);
+    LByte := Byte(UnsignedBit shl LGroupNumber);
     SmallBlockTypes[LInd].AllowedGroupsForBlockPoolBitmap := NegByteMaskBit(LByte);
     {Set the minimum pool size}
     SmallBlockTypes[LInd].MinimumBlockPoolSize := Word(MinimumMediumBlockSize + (LGroupNumber shl (MediumBlockGranularityPowerOf2 + MediumBlockBinsPerGroupPowerOf2)));
