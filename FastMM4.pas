@@ -21081,6 +21081,15 @@ begin
   begin
 {$IFNDEF NeverUninstall}
 {$IFDEF UseReleaseStack}
+  {Caveat: when NeverUninstall is also defined (e.g. Linux Delphi, BCB IDE DLL,
+   SoftInvalidFreeMem), both DestroyCleanupThread and CleanupReleaseStacks are
+   skipped. This keeps release-stack buffers alive for late FreeMem pushes
+   (their Finalize would free the buffer), but it also means any blocks still
+   sitting on the release stacks at shutdown are not drained into the pool
+   metadata and so can be reported as leaks by CheckBlocksOnShutdown. For
+   NeverUninstall builds that want accurate leak reports, drain release stacks
+   from application code before process exit, or avoid combining UseReleaseStack
+   with EnableMemoryLeakReporting.}
   DestroyCleanupThread;
   CleanupReleaseStacks;
 {$ENDIF}
