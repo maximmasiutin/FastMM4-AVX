@@ -9813,7 +9813,7 @@ begin
           {Is this bin now empty?}
           if LNextFreeBlock = LPMediumBin then
           begin
-            LShift := LBinNumber and (MediumBlockBinsPerGroup-1);
+            LShift := Byte(LBinNumber and (MediumBlockBinsPerGroup-1));
             LMask := not (Cardinal(UnsignedBit) shl LShift);
             {Flag this bin as empty}
             MediumBlockBinBitmaps[LBinGroupNumber] := MediumBlockBinBitmaps[LBinGroupNumber] and LMask;
@@ -10008,7 +10008,7 @@ begin
 
       {Calculate the bin group}
       LBinGroupNumber := LBinNumber shr MediumBlockBinsPerGroupPowerOf2;
-      LShift := LBinNumber and (MediumBlockBinsPerGroup-1);
+      LShift := Byte(LBinNumber and (MediumBlockBinsPerGroup-1));
       {Is there a suitable block inside this group?}
       LBinGroupMasked := MediumBlockBinBitmaps[LBinGroupNumber] and NegCardinalMaskBit(Cardinal(UnsignedBit) shl LShift);
       if LBinGroupMasked <> 0 then
@@ -18228,7 +18228,7 @@ begin
           LPMsg := AppendStringToBuffer(LogStateAllocatedMsg, LPMsg, Length(LogStateAllocatedMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           LPMsg := NativeUIntToStrBuf(LMemoryManagerUsageSummary.OverheadBytes shr 10, LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           LPMsg := AppendStringToBuffer(LogStateOverheadMsg, LPMsg, Length(LogStateOverheadMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
-          LPMsg := NativeUIntToStrBuf(Round(LMemoryManagerUsageSummary.EfficiencyPercentage), LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
+          LPMsg := NativeUIntToStrBuf(NativeUInt(Round(LMemoryManagerUsageSummary.EfficiencyPercentage)), LPMsg, Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           LPMsg := AppendStringToBuffer(LogStateEfficiencyMsg, LPMsg, Length(LogStateEfficiencyMsg), Cardinal(LInitialSize-NativeUInt(LPMsg-LPInitialMsgPtr)));
           {Log the allocation detail}
           for LInd := LPLogInfo^.NodeCount - 1 downto 0 do
@@ -20035,8 +20035,10 @@ var
   LPSmallBlockPoolHeader: PSmallBlockPoolHeader;
   LPSmallBlockType: PSmallBlockType;
 {$IFDEF Use_GetEnabledXStateFeatures_WindowsAPICall}
+{$IFDEF USE_CPUID}
   FGetEnabledXStateFeatures: TGetEnabledXStateFeatures;
   EnabledXStateFeatures: Int64;
+{$ENDIF}
 {$ENDIF}
 
 {$IFDEF USE_CPUID}
@@ -20571,7 +20573,7 @@ ENDQUOTE}
     for LSizeInd := (LPreviousBlockSize div SmallBlockGranularity) to Cardinal(NativeUInt(SmallBlockTypes[LInd].BlockSize - 1) shr SmallBlockGranularityPowerOf2) do
     begin
    {$IFDEF AllocSize2SmallBlockTypesPrecomputedOffsets}
-      AllocSz2SmlBlkTypOfsDivSclFctr[LSizeInd] := LInd shl (SmallBlockTypeRecSizePowerOf2 - MaximumCpuScaleFactorPowerOf2);
+      AllocSz2SmlBlkTypOfsDivSclFctr[LSizeInd] := Byte(LInd shl (SmallBlockTypeRecSizePowerOf2 - MaximumCpuScaleFactorPowerOf2));
    {$ELSE}
       AllocSize2SmallBlockTypesIdx[LSizeInd] := Byte(LInd);
    {$ENDIF}
@@ -21072,8 +21074,10 @@ end;
 
 procedure FinalizeMemoryManager;
 {$IFDEF SmallBlocksLockedCriticalSection}
+{$IFNDEF NeverUninstall}
 var
   LInd: Integer;
+{$ENDIF}
 {$ENDIF}
 begin
   {Restore the old memory manager if FastMM has been installed}
