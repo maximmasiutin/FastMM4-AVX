@@ -11908,6 +11908,9 @@ var
   LPSmallBlockType: PSmallBlockType;
   LOldFirstFreeBlock: Pointer;
   LBlockHeader: NativeUInt;
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
+  LBlockSize: NativeUInt;
+{$ENDIF}
 {$IFDEF LogLockContention}
   LDidSleep: Boolean;
   LStackTrace: TStackTrace;
@@ -12197,36 +12200,40 @@ begin
     {Is this a medium block or a large block?}
     if (LBlockHeader and (IsFreeBlockFlag or IsLargeBlockFlag)) = 0 then
     begin
+{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
       {Guard: validate medium block size BEFORE the ClearSmallAndMedium
        FillChar call. A foreign pointer (not allocated by FastMM) can have
        a garbage header whose masked size either underflows below
        BlockHeaderSize or exceeds the pool, causing FillChar to zero
-       arbitrary memory. FreeMediumBlock still carries a redundant check
-       for defense-in-depth. Issue #39.}
+       arbitrary memory. When clearing is disabled this extra pre-check is
+       skipped because FreeMediumBlock's internal bounds check runs before
+       the block dereferences its neighbours and suffices on its own.
+       Issue #39.}
       LBlockHeader := PNativeUInt(PByte(APointer) - BlockHeaderSize)^;
-      if ((LBlockHeader and DropMediumAndLargeFlagsMask) < MinimumMediumBlockSize) or
-         ((LBlockHeader and DropMediumAndLargeFlagsMask) > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
+      LBlockSize := LBlockHeader and DropMediumAndLargeFlagsMask;
+      if (LBlockSize < MinimumMediumBlockSize) or
+         (LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then
       begin
-{$IFDEF SoftInvalidFreeMem}
+  {$IFDEF SoftInvalidFreeMem}
         Result := 0;
-{$ELSE}
-  {$IFDEF BCB6OrDelphi7AndUp}
-        System.Error(reInvalidPtr);
   {$ELSE}
+    {$IFDEF BCB6OrDelphi7AndUp}
+        System.Error(reInvalidPtr);
+    {$ELSE}
         System.RunError(reInvalidPtr);
-  {$ENDIF}
+    {$ENDIF}
         Result := CFastFreeMemReturnValueError;
-{$ENDIF}
+  {$ENDIF}
       end
       else
       begin
-{$IFDEF ClearSmallAndMediumBlocksInFreeMem}
-        {Block size now validated; safe to clear before freeing.}
-        FillChar(APointer^,
-          (LBlockHeader and DropMediumAndLargeFlagsMask) - BlockHeaderSize, 0);
-{$ENDIF}
+        {Block size validated; safe to clear before freeing.}
+        FillChar(APointer^, LBlockSize - BlockHeaderSize, 0);
         Result := FreeMediumBlock(APointer);
       end;
+{$ELSE}
+      Result := FreeMediumBlock(APointer);
+{$ENDIF}
     end
     else
     begin
