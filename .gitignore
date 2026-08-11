@@ -55,6 +55,36 @@ FastMM4_AVX512_Linux.o
 libimpFastMM4.a
 
 # SonarQube scanner
-.scannerwork 
+.scannerwork
 
 fastmm4-avx-reports
+
+# FreePascal assembly listings
+*.s
+
+# Lazarus unit output directory
+/Tests/Advanced/lib/
+
+# Lazarus project files and backups of the Advanced test
+/Tests/Advanced/AdvancedTest.dbg
+/Tests/Advanced/AdvancedTest.lpi
+/Tests/Advanced/AdvancedTest.lps
+/Tests/Advanced/backup/
+
+# Simple test build artifacts
+/Tests/Simple/FullDebugModeTest.res
+/Tests/Simple/SoftInvalidFreeMemTest
+/Tests/Simple/SoftInvalidFreeMemTest.o
+libimpSoftInvalidFreeMemTest.a
+
+# SonarQube project configuration, kept in the reports repository
+/sonar-project.properties
+
+# FreePascal linker response files
+link*.res
+
+# Delphi Linux test project directory
+/Tests/DelphiLinux/
+
+# Local tooling metadata
+/.project/
