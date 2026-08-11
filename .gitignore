@@ -55,6 +55,35 @@ FastMM4_AVX512_Linux.o
 libimpFastMM4.a
 
 # SonarQube scanner
-.scannerwork 
+.scannerwork
 
 fastmm4-avx-reports
+
+# FreePascal assembly listing of the main unit. Named rather than matched by
+# extension, so that a hand-written GNU-style .s source stays visible.
+/FastMM4.s
+
+# FreePascal split debug info
+*.dbg
+
+# FreePascal linker response files, named with the process id
+link*.res
+
+# Lazarus and Delphi per-user session files
+*.lps
+*.dsv
+
+# Delphi Linux test project: everything is generated except the project files,
+# which are re-included below. A negation cannot be written against an excluded
+# directory, so the contents are excluded instead of the directory itself.
+/Tests/DelphiLinux/*
+!/Tests/DelphiLinux/*.dpr
+!/Tests/DelphiLinux/*.dproj
+!/Tests/DelphiLinux/*.lpi
+!/Tests/DelphiLinux/*.deployproj
+
+# SonarQube project configuration, kept in the reports repository
+/sonar-project.properties
+
+# Local tooling metadata
+/.project/

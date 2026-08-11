@@ -1,4 +1,9 @@
 SimpleTest.o
 SimpleTest
+SimpleTest.s
 PrintCpuFeatures.dproj
 PrintCpuFeatures.res
+FullDebugModeTest.res
+SoftInvalidFreeMemTest
+SoftInvalidFreeMemTest.o
+libimpSoftInvalidFreeMemTest.a
