@@ -73,14 +73,11 @@ link*.res
 *.lps
 *.dsv
 
-# Delphi Linux test project: everything is generated except the project files,
-# which are re-included below. A negation cannot be written against an excluded
-# directory, so the contents are excluded instead of the directory itself.
-/Tests/DelphiLinux/*
-!/Tests/DelphiLinux/*.dpr
-!/Tests/DelphiLinux/*.dproj
-!/Tests/DelphiLinux/*.lpi
-!/Tests/DelphiLinux/*.deployproj
+# Delphi Linux scratch project, deliberately not versioned. TestFastMM.dpr there
+# is an unmodified IDE console scaffold whose body is a Writeln and a TODO, so it
+# asserts nothing; committing it would advertise Delphi Linux coverage that does
+# not exist. Real coverage belongs in Tests/Simple as a .dpr driven from CI.
+/Tests/DelphiLinux/
 
 # SonarQube project configuration, kept in the reports repository
 /sonar-project.properties
