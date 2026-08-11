@@ -59,8 +59,11 @@ libimpFastMM4.a
 
 fastmm4-avx-reports
 
-# FreePascal assembly listings and split debug info
-*.s
+# FreePascal assembly listing of the main unit. Named rather than matched by
+# extension, so that a hand-written GNU-style .s source stays visible.
+/FastMM4.s
+
+# FreePascal split debug info
 *.dbg
 
 # FreePascal linker response files, named with the process id
