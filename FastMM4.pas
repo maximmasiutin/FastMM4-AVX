@@ -35,13 +35,13 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      there may be no benefit compared to the original FastMM4;
    - the number of iterations of "pause"-based spin-wait loops is 5000,
      before relinquishing to SwitchToThread();
-   - see https://stackoverflow.com/a/44916975 for more details on the
+   - see https://stackoverflow.com/a/44916975/6910868 for more details on the
      implementation of the "pause"-based spin-wait loops;
    - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
      then the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
-     see https://stackoverflow.com/a/44959764
+     see https://stackoverflow.com/a/44959764/6910868
      for discussion on releasing a lock;
      you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
@@ -99,7 +99,7 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
-     see https://stackoverflow.com/q/45112065
+     see https://stackoverflow.com/q/45112065/6910868
    - compare instructions + conditional jump instructions are put together
      to allow macro-op fusion (which happens since Core2 processors, when
      the first instruction is a CMP or TEST instruction and the second
@@ -3074,7 +3074,9 @@ const
   run on any of the 3 ALU execution ports, p0/p1/p5.  VXORPS can only run on p5.
   Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. Newer CPU
   doesn't have such a huge transition penalty, and VZEROUPPER is not needed,
-  moreover, it can make subsequent SSE code slower}
+  moreover, it can make subsequent SSE code slower.
+  On which transitions actually carry a penalty, and on VZEROUPPER as the way
+  out of a dirty upper state, see https://stackoverflow.com/a/43881748/6910868}
   {On ERMSB, see p. 3.7.6 of the
   Intel 64 and IA-32 Architectures Optimization Reference Manual}
 
@@ -3992,6 +3994,9 @@ asm
    jz   @NoWaitPKG
 
    // Start of Umonitor-related section
+   // The sequence below, including the re-read of the lock byte between arming
+   // the monitor and waiting on it, follows the worked umonitor/umwait spin-wait
+   // loop at https://stackoverflow.com/a/78095037/6910868
    mov  eax, cLockByteLocked
    push rcx
    push rdx
@@ -6868,7 +6873,14 @@ end;
 (see "Intel 64 and IA-32 Architectures Optimization Reference Manual,"
 Section 3.7.7, "Enhanced REP MOVSB and STOSB operation (ERMSB)").
 We first check the corresponding bit in the CPUID, and if it is supported,
-call this routine.}
+call this routine.
+
+The two constants below are what the measurements ask for rather than round
+numbers: a destination aligned by 64 bytes, and a length taken down to a
+multiple of 64 before the transfer. A misaligned destination costs an ERMSB
+copy up to 25 per cent against 5 per cent for a 128-bit AVX copy, so the
+alignment is worth the head copy that buys it, see
+https://stackoverflow.com/a/43837564/6910868}
 
 const
   cAlignErmsDestinationBits = 6;
@@ -19562,7 +19574,10 @@ begin
       if VirtualQuery(Pointer(LIndNUI * 65536), LMBI, SizeOf(LMBI)) = 0 then
       begin
         {VirtualQuery may fail for addresses >2GB if a large address space is
-         not enabled.}
+         not enabled: a 32-bit process is given a 2GB user address space by
+         default, and reaches beyond it only when the image is marked large
+         address aware, so the remainder of the map is reported as system
+         reserved. See https://stackoverflow.com/a/44863475/6910868}
         LCharToFill := AnsiChar(csSysReserved);
         FillChar(AMemoryMap[LIndNUI], 65536 - LIndNUI, LCharToFill);
         Break;
