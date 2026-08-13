@@ -160,7 +160,13 @@ suits our need. Although "xchg" has exactly the same latency and costs in terms
 of CPU cycles as "cmpxchg", it is just simpler way to do the lock that we need,
 and, according to the Occam's razor principle, simple things are better. If you
 wish to restore old functionality of FastMM4 version 4.992, disable this option,
-e.g. by defining "DontUseSimplifiedInterlockedExchangeByte" }
+e.g. by defining "DontUseSimplifiedInterlockedExchangeByte".
+
+Measured latencies support treating the locked forms as interchangeable in cost:
+"lock add" and "xchg [mem]" both come out at about 17 cycles on Haswell and on
+Kaby Lake, roughly five times a non-locked store, so choosing between locked
+instructions is not a latency decision, see
+https://stackoverflow.com/a/44959466/6910868 }
 
 {$define SimplifiedInterlockedExchangeByte}
 
@@ -178,7 +184,12 @@ working with the memory manager is the same or higher than the number of
 physical cores.
 Critical Sections or "pause"-based spin-wait loops implemented as
 "test, test-and-set" are much more CPU-friendly and have definitely lower
-latency than Sleep() or SwitchToThread().
+latency than Sleep() or SwitchToThread(). The sizes of that difference are
+what make the 5000 iterations worth spending: a Sleep(0) loop pays a context
+switch of 10000 cycles or more and a ring 3 to ring 0 transition of 1000 or
+more on each turn, where the "pause" instruction costs about 10 cycles, raised
+to as many as 140 on Skylake, see
+https://stackoverflow.com/a/44875567/6910868
 
 When these options are enabled, FastMM4-AVX checks:
  - whether the CPU supports SSE2 and thus the "pause" instruction, and
@@ -617,7 +628,10 @@ Combine it with the two options below for further fine-tuning.}
   instead of pause-based loop;
   however these instructions for FastMM synchronization are not as efficient
   as pause-based loop, so only enable it if your tests show clear benefit
-  in your scenarios }
+  in your scenarios.
+  A worked umonitor/umwait spin-wait loop, and how it stands in for a
+  pause-based test-test-and-set loop, is at
+  https://stackoverflow.com/a/78095037/6910868 }
 
   {.$define EnableWaitPKG}
 {$endif}
