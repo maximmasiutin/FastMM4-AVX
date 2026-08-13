@@ -250,13 +250,20 @@ be able to use efficient locking without inline assembly.}
 {.$define PurePascal}
 
 
-{Define the "EnableAsmCodeAlign" to allow using ".align" assembler
- directive for the 32-bit or 64-bit inline assembly.
+{Define the "EnableAsmCodeAlign" to allow using the align assembler directive
+ for the 32-bit or 64-bit inline assembly.
+
+ The two compilers spell that directive differently, and this unit emits
+ whichever the compiler in use accepts: FreePascal takes a bare "align 4" and
+ Delphi takes the dotted ".align 4". The "AsmAlNodot" symbol selects the bare
+ form and is defined for FreePascal only, so a sentence naming one spelling for
+ both compilers is describing neither of them.
+
  Delphi 32-bit or 64-bit compiler incorrectly encodes conditional jumps
  (used 6-byte instructions instead of just 2 bytes, so it prevents branch
  predictions. So for Embarcadero (former Borland) 32-bit or 64-bit
  Delphi, EnableAsmCodeAlign will have no effect. However, under FreePascal
- it turns on using the ".align".
+ it turns the alignment on, emitted there as "align".
 
  "ForceAsmCodeAlign" is honoured under FreePascal, and under Delphi only from
  XE2 onwards. On older Delphi it is a no-op rather than an override of the

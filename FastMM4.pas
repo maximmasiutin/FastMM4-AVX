@@ -1806,11 +1806,11 @@ of just one option: "Boolean short-circuit evaluation".}
      pseudo-instruction with the same meaning as the CODEALIGN n compiler
      directive, and CODEALIGN arrived in Delphi XE. Before that the assembler
      has nothing to emit: on Delphi 7, compiler version 15.0, ".align 4" is
-     rejected as
-     an inline assembler syntax error and a bare "align 4" as an undeclared
-     identifier, at every align site the 32-bit path reaches, so defining
-     ForceAsmCodeAlign there produced a unit that would not compile at all rather
-     than an aligned one. That is what issue 81 in this repository reported.
+     rejected as an inline assembler syntax error and a bare "align 4" as an
+     undeclared identifier, at every align site the 32-bit path reaches, so
+     defining ForceAsmCodeAlign there produced a unit that would not compile at
+     all rather than an aligned one. That is what issue 81 in this repository
+     reported.
 
      XE2AndUp is the same boundary the PasCodeAlign block above already uses to
      decide whether Delphi gets a CODEALIGN directive at all, so the assembler
