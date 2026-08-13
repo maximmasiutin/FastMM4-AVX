@@ -17065,7 +17065,10 @@ begin
    on its item array even when the list never allocated one. The header has to be
    left unread in that case: PByte(nil) - SizeOf(TFullDebugBlockHeader) is a wild
    address and the checksum would be read from it. FastFreeMem starts with the
-   same guard.}
+   same guard. The guard sits above the memory pool scan deliberately: freeing
+   nil touches no block, so a scan here can only report a corruption that the
+   preceding operation already had its own scan for, and the finalisation path
+   that reaches this guard frees nil repeatedly.}
   if APointer = nil then
   begin
     Result := 0;
