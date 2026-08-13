@@ -4255,7 +4255,13 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4.
+
+The trade that the plain store makes is worth stating where it is made. Other
+NUMA nodes learn of the release later than a locked instruction would tell
+them, and the release costs less on every core that performs it, so the plain
+store wins across the whole processor set wherever the release does not have
+to become visible at once. See https://stackoverflow.com/a/79993726/6910868 }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
