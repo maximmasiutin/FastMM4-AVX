@@ -1801,22 +1801,32 @@ of just one option: "Boolean short-circuit evaluation".}
     {$define AsmCodeAlign}
     {$define AsmAlNodot}
   {$ELSE}
-    {Deliberately not defined for Delphi, whose inline assembler has no align
-     directive to emit. Both spellings were tried on Delphi 7, compiler version
-     15.0: ".align 4" is rejected as an inline assembler syntax error and a bare
-     "align 4" as an undeclared identifier, at every align site in this unit that
-     the 32-bit code path reaches. So defining ForceAsmCodeAlign under Delphi
-     produced a unit that could not compile at all rather than an aligned one,
-     which is what issue 81 in this repository reported for Delphi 7 and what a
-     reader following FastMM4Options.inc was invited to do.
+    {Delphi gained an align directive part way through its life, so this is a
+     version test rather than a refusal. ".align n" is a documented asm
+     pseudo-instruction with the same meaning as the CODEALIGN n compiler
+     directive, and CODEALIGN arrived in Delphi XE. Before that the assembler
+     has nothing to emit: on Delphi 7, compiler version 15.0, ".align 4" is
+     rejected as
+     an inline assembler syntax error and a bare "align 4" as an undeclared
+     identifier, at every align site the 32-bit path reaches, so defining
+     ForceAsmCodeAlign there produced a unit that would not compile at all rather
+     than an aligned one. That is what issue 81 in this repository reported.
 
-     Nothing is lost by ignoring it here. Branch target alignment brings no
-     benefit under Delphi in the first place, because Delphi encodes conditional
-     jumps as 6-byte instructions where 2 bytes would do and the effect on branch
-     prediction outweighs the alignment, which is why EnableAsmCodeAlign has
-     never applied to Delphi either. A later Delphi whose assembler does accept
-     the directive is the place to widen this, with the spelling it accepts
-     verified on that compiler rather than assumed from this one.}
+     XE2AndUp is the same boundary the PasCodeAlign block above already uses to
+     decide whether Delphi gets a CODEALIGN directive at all, so the assembler
+     side now agrees with the Pascal side about which compilers have this feature
+     instead of contradicting it. It is one release later than the documentation
+     strictly requires, since the directive landed in XE; that release is left
+     out rather than given a version chain of its own, because XE2AndUp is
+     already computed here and a Delphi XE user can widen this on a compiler they
+     can run.
+
+     Note the spelling: Delphi takes the dotted form, so AsmAlNodot stays
+     FreePascal-only and Delphi reaches the dotted arm of every align site. That
+     is the arm already written there, so nothing else has to change.}
+    {$IFDEF XE2AndUp}
+      {$define AsmCodeAlign}
+    {$ENDIF}
   {$ENDIF}
 {$ENDIF}
 

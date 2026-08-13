@@ -258,12 +258,16 @@ be able to use efficient locking without inline assembly.}
  Delphi, EnableAsmCodeAlign will have no effect. However, under FreePascal
  it turns on using the ".align".
 
- "ForceAsmCodeAlign" applies under FreePascal only, and it is a no-op under
- Delphi rather than an override of the paragraph above. This is not a policy
- choice: the Delphi inline assembler has no align directive to emit. On Delphi 7
- ".align 4" is rejected as an inline assembler syntax error and a bare "align 4"
- as an undeclared identifier, so the define used to break the build instead of
- aligning anything. That was issue 81.
+ "ForceAsmCodeAlign" is honoured under FreePascal, and under Delphi only from
+ XE2 onwards. On older Delphi it is a no-op rather than an override of the
+ paragraph above, because the assembler there has no align directive to emit:
+ the ".align" pseudo-instruction and its CODEALIGN equivalent arrived in Delphi
+ XE, and on Delphi 7 ".align 4" is rejected as an inline assembler syntax error
+ while a bare "align 4" is an undeclared identifier. So on those compilers the
+ define used to break the build instead of aligning anything. That was issue 81.
+ Delphi XE itself is treated as not having it, one version more cautious than
+ the documentation requires, because XE2 is the version boundary this unit
+ already detects.
 
  To disable this option, define "DisableAsmCodeAlign",
  which affects both "EnableAsmCodeAlign" and "ForceAsmCodeAlign" }
