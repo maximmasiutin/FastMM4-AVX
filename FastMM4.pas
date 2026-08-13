@@ -7061,10 +7061,13 @@ asm
 {$IFNDEF fpc}
 {$IFDEF EnableFSRM}
   // Blocks of 65 up to cRepMovsSmallBlock bytes reach this test, and rep movsb
-  // is worth taking for them only where Fast Short REP MOV has removed its
-  // startup cost, which exists on 64 bit and not on 32 bit. Blocks of 64 bytes
-  // and less never arrive here at all: @SmallBlock above sent those straight to
-  // @Left64OrLess, so the test cannot decide anything about them.
+  // is worth taking for them only where Fast Short REP MOV has removed the
+  // startup cost that the rep prefix otherwise pays. The rep prefix pays that
+  // cost on both architectures; it is Fast Short REP MOV that is effective under
+  // 64 bit only, which is why the 32-bit routine above makes no such test and
+  // says so where it declines to. Blocks of 64 bytes and less never arrive here
+  // at all: @SmallBlock above sent those straight to @Left64OrLess, so the test
+  // cannot decide anything about them.
   push    rsi
   push    rdi
   call    GetFastMMCpuFeaturesA
