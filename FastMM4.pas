@@ -7096,6 +7096,10 @@ asm
   // Blocks of 64 bytes or less never arrive here at all: @SmallBlock above sent
   // those straight to @Left64OrLess, so the test cannot decide anything about
   // them.
+  // The startup cost is what makes the test worth its own branch: rep movsb
+  // starts at about 50 cycles for a string longer than nine bytes, where
+  // rep movsw, movsd and movsq start at 35 to 40, so at these sizes the setup
+  // dominates the copy. See https://stackoverflow.com/a/45123049/6910868
   push    rsi
   push    rdi
   call    GetFastMMCpuFeaturesA
