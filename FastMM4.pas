@@ -1643,6 +1643,11 @@ interface
 {$define EnableAVX512}
 {$ENDIF}
 
+{Define Disable32BitSSE to keep the plain fixed size move routines on a 32-bit
+ build that would otherwise get the SSE ones. The routines the two families
+ replace are the same, so this changes only which of them the allocator
+ installs, and it is what lets a test reach the plain family on a host whose
+ CPU has SSE. See Tests/Simple/FpuStackTest.dpr.}
 {$IFDEF 32BIT}
   {$IFDEF FPC}
     {$define 32BIT_SSE}
@@ -1650,6 +1655,9 @@ interface
   {$IFDEF XE2AndUp}
     {$define 32BIT_SSE}
   {$ENDIF}
+{$ENDIF}
+{$IFDEF Disable32BitSSE}
+{$undef 32BIT_SSE}
 {$ENDIF}
 
 {------------------------Compiler options for FastMM4------------------------}
