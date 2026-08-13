@@ -107,7 +107,12 @@ Version: 1.0.12 (5 March 2026)
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
-     see https://stackoverflow.com/q/45112065
+     see https://stackoverflow.com/q/45112065. EnableAsmCodeAlign applies under
+     FreePascal only. ForceAsmCodeAlign is honoured under FreePascal, and under
+     Delphi from XE2 onwards; on older Delphi it is a no-op rather than an
+     override, because that inline assembler has no align directive to emit.
+     The spelling differs by compiler: FreePascal takes a bare "align" and
+     Delphi takes the dotted ".align";
    - compare instructions + conditional jump instructions are put together
      to allow macro-op fusion (which happens since Core2 processors, when
      the first instruction is a CMP or TEST instruction and the second
