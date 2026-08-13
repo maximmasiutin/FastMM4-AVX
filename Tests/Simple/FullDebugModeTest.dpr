@@ -411,6 +411,38 @@ begin
   FreeMem(P, 256);
   Say('  ok    FreeMem with an explicit size returned');
 end;
+
+{The FreePascal runtime frees a nil pointer without filtering it out first, so
+ the allocator has to accept one. TFPSList.Destroy does exactly that at
+ finalisation, for a list that never allocated its item array. Under
+ FullDebugMode the free path read a block header from PByte(nil) minus the
+ header size, a wild address, and faulted while checksumming it.
+
+ A fault here takes the process down, so reaching the line after each call is
+ the check. The four shapes below are the ones the runtime can produce: the
+ plain free, the sized entry with a size and with zero, and a reallocation
+ from nil, which is the sibling guard in the reallocation path.}
+procedure TestFreeNilPointer;
+var
+  P: Pointer;
+begin
+  Say('freeing a nil pointer');
+  FreeMem(nil);
+  Check(True, 'FreeMem(nil) returned');
+  FreeMem(nil, 64);
+  Check(True, 'FreeMem(nil, 64) returned, which reaches the sized entry');
+  FreeMem(nil, 0);
+  Check(True, 'FreeMem(nil, 0) returned, which stops before the delegation');
+  P := nil;
+  ReallocMem(P, 128);
+  Check(P <> nil, 'ReallocMem from nil allocates instead of reading a header');
+  ReallocMem(P, 0);
+  Check(P = nil, 'ReallocMem to zero frees and clears the pointer');
+  P := GetMem(64);
+  PByte(P)^ := 42;
+  FreeMem(P);
+  Check(True, 'a real block still round trips after all of that');
+end;
 {$ENDIF}
 
 {$IFDEF FullDebugModeIsActive}
@@ -422,6 +454,12 @@ begin
   FullDebugModeScanMemoryPoolBeforeEveryOperation := True;
   try
     TestReallocateInPlace;
+  {$IFDEF FPC}
+    {The nil guard sits above the pool scan, so it is worth running once with
+     the scan switched on: that ordering was questioned in review, and this is
+     what settles it rather than an argument.}
+    TestFreeNilPointer;
+  {$ENDIF}
   finally
     FullDebugModeScanMemoryPoolBeforeEveryOperation := False;
   end;
@@ -554,6 +592,7 @@ begin
   TestManagedTypes;
 {$IFDEF FPC}
   TestFreePascalManagerEntries;
+  TestFreeNilPointer;
 {$ENDIF}
 {$IFDEF FullDebugModeIsActive}
   TestWithPoolScan;
