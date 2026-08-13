@@ -4255,7 +4255,31 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4.
+
+The plain store is chosen because it costs less and gives up nothing this
+unlock needs.
+
+On cost, Agner Fog puts a LOCK prefix at more than a hundred clock cycles in
+the general case, in the introduction to "Lists of instruction latencies,
+throughputs and micro-operation breakdowns", where the latency depends on cache
+organisation and may reach main memory. With the line already held in L1 the
+figure is far lower: 17.8 cycles measured on a Haswell-DT Core i5-4430 and 16.8
+on a Kaby Lake-S Core i7-7700K, against 5.0 and 5.6 on those same parts for the
+non-locking "add [mem], reg" the table uses as its baseline
+(see https://stackoverflow.com/a/44959466/6910868). A "mov" to the lock byte is a
+plain store, cheaper than that baseline again, and it is not in that table at
+all.
+
+On what the lock would have bought, the answer for this use is nothing. No core
+pushes a cache line to another, so a waiting core learns of either release only
+when its own load takes the line. Nor does either form get ahead of the stores
+of the critical section: x86 keeps stores in order, so a plain store to the
+lock byte becomes visible after them, and a locked instruction drains the store
+buffer before it completes, which puts it after them as well. What the locked
+form does buy is ordering for accesses that follow it, which an unlock does not
+need, and the Linux kernel releases a spinlock with a plain store for the same
+reason (see https://stackoverflow.com/a/79993726/6910868). }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
