@@ -256,8 +256,14 @@ be able to use efficient locking without inline assembly.}
  (used 6-byte instructions instead of just 2 bytes, so it prevents branch
  predictions. So for Embarcadero (former Borland) 32-bit or 64-bit
  Delphi, EnableAsmCodeAlign will have no effect. However, under FreePascal
- it turns on using the ".align". To force using it under Delphi, define
- "ForceAsmCodeAlign".
+ it turns on using the ".align".
+
+ "ForceAsmCodeAlign" applies under FreePascal only, and it is a no-op under
+ Delphi rather than an override of the paragraph above. This is not a policy
+ choice: the Delphi inline assembler has no align directive to emit. On Delphi 7
+ ".align 4" is rejected as an inline assembler syntax error and a bare "align 4"
+ as an undeclared identifier, so the define used to break the build instead of
+ aligning anything. That was issue 81.
 
  To disable this option, define "DisableAsmCodeAlign",
  which affects both "EnableAsmCodeAlign" and "ForceAsmCodeAlign" }
