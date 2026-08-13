@@ -40,13 +40,13 @@ Version: 1.0.12 (5 March 2026)
      there may be no benefit compared to the original FastMM4;
    - the number of iterations of "pause"-based spin-wait loops is 5000,
      before relinquishing to SwitchToThread();
-   - see https://stackoverflow.com/a/44916975 for more details on the
+   - see https://stackoverflow.com/a/44916975/6910868 for more details on the
      implementation of the "pause"-based spin-wait loops;
    - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
-     then the bus-locking "xchg" instruction to write into the synchronization
+     than the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
-     see https://stackoverflow.com/a/44959764
+     see https://stackoverflow.com/a/44959764/6910868
      for discussion on releasing a lock;
      you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
@@ -107,7 +107,7 @@ Version: 1.0.12 (5 March 2026)
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
-     see https://stackoverflow.com/q/45112065. EnableAsmCodeAlign applies under
+     see https://stackoverflow.com/q/45112065/6910868. EnableAsmCodeAlign applies under
      FreePascal only. ForceAsmCodeAlign is honoured under FreePascal, and under
      Delphi from XE2 onwards; on older Delphi it is a no-op rather than an
      override, because that inline assembler has no align directive to emit.
