@@ -3734,6 +3734,17 @@ const
   cLockByteFinished  = 113;
 
 // the spin-wait loop count for the "test, test-and-set" technique, details are in the comment section at the beginning of the file
+// The shape of that loop earns as much as this count does: the loop reads the
+// lock byte with a plain load and attempts the locked exchange only once that
+// load looks promising, which keeps a waiting core from driving locked
+// read-modify-writes at the line the writer needs exclusively.
+// This count is a number of PAUSE instructions and not an amount of time, and
+// the two are not related by a constant. Intel gives PAUSE about 10 cycles on
+// the microarchitectures before Skylake and as many as 140 on Skylake itself;
+// other Intel generations and AMD parts sit elsewhere again, so the same 5000
+// iterations are a different wait on every part this constant is compiled for.
+// Measure on the target before changing it.
+// See https://stackoverflow.com/a/79993745/6910868
   cPauseSpinWaitLoopCount = 5000;
   cUMWaitTime             = 7000000;
 
