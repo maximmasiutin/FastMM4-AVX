@@ -34,7 +34,7 @@
 ; zmm16 - zmm31 with non-VEX SSE code. By using these registers (zmm16 - zmm31)
 ; rather than zmm0-xmm15 we save us from calling "vzeroupper".
 ; Source:
-; https://stackoverflow.com/questions/43879935/avoiding-avx-sse-vex-transition-penalties/54587480#54587480
+; https://stackoverflow.com/a/54587480
 
 
 %define	EVEXR512N0	zmm31
@@ -293,7 +293,11 @@ MoveX32LpAvx512WithErms:
 	neg		rdx
 	jns		@MoveLast8Linux
 
-	cmp		rdx, -2048	; According to the Intel Manual, rep movsb outperforms AVX copy on blocks of 2048 bytes and above
+	cmp		rdx, -2048	; According to the Intel Manual, rep movsb outperforms AVX copy on blocks of 2048 bytes and above; the counter here already has the 8-byte tail removed, so this turns over at a block of 2056
+; Measurements on parts that have ERMSB but not Fast Short REP MOV put the
+; crossover where the manual does: rep movsb starts to beat other methods at
+; 256 bytes, but the clear benefit over an AVX copy only appears above 2048.
+; See https://stackoverflow.com/a/43837564/6910868
 	jg		@DontDoRepMovsbLinux
 
 	align		4
