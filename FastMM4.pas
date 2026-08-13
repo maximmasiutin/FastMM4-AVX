@@ -4255,7 +4255,25 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4.
+
+Two things decide the choice, and they pull the same way. The first is cost.
+Agner Fog puts a LOCK prefix at more than a hundred clock cycles in the general
+case, in the introduction to "Lists of instruction latencies, throughputs and
+micro-operation breakdowns", where the latency depends on cache organisation
+and may reach main memory; with the line already held in L1 the figure is far
+lower, 17.8 cycles measured on a Haswell-DT Core i5-4430 and 16.8 on a Kaby
+Lake-S Core i7-7700K, see https://stackoverflow.com/a/44959466/6910868
+The plain store costs neither figure.
+
+The second is what the locked form does not buy, which is faster propagation.
+No core pushes a cache line to another, so a waiting core learns of either
+release only when its own load takes the line. The one real difference is that
+a locked release drains the store buffer, so a plain store can become visible
+slightly later when earlier stores of the critical section are still queued
+ahead of it. That window is bounded by the buffer, the x86 ordering rules make
+the plain store safe on their own, and the Linux kernel releases a spinlock the
+same way. See https://stackoverflow.com/a/79993726/6910868 }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
