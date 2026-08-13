@@ -4255,7 +4255,20 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4.
+
+The plain store is the cheaper release, and cost is the whole of the trade.
+A LOCK prefix costs the releasing core upwards of a hundred clock cycles, by
+the measurements in Agner Fog's "Optimizing subroutines in assembly language",
+where the store costs a store. What the locked form does not buy is faster
+propagation: no core pushes a cache line to another, so a waiting core learns
+of either release when its own load takes the line. The one real difference is
+that a locked release drains the store buffer, so a plain store can become
+visible slightly later when earlier stores of the critical section are still
+queued ahead of it. That window is bounded by the buffer, while the hundred
+cycles are paid on every unlock, and the x86 ordering rules make the plain
+store safe, which is why the Linux kernel releases a spinlock the same way.
+See https://stackoverflow.com/a/79993726/6910868 }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
