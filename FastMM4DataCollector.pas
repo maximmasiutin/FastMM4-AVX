@@ -381,6 +381,12 @@ begin
       SwitchToThread;
   {$endif}
 {$else}
+      {Sleep(0) yields only to a ready thread of equal priority and returns at
+       once otherwise, while Sleep(1) gives up a whole timer tick. That is why
+       the retry sits between them, and why the alternative compiled in above,
+       SwitchToThread, behaves differently again: it yields to a ready thread on
+       any processor. The three are compared in
+       https://stackoverflow.com/a/44875696/6910868}
       Sleep(0);
       if LockCmpxchg8(False, True, @FLocked) = False then
         Break;
