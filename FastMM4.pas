@@ -7060,8 +7060,11 @@ asm
 
 {$IFNDEF fpc}
 {$IFDEF EnableFSRM}
-  // moves of 64 bytes or less are good only when we have fast short strings on 64 bit,
-  // but not on 32 bit
+  // Blocks of 65 up to cRepMovsSmallBlock bytes reach this test, and rep movsb
+  // is worth taking for them only where Fast Short REP MOV has removed its
+  // startup cost, which exists on 64 bit and not on 32 bit. Blocks of 64 bytes
+  // and less never arrive here at all: @SmallBlock above sent those straight to
+  // @Left64OrLess, so the test cannot decide anything about them.
   push    rsi
   push    rdi
   call    GetFastMMCpuFeaturesA
