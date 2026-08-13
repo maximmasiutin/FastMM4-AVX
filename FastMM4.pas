@@ -7096,6 +7096,13 @@ asm
   // Blocks of 64 bytes or less never arrive here at all: @SmallBlock above sent
   // those straight to @Left64OrLess, so the test cannot decide anything about
   // them.
+  // The size of the startup cost is what makes the Fast Short REP MOV test
+  // below worth its own branch. Intel gives the figures for Nehalem, where
+  // rep movsb starts at 50 cycles for a string longer than nine bytes, and
+  // rep movsw, rep movsd and rep movsq start at 35 to 40 cycles, so at these
+  // lengths the setup dominates the copy. Later processor generations may
+  // differ, and the figures are quoted here for the size of the effect rather
+  // than as constants. See https://stackoverflow.com/a/45123049/6910868
   push    rsi
   push    rdi
   call    GetFastMMCpuFeaturesA
