@@ -358,8 +358,13 @@ begin
     for I := 0 to 49 do
       if PByte(P)[I] <> Byte(I) then
         LOk := False;
-    FreeMem(P);
   end;
+  {Freed whichever way the checks went. Leaving the free inside the branch
+   above would leak the block on exactly the runs that already failed, and the
+   leak report would then arrive on top of the failure it did not cause. P is
+   nil only when a ReallocMem returned nil, and FreeMem(nil) is the case
+   TestFreeNilPointer covers.}
+  FreeMem(P);
   Check(LOk, '40 grows and a shrink keep the contents intact');
   Check(LStayed, 'at least one grow stayed in the same block, and '
     + IntToStr(LStayedCount) + ' of 40 did');
