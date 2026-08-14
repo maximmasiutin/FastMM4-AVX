@@ -333,11 +333,29 @@ jobs:
           fpc -B -Mdelphi -Tlinux -Px86_64 -Co -Cr -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -O4 AdvancedTest.dpr
           ./AdvancedTest
 
+  # The 3.2.2 leg is the required one. The snapshot leg builds the same sweep
+  # with the current Free Pascal trunk build, which is the only thing above
+  # 3.2.2 there is: no release has been published since 3.2.2 in 2021. It is
+  # advisory, because trunk changes daily and a bad snapshot is not a defect in
+  # this repository, and it is skipped on pull requests so it costs nothing on
+  # the blocking path.
   build_windows:
+    name: build_windows (${{ matrix.fpc }})
     runs-on: windows-latest
+    continue-on-error: ${{ matrix.fpc == 'snapshot' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # A job-level "if" cannot read the matrix context, so the snapshot leg
+        # is dropped from the matrix itself on a pull request rather than
+        # started and skipped.
+        fpc: ${{ github.event_name == 'pull_request' && fromJSON('["release"]') || fromJSON('["release", "snapshot"]') }}
     env:
-      fpc: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
       nasm: 'C:\Program Files\NASM\nasm.exe'
+      fpc_release: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
+      fpc_release_version: '3.2.2'
+      fpc_snapshot_branch: trunk
+      fpc_snapshot_root: 'C:\FPC-snapshot'
 
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -361,11 +379,93 @@ jobs:
         run: |
           & 'choco.exe' @('install', 'nasm', '-y')
 
+      # if: always() means this can run when the install itself failed and left
+      # no log, and a wildcard that matches nothing is an error rather than an
+      # empty result, so the absent case is silenced to keep the real failure
+      # legible.
       - name: Output the installation log
+        if: always()
         run: |
-          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" | ForEach-Object {
+          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "=== Log file: $($_.FullName) ==="
             Get-Content -Path $_.FullName
+          }
+
+      - name: Select the released compiler
+        if: matrix.fpc == 'release'
+        run: |
+          "fpc=$Env:fpc_release" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+
+      # The snapshot file names carry the build version and change daily, so
+      # there is no URL to pin and the listing has to be read for the current
+      # name. Two packages make one install: the win64 package is a
+      # cross-compiler overlay carrying ppcrossx64.exe and the x86_64-win64
+      # units but no driver, so the i386-win32 package is unpacked first for
+      # fpc.exe, ppc386.exe and the message files, and win64 is unpacked over
+      # it. The zips ship no binutils, so fpc.cfg gets a -FD line onto the
+      # 3.2.2 tool directory for windres, ar and gdb, which do not track the
+      # compiler version.
+      - name: Install the FreePascal snapshot beside the release
+        if: matrix.fpc == 'snapshot'
+        run: |
+          $base = "https://downloads.freepascal.org/fpc/snapshot/$Env:fpc_snapshot_branch"
+          $wanted = @(
+            @{ Url = "$base/i386-win32/"; Pattern = 'href="(fpc-([\d.]+)\.i386-win32\.zip)"'; File = 'base.zip' },
+            @{ Url = "$base/x86_64-win64/"; Pattern = 'href="(fpc-([\d.]+)\.x86_64-win64(?:\.built\.on\.i386-win32)?\.zip)"'; File = 'cross.zip' }
+          )
+          $versions = @()
+          foreach ($w in $wanted) {
+            $html = (Invoke-WebRequest -Uri $w.Url -UseBasicParsing -TimeoutSec 120).Content
+            $m = [regex]::Match($html, $w.Pattern)
+            if (-not $m.Success) { Write-Error "no file matching $($w.Pattern) at $($w.Url)"; exit 1 }
+            $name = $m.Groups[1].Value
+            $versions += $m.Groups[2].Value
+            Write-Host "downloading $($w.Url)$name"
+            Invoke-WebRequest -Uri "$($w.Url)$name" -OutFile $w.File -UseBasicParsing -TimeoutSec 1800
+            Expand-Archive -Path $w.File -DestinationPath $Env:fpc_snapshot_root -Force
+          }
+          # The two packages are published separately, so a mirror caught partway
+          # through an update can offer versions that do not belong together. One
+          # is unpacked over the other, and the result would be a mixed toolchain
+          # that installs quietly and misbehaves later.
+          $version = $versions[0]
+          if (@($versions | Sort-Object -Unique).Count -ne 1) {
+            Write-Error "the snapshot packages disagree on the version: $($versions -join ', '). The mirror is probably partway through an update; re-run later."
+            exit 1
+          }
+          $bin = Join-Path $Env:fpc_snapshot_root 'bin\i386-win32'
+          $exe = Join-Path $bin 'fpc.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { Write-Error "no fpc.exe at $exe"; exit 1 }
+          $cfg = Join-Path $bin 'fpc.cfg'
+          & (Join-Path $bin 'fpcmkcfg.exe') @('-d', "basepath=$Env:fpc_snapshot_root", '-o', $cfg)
+          if (-not (Test-Path -LiteralPath $cfg)) { Write-Error 'fpcmkcfg produced no configuration'; exit 1 }
+          Add-Content -LiteralPath $cfg -Encoding ascii -Value "-FD$(Split-Path -Parent $Env:fpc_release)"
+          $reported = (& $exe '-iV' | Out-String).Trim()
+          if ($reported -ne $version) { Write-Error "snapshot reports '$reported', listing said '$version'"; exit 1 }
+          "fpc=$exe" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
+
+      # A missing compiler used to surface at the first compile step as a
+      # confusing failure, so the layout is checked here where the message can
+      # name what changed.
+      - name: Check the toolchain and record its version
+        env:
+          leg: ${{ matrix.fpc }}
+        run: |
+          if (-not (Test-Path -LiteralPath $Env:fpc)) {
+            Write-Error "fpc.exe not found at '$Env:fpc'. The installer or the snapshot layout changed; read the 'Output the installation log' step."
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $Env:nasm)) {
+            Write-Error "nasm.exe not found at '$Env:nasm'. The Chocolatey package layout changed."
+            exit 1
+          }
+          $reported = (& $Env:fpc '-iV' | Out-String).Trim()
+          Write-Host "fpc $reported at $Env:fpc"
+          "FreePascal ``$reported`` ($Env:leg) at ``$Env:fpc``" |
+            Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          if ($Env:leg -eq 'release' -and $reported -ne $Env:fpc_release_version) {
+            Write-Error "expected FreePascal $Env:fpc_release_version, got '$reported'"
+            exit 1
           }
 
       - name: Compile by FreePascal 32-bit with -dDisableAsmCodeAlign
