@@ -304,9 +304,11 @@ begin
     FillChar(P^, 400000, $5A);
   end
   else
+  begin
     {A failed reallocation clears P and leaves the original block allocated,
      so that address is the one still to be freed.}
     P := LBefore;
+  end;
   FreeMem(P);
   Check(LOk, 'a moved block returns a usable pointer with the data preserved');
 end;
