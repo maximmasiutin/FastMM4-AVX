@@ -1267,7 +1267,11 @@ interface
 {$ENDIF}
 
 {$IFDEF DontUseSimplifiedInterlockedExchangeByte}
-  {$undef UseSimplifiedInterlockedExchangeByte}
+  {The symbol undefined here is the one the code tests. It used to read
+   UseSimplifiedInterlockedExchangeByte, which nothing defines and nothing
+   tests, so the documented option had no effect and the InterlockedCompareExchangeByte
+   path it selects could not be reached at all.}
+  {$undef SimplifiedInterlockedExchangeByte}
 {$ENDIF}
 
 {$IFDEF DontUseCustomFixedSizeMoveRoutines}
@@ -3760,7 +3764,45 @@ const
 {$define UseNormalLoadBeforeAcquireLock}
 {$ENDIF}
 
+{ InterlockedRelease is refused together with the assembler allocator, because
+the two produce a program that faults on its first release of a small block.
+Each assembler unlock site emits a bare LOCK prefix in front of a MOV of
+cLockByteAvailable into the lock byte. LOCK is architecturally valid only on
+ADD, ADC, AND, BTC, BTR, BTS, CMPXCHG, CMPXCHG8B, DEC, INC, NEG, NOT, OR, SBB,
+SUB, XOR, XADD and XCHG; on anything else the processor raises an invalid
+opcode exception. The assembler accepts the pair and the fault arrives at run
+time, which is what makes the combination worth refusing here rather than
+leaving to be discovered.
+Measured with FreePascal 3.2.2 for win32: AdvancedTest built with
+-dInterlockedRelease stops with runtime error 216 before its first test line,
+and the same build with -dDontUseASMVersion passes all 26.
+The repair is to write the release as an exchange through a scratch register at
+each of those sites, which is its own change against the assembler. Until then
+InterlockedRelease is available with PurePascal or DontUseASMVersion, and on
+64-bit FreePascal, where ASMVersion is undefined in any case. }
+
+{$IFDEF InterlockedRelease}
+  {$IFDEF ASMVersion}
+  {$message error 'InterlockedRelease emits a LOCK prefix on MOV in the assembler unlock paths, which faults at run time. Build with PurePascal or DontUseASMVersion, or leave InterlockedRelease undefined.'}
+  {$ENDIF}
+{$ENDIF}
+
 {$IFDEF SimplifiedInterlockedExchangeByte}
+
+{ Which of the two routines below is compiled used to follow the acquire path
+alone: AcquireLockTryNormalLoadFirst when UseNormalLoadBeforeAcquireLock is
+defined, InterlockedExchangeByte otherwise. ReleaseLockByte needs the latter as
+well when InterlockedRelease is defined, and the two conditions are unrelated,
+so the release is asked for here rather than left to fall out of the acquire.
+Without this, InterlockedRelease failed to compile on every build that is not
+PurePascal. }
+
+{$IFNDEF UseNormalLoadBeforeAcquireLock}
+  {$define NeedInterlockedExchangeByte}
+{$ENDIF}
+{$IFDEF InterlockedRelease}
+  {$define NeedInterlockedExchangeByte}
+{$ENDIF}
 
 {$IFDEF UseNormalLoadBeforeAcquireLock}
 function AcquireLockTryNormalLoadFirst(var Target: TSynchronizationVariable): TSynchronizationVariable; assembler;
@@ -3798,9 +3840,23 @@ asm
 {$ENDIF}
 @Exit:
 end;
-{$ELSE}
+{$ENDIF UseNormalLoadBeforeAcquireLock}
+
+{$IFDEF NeedInterlockedExchangeByte}
+
+{ The assembler body is chosen on the same condition that lets
+AcquireLockTryNormalLoadFirst above be written in assembler, which is the
+absence of PurePascal, rather than on ASMVersion. ASMVersion is undefined for
+64-bit FreePascal, and there the Pascal body reaches Windows.InterlockedExchange8,
+which FreePascal does not declare. That was invisible while this function was
+compiled only for builds that also undefine UseNormalLoadBeforeAcquireLock; it
+became a compile error as soon as InterlockedRelease could reach it. Neither
+routine here uses a memory operand with a relative address, which is the
+encoding 64-bit FreePascal gets wrong and the reason ASMVersion is undefined
+for it. }
+
 function InterlockedExchangeByte(var Target: TSynchronizationVariable; const Value: TSynchronizationVariable): TSynchronizationVariable;
-{$IFNDEF ASMVersion}
+{$IFDEF PurePascal}
 begin
   Result :=
   {$IFDEF SynchroVar32BIT}
@@ -3818,7 +3874,7 @@ begin
   {$ENDIF}
   (Target, Value);
 end;
-{$ELSE ASMVersion}
+{$ELSE PurePascal}
 assembler;
 asm
 {$IFDEF 32BIT}
@@ -3847,8 +3903,10 @@ asm
   {$ENDIF}
 {$ENDIF}
 end;
-{$ENDIF 32BIT}
-{$ENDIF ASMVersion}
+{$ENDIF PurePascal}
+{$ENDIF NeedInterlockedExchangeByte}
+
+{$undef NeedInterlockedExchangeByte}
 
 {$ELSE !SimplifiedInterlockedExchangeByte}
 
