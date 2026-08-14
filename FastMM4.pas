@@ -27,9 +27,9 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      iteration of the spin-wait loop; if the variable is available upon
      the normal memory load of the first step ("test"), proceed to the
      second step ("test-and-set") which is done via the bus-locking atomic
-     "xchg" instruction, which is atomic with a memory operand whether or not a
-     LOCK prefix is written: see https://stackoverflow.com/a/79993726
-     However, this two-steps approach of using "test" before
+     "xchg" instruction, whose memory-operand form locks whether or not a LOCK
+     prefix is written, see https://stackoverflow.com/a/79993726
+     however, this two-steps approach of using "test" before
      "test-and-set" can increase the cost for the un-contended case comparing
      to just single-step "test-and-set", this may explain why the speed benefits
      of the FastMM4-AVX are more pronounced when the memory manager is called
