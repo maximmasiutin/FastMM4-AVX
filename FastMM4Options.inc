@@ -180,8 +180,15 @@ CriticalSections or "pause"-based spin-wait loops instead of Sleep() or
 SwitchToThread().
 Using Sleep(0) or SwitchToThread() while waiting for a lock is a default
 approach in the original version of FastMM.
-With the new approach, the Sleep() will never be called, and SwitchToThread()
+With the new approach, the Sleep() will never be called on the small, medium
+and large block locks these 3 options cover, and SwitchToThread()
 may only be called after 5000 iterations of the "pause"-based spin-wait loop.
+The statement is about those three locks and not about every lock in the unit:
+TStaticCollector.Lock in FastMM4DataCollector.pas keeps the older shape, and
+calls Sleep(0) and Sleep(1) by default, or SwitchToThread() when
+NeverSleepOnThreadContention and UseSwitchToThread are defined. That collector
+is compiled for lock contention logging rather than for allocation, so it is
+not on the path these 3 options are chosen for.
 That count is a number of iterations and not a number of cycles and not an
 amount of time: Intel gives "pause" about 10 cycles on the microarchitectures
 before Skylake and as many as 140 on Skylake itself, so the same 5000
