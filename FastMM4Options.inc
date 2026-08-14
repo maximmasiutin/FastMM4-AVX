@@ -210,7 +210,9 @@ i.e. writing to a synchronization variable, to use bus-locking memory store
 Using bus-locking memory store to release a lock on data structure is
 an old approach of the original FastMM4, and is not recommended
 for FastMM4-AVX. Look for "using normal memory store" in the comment section
-at the beginning of the main .pas file for the discussion }
+at the beginning of the main .pas file for the discussion, and see
+https://stackoverflow.com/a/79993726
+for why the plain store is safe and what the locked store costs }
 
 {.$define InterlockedRelease}
 

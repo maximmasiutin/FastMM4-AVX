@@ -27,7 +27,9 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      iteration of the spin-wait loop; if the variable is available upon
      the normal memory load of the first step ("test"), proceed to the
      second step ("test-and-set") which is done via the bus-locking atomic
-     "xchg" instruction; however, this two-steps approach of using "test" before
+     "xchg" instruction, which is atomic with a memory operand whether or not a
+     LOCK prefix is written: see https://stackoverflow.com/a/79993726
+     However, this two-steps approach of using "test" before
      "test-and-set" can increase the cost for the un-contended case comparing
      to just single-step "test-and-set", this may explain why the speed benefits
      of the FastMM4-AVX are more pronounced when the memory manager is called
@@ -42,7 +44,8 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      then the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
      see https://stackoverflow.com/a/44959764
-     for discussion on releasing a lock;
+     for discussion on releasing a lock, and https://stackoverflow.com/a/79993726
+     for why the plain store is safe here;
      you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
    - implemented dedicated lock and unlock procedures that operate with
@@ -130,6 +133,8 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      values will be used for FastMM4 only;
    - the type of one-byte synchronization variables (accessed via "lock cmpxchg"
      or "lock xchg") replaced from Boolean to Byte for stricter type checking;
+     the LOCK prefix written on "xchg" is redundant, see
+     https://stackoverflow.com/a/79993726
    - those fixed-block-size memory move procedures that are not needed
      (under the current bitness and alignment combinations) are
      explicitly excluded from compiling, to not rely on the compiler
