@@ -3069,12 +3069,17 @@ const
 
   {The distinction between AVX1 and AVX2 is on how it clears the registers
   and how it avoids AVX-SSE transition penalties.
-  AVX2 uses the VPXOR instruction, not available on AVX1. On most Intel
-  processors, VPXOR is faster than VXORPS. For example, on Sandybridge, VPXOR can
-  run on any of the 3 ALU execution ports, p0/p1/p5.  VXORPS can only run on p5.
-  Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. Newer CPU
-  doesn't have such a huge transition penalty, and VZEROUPPER is not needed,
-  moreover, it can make subsequent SSE code slower.
+  AVX2 uses the VPXOR instruction, not available on AVX1. Through Broadwell the
+  integer form issued to any of the three ALU ports p0/p1/p5 while VXORPS was
+  limited to p5, which is where the claim that VPXOR is the faster of the two
+  comes from. From Skylake the floating-point logicals issue to p0/p1/p5 as
+  well, so on those parts the difference is historical rather than current.
+  Measured port usage per microarchitecture is at
+  https://uops.info/html-instr/VXORPS_YMM_YMM_YMM.html
+  and https://uops.info/html-instr/PXOR_XMM_XMM.html
+  Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. A newer CPU
+  does not have such a huge transition penalty, and the dirty upper state it
+  leaves behind is what can make subsequent SSE code slower.
   What the penalty is differs by vendor and by generation. AMD keeps the halves
   of a vector register independent and has no such transition. On Intel through
   Broadwell, a legacy SSE instruction executed while the upper halves are dirty
@@ -3087,8 +3092,14 @@ const
   https://stackoverflow.com/a/43881748/6910868
 
   Leaving VZEROUPPER out of the AVX2 routines is therefore a trade rather than a
-  free choice, and it is made for Skylake and later, where the instruction costs
-  more than the dependency it would break. It does not follow that the state is
+  free choice, and which way it goes depends on how much legacy SSE code runs
+  afterwards. The instruction is four front-end uops on Intel from Sandy Bridge
+  to Ice Lake and is paid once, per
+  https://uops.info/html-instr/VZEROUPPER.html
+  while the false dependency it would break is paid on every later non-VEX write
+  to an xmm register, so omitting it pays off only when little such code
+  follows. No measurement of where that crossover falls for this allocator's
+  callers has been made here. It does not follow that the state is
   clean when those routines return: zeroing a register with a VEX encoded vpxor
   changes what the register holds, not the state the hardware tracks, and only
   VZEROUPPER or VZEROALL clear that. On an AVX2 part older than Skylake, meaning
@@ -19600,12 +19611,16 @@ begin
       if VirtualQuery(Pointer(LIndNUI * 65536), LMBI, SizeOf(LMBI)) = 0 then
       begin
         {VirtualQuery may fail for addresses >2GB if a large address space is
-         not enabled: a 32-bit process on 32-bit Windows booted without /3GB or
-         increaseuserva is given a 2GB user address space, and reaches beyond
-         it only when the image is marked large address aware, so the remainder
-         of the map is reported as system reserved. Both the boot switch and a
-         64-bit host move that boundary, see
-         https://stackoverflow.com/a/44863475/6910868 }
+         not enabled. A 32-bit process is given 2GB of user address space and
+         reaches above it only when its image is marked large address aware,
+         and on 32-bit Windows only if the system was also booted with /3GB or
+         increaseuserva, which raises the limit to at most 3GB. On 64-bit
+         Windows the flag alone gives such a process 4GB. Where neither
+         condition is met the remainder of the map is reported as system
+         reserved. The two rules are stated in the Microsoft documentation at
+         https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases
+         and https://learn.microsoft.com/en-us/windows/win32/memory/4-gigabyte-tuning
+         see also https://stackoverflow.com/a/44863475/6910868 }
         LCharToFill := AnsiChar(csSysReserved);
         FillChar(AMemoryMap[LIndNUI], 65536 - LIndNUI, LCharToFill);
         Break;

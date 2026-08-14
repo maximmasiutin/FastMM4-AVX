@@ -199,9 +199,14 @@ Testing has shown that the new approach provides significant gain in
 multi-threaded scenarios, especially in situations when the number of threads
 working with the memory manager is the same or higher than the number of
 physical cores.
-Critical Sections or "pause"-based spin-wait loops implemented as
-"test, test-and-set" are much more CPU-friendly and have definitely lower
-latency than Sleep() or SwitchToThread(). The two costs being traded are of
+"pause"-based spin-wait loops implemented as "test, test-and-set" are more
+CPU-friendly and have lower latency than Sleep() or SwitchToThread() while the
+wait is short. A Critical Section shares that property only while it is
+uncontended, where entering it is one interlocked operation in user mode: once
+its spin count is exhausted it waits on a semaphore and pays the same kernel
+transition, which InitializeCriticalSectionAndSpinCount documents at
+https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionandspincount
+The two costs being traded are of
 very different sizes: each Sleep() or SwitchToThread() call can pay a context
 switch of 10000 cycles or more and a ring 3 to ring 0 transition of 1000 or
 more, where the "pause" instruction costs about 10 cycles before Skylake and as
