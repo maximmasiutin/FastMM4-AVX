@@ -15,11 +15,12 @@
 ; License Version 3, dated 29 June 2007 (LGPL 3, available from
 ; https://www.gnu.org/licenses/lgpl.html).
 
-; This code uses zmm26 - zmm31 registers to avoid AVX-SSE transition penalty.
-; These registers (zmm16 - zmm31) have no non-VEX counterpart. According to the
-; advice of Agner Fog, there is no state transition and no penalty for mixing
-; zmm16 - zmm31 with non-VEX SSE code. By using these registers (zmm16 - zmm31)
-; rather than zmm0-xmm15 we save us from calling "vzeroupper".
+; This code uses the zmm26 - zmm31 registers to avoid the AVX-SSE transition
+; penalty. They belong to the zmm16 - zmm31 range, which has no non-VEX
+; counterpart: according to the advice of Agner Fog, there is no state
+; transition and no penalty for mixing zmm16 - zmm31 with non-VEX SSE code.
+; Using registers from that range rather than zmm0 - zmm15 saves the call to
+; "vzeroupper".
 ; Source:
 ; https://stackoverflow.com/a/54587480
 
