@@ -379,10 +379,14 @@ jobs:
         run: |
           & 'choco.exe' @('install', 'nasm', '-y')
 
+      # if: always() means this can run when the install itself failed and left
+      # no log, and a wildcard that matches nothing is an error rather than an
+      # empty result, so the absent case is silenced to keep the real failure
+      # legible.
       - name: Output the installation log
         if: always()
         run: |
-          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" | ForEach-Object {
+          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "=== Log file: $($_.FullName) ==="
             Get-Content -Path $_.FullName
           }
