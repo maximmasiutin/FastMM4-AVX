@@ -309,8 +309,8 @@ end;
 {Grow and shrink within the space the block already has}
 procedure TestReallocateInPlace;
 var
-  P, LFirst: Pointer;
-  I, LStep: Integer;
+  P, LPrevious: Pointer;
+  I, LStep, LStayedCount: Integer;
   LOk, LStayed: Boolean;
 begin
   Say('reallocation inside the existing block');
@@ -322,9 +322,18 @@ begin
   end;
   for I := 0 to 99 do
     PByte(P)[I] := Byte(I);
-  LFirst := P;
+  {The address to compare against is the one from the step before, not the one
+   the block started at. Comparing against the original address asks whether the
+   block never moved at all, which is a different and much stronger claim: one
+   move at any step makes every later comparison false however many of the
+   remaining grows are served in place. Under FullDebugMode the first grow does
+   move, because DebugGetMem sizes the block to the request plus the debug
+   overhead and leaves no slack, so the original-address form reported nothing
+   stayed when in fact 28 of the 40 grows did.}
+  LPrevious := P;
   LOk := True;
   LStayed := False;
+  LStayedCount := 0;
   for LStep := 1 to 40 do
   begin
     ReallocMem(P, 100 + LStep * 8);
@@ -333,8 +342,12 @@ begin
       LOk := False;
       Break;
     end;
-    if P = LFirst then
+    if P = LPrevious then
+    begin
       LStayed := True;
+      Inc(LStayedCount);
+    end;
+    LPrevious := P;
     for I := 0 to 99 do
       if PByte(P)[I] <> Byte(I) then
         LOk := False;
@@ -348,7 +361,8 @@ begin
     FreeMem(P);
   end;
   Check(LOk, '40 grows and a shrink keep the contents intact');
-  Check(LStayed, 'at least one grow stayed in the same block');
+  Check(LStayed, 'at least one grow stayed in the same block, and '
+    + IntToStr(LStayedCount) + ' of 40 did');
 end;
 
 {Strings and dynamic arrays grow through the runtime rather than through
