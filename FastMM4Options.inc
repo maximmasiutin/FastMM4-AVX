@@ -243,14 +243,20 @@ options }
 
 
 { Use this option if you need that releasing a lock on data structure,
-i.e. writing to a synchronization variable, to use bus-locking memory store
-(lock xchg) rather than just the normal memory store (mov).
-Using bus-locking memory store to release a lock on data structure is
+i.e. writing to a synchronization variable, to use a locked memory exchange
+(xchg, which locks implicitly with a memory operand) rather than just the
+normal memory store (mov).
+Using a locked memory exchange to release a lock on data structure is
 an old approach of the original FastMM4, and is not recommended
 for FastMM4-AVX. Look for "using normal memory store" in the comment section
 at the beginning of the main .pas file for the discussion, and see
 https://stackoverflow.com/a/79993726
-for why the plain store is safe and what the locked store costs }
+for why the plain store is safe for a correctly synchronized unlock and what
+the locked exchange costs. One diagnostic is stronger under this option: with
+DebugReleaseLockByte active under DEBUG or FullDebugMode, the atomic exchange
+keeps the double-release check reliable where the plain store can let two
+erroneous concurrent releases both pass, as the comment above ReleaseLockByte
+in the main .pas file explains }
 
 {.$define InterlockedRelease}
 
