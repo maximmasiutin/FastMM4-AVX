@@ -4274,7 +4274,57 @@ end;
 { Look for "using normal memory store" in the comment section
 at the beginning of the file for the discussion on releasing locks on data
 structures. You can also define the "InterlockedRelease" option in the
-FastMM4Options.inc file to get the old behaviour of the original FastMM4. }
+FastMM4Options.inc file to get the old behaviour of the original FastMM4.
+
+The plain store is chosen because it costs less and gives up nothing this
+unlock needs.
+
+On cost, Agner Fog puts a LOCK prefix at more than a hundred clock cycles in
+the general case, in the introduction to "Lists of instruction latencies,
+throughputs and micro-operation breakdowns", where the latency depends on cache
+organisation and may reach main memory. With the line already held in L1 the
+figure is far lower: 17.8 cycles measured on a Haswell-DT Core i5-4430 and 16.8
+on a Kaby Lake-S Core i7-7700K, against 5.0 and 5.6 on those same parts for the
+non-locking "add [mem], reg" the table uses as its baseline, at
+https://stackoverflow.com/a/44959466/6910868
+A "mov" to the lock byte is a plain store, cheaper again than that baseline,
+and it is not in that table at all.
+
+On what the lock would have bought, a correctly synchronised unlock gets
+nothing from it. No core pushes a cache line to another, so a waiting core
+learns of either release only when its own load takes the line. Nor does either
+form get ahead of the stores of the critical section: x86 keeps stores in order,
+so a plain store to the lock byte becomes visible after them, and a locked
+instruction drains the store buffer before it completes, which puts it after
+them as well. What the locked form does buy is ordering for accesses that follow
+it, which an unlock does not need, and the Linux kernel releases a spinlock with
+a plain store for the same reason, as discussed at
+https://stackoverflow.com/a/79993726/6910868
+
+DebugReleaseLockByte below is the exception, and it is a diagnostic rather than
+a correctness one. That check reads the previous value and reports a release of
+a lock that was not held. Under InterlockedRelease the read and the store are
+one operation, so of two erroneous concurrent releases exactly one sees
+cLockByteLocked and the other reports. Under the plain store they are two
+operations, so both can read cLockByteLocked before either stores and the double
+release goes unreported. A build hunting that fault is therefore worth defining
+InterlockedRelease for, which is a reason to keep the option that has nothing to
+do with the cost above.
+
+Note that InterlockedRelease presently compiles only together with PurePascal.
+The constraint belongs to the SimplifiedInterlockedExchangeByte branch below,
+which calls InterlockedExchangeByte: that function is declared only when
+UseNormalLoadBeforeAcquireLock is not, and that symbol is defined for every
+build except PurePascal, the assembler path putting AcquireLockTryNormalLoadFirst
+in its place. The other branch calls InterlockedCompareExchangeByte, which is
+declared alongside it and needs neither, so it would compile.
+
+Reaching that other branch is what cannot be done. FastMM4Options.inc defines
+SimplifiedInterlockedExchangeByte unconditionally and names
+DontUseSimplifiedInterlockedExchangeByte as the way to turn it off, but that
+option undefines UseSimplifiedInterlockedExchangeByte, which nothing tests. The
+two symbols differ by their first three letters, so the option has no effect and
+the branch it was meant to select is unreachable. }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
