@@ -3087,14 +3087,15 @@ const
 
   {The distinction between AVX1 and AVX2 is on how it clears the registers
   and how it avoids AVX-SSE transition penalties.
-  AVX2 uses the VPXOR instruction, not available on AVX1. Through Broadwell the
+  AVX2 uses the 256-bit VPXOR on YMM registers, a form AVX1 lacks; AVX1 has
+  only the 128-bit VPXOR on XMM registers. Through Broadwell the 256-bit
   integer form issued to any of the three ALU ports p0/p1/p5 while VXORPS was
   limited to p5, which is where the claim that VPXOR is the faster of the two
   comes from. From Skylake the floating-point logicals issue to p0/p1/p5 as
   well, so on those parts the difference is historical rather than current.
   Measured port usage per microarchitecture is at
   https://uops.info/html-instr/VXORPS_YMM_YMM_YMM.html
-  and https://uops.info/html-instr/PXOR_XMM_XMM.html
+  and https://uops.info/html-instr/VPXOR_YMM_YMM_YMM.html
   Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. A newer CPU
   does not have such a huge transition penalty, and the dirty upper state it
   leaves behind is what can make subsequent SSE code slower.
@@ -7050,12 +7051,14 @@ Section 3.7.7, "Enhanced REP MOVSB and STOSB operation (ERMSB)").
 We first check the corresponding bit in the CPUID, and if it is supported,
 call this routine.
 
-The two constants below are what the measurements ask for rather than round
-numbers: a destination aligned by 64 bytes, and a length taken down to a
-multiple of 64 before the transfer. The Intel manual reports that a misaligned
-destination costs an ERMSB copy up to 25 per cent against the 16-byte aligned
-case, where a 128-bit AVX copy loses only 5 per cent, so the alignment is worth
-the head copy that buys it, see
+The two constants below choose a destination aligned by 64 bytes, one cache
+line, and a length taken down to a multiple of 64 before the transfer. The
+64-byte figure is this implementation's choice rather than a value the
+measurements ask for: the Intel manual reports that a misaligned destination
+costs an ERMSB copy up to 25 per cent against the 16-byte aligned case, where a
+128-bit AVX copy loses only 5 per cent, so alignment is worth the head copy
+that buys it, but those measurements distinguish a misaligned destination from
+a 16-byte aligned one and do not compare 16 against 64, see
 https://stackoverflow.com/a/43837564/6910868 }
 
 const

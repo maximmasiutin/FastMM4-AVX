@@ -297,6 +297,8 @@ MoveX32LpAvx512WithErms:
 ; Measurements on parts that have ERMSB but not Fast Short REP MOV put the
 ; crossover where the manual does: rep movsb starts to beat other methods at
 ; 256 bytes, but the clear benefit over an AVX copy only appears above 2048.
+; Both 256 and 2048 are full-block sizes as measured, while the comparison
+; above runs on a counter with the 8-byte tail already removed.
 ; See https://stackoverflow.com/a/43837564/6910868
 	jg		@DontDoRepMovsbLinux
 

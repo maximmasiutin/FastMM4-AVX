@@ -201,14 +201,15 @@ working with the memory manager is the same or higher than the number of
 physical cores.
 "pause"-based spin-wait loops implemented as "test, test-and-set" are more
 CPU-friendly and have lower latency than Sleep() or SwitchToThread() while the
-wait is short. A Critical Section shares that property only while it is
-uncontended, where entering it is one interlocked operation in user mode: once
-its spin count is exhausted it waits on a semaphore and pays the same kernel
-transition, which InitializeCriticalSectionAndSpinCount documents at
+wait is short. A Critical Section shares that property while it is uncontended,
+where entering it is one interlocked operation in user mode, and while
+contention resolves within its spin count, the case the spin count exists for:
+only once the spin count is exhausted does it wait on a semaphore and pay the
+same kernel transition, which InitializeCriticalSectionAndSpinCount documents at
 https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionandspincount
-The two costs being traded are of
-very different sizes: each Sleep() or SwitchToThread() call can pay a context
-switch of 10000 cycles or more and a ring 3 to ring 0 transition of 1000 or
+The two costs being traded
+are of very different sizes: each Sleep() or SwitchToThread() call can pay a
+context switch of 10000 cycles or more and a ring 3 to ring 0 transition of 1000 or
 more, where the "pause" instruction costs about 10 cycles before Skylake and as
 many as 140 from Skylake on. The measurements are at:
 https://stackoverflow.com/a/44875567/6910868
