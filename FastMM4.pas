@@ -133,7 +133,7 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      differently outside FastMM4, they will be silently redefined, and the new
      values will be used for FastMM4 only;
    - the type of one-byte synchronization variables (accessed via "lock cmpxchg",
-     or via "xchg" whose memory-operand form locks implicitly) replaced from
+     or via "xchg" whose memory-operand form locks implicitly) changed from
      Boolean to Byte for stricter type checking; the assembly spells the pair as
      "lock cmpxchg" and "lock xchg", and the second prefix is redundant, see
      https://stackoverflow.com/a/79993726
