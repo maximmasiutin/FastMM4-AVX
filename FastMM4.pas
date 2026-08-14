@@ -3768,9 +3768,9 @@ const
 the two produce a program that faults on its first release of a small block.
 Each assembler unlock site emits a bare LOCK prefix in front of a MOV of
 cLockByteAvailable into the lock byte. LOCK is architecturally valid only on
-ADD, ADC, AND, BTC, BTR, BTS, CMPXCHG, CMPXCHG8B, DEC, INC, NEG, NOT, OR, SBB,
-SUB, XOR, XADD and XCHG; on anything else the processor raises an invalid
-opcode exception. The assembler accepts the pair and the fault arrives at run
+ADD, ADC, AND, BTC, BTR, BTS, CMPXCHG, CMPXCHG8B, CMPXCHG16B, DEC, INC, NEG,
+NOT, OR, SBB, SUB, XOR, XADD and XCHG; on anything else the processor raises an
+invalid opcode exception. The assembler accepts the pair and the fault arrives at run
 time, which is what makes the combination worth refusing here rather than
 leaving to be discovered.
 Measured with FreePascal 3.2.2 for win32: AdvancedTest built with
@@ -3784,6 +3784,19 @@ InterlockedRelease is available with PurePascal or DontUseASMVersion, and on
 {$IFDEF InterlockedRelease}
   {$IFDEF ASMVersion}
   {$message error 'InterlockedRelease emits a LOCK prefix on MOV in the assembler unlock paths, which faults at run time. Build with PurePascal or DontUseASMVersion, or leave InterlockedRelease undefined.'}
+  {$ENDIF}
+{$ENDIF}
+
+{ The restored InterlockedCompareExchangeByte below is assembler with no Pascal
+body, so the option that selects it cannot be combined with a build that
+excludes assembler. PurePascal is decided by this point: the user can define
+it, and this unit defines it itself for Delphi on Linux. Refusing here turns a
+combination that would otherwise fail inside an asm block into a message that
+names the conflict and the ways out. }
+
+{$IFNDEF SimplifiedInterlockedExchangeByte}
+  {$IFDEF PurePascal}
+  {$message error 'DontUseSimplifiedInterlockedExchangeByte selects an assembler-only InterlockedCompareExchangeByte, which a PurePascal build excludes. Remove one of the two options.'}
   {$ENDIF}
 {$ENDIF}
 
