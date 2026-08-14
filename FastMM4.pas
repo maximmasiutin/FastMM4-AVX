@@ -28,8 +28,8 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      the normal memory load of the first step ("test"), proceed to the
      second step ("test-and-set") which is done via the bus-locking atomic
      "xchg" instruction; however, this two-step approach of using "test" before
-     "test-and-set" can increase the cost for the un-contended case comparing
-     to just single-step "test-and-set", this may explain why the speed benefits
+     "test-and-set" can increase the cost for the uncontended case compared
+     to just single-step "test-and-set"; this may explain why the speed benefits
      of the FastMM4-AVX are more pronounced when the memory manager is called
      from multiple threads in parallel, while in single-threaded use scenario
      there may be no benefit compared to the original FastMM4;
@@ -42,7 +42,7 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      implementation of the "pause"-based spin-wait loops;
    - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
-     then the bus-locking "xchg" instruction to write into the synchronization
+     than the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
      see https://stackoverflow.com/a/44959764
      for discussion on releasing a lock, and https://stackoverflow.com/a/79993726
