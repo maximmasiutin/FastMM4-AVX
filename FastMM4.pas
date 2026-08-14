@@ -4290,10 +4290,22 @@ cLockByteLocked and the other reports. Under the plain store they are two
 operations, so both can read cLockByteLocked before either stores and the double
 release goes unreported. A build hunting that fault is therefore worth defining
 InterlockedRelease for, which is a reason to keep the option that has nothing to
-do with the cost above. Note that InterlockedRelease presently compiles only
-together with PurePascal: the assembler path defines
-AcquireLockTryNormalLoadFirst in place of InterlockedExchangeByte, and this
-procedure still calls the latter. }
+do with the cost above.
+
+Note that InterlockedRelease presently compiles only together with PurePascal.
+The constraint belongs to the SimplifiedInterlockedExchangeByte branch below,
+which calls InterlockedExchangeByte: that function is declared only when
+UseNormalLoadBeforeAcquireLock is not, and that symbol is defined for every
+build except PurePascal, the assembler path putting AcquireLockTryNormalLoadFirst
+in its place. The other branch calls InterlockedCompareExchangeByte, which is
+declared alongside it and needs neither, so it would compile.
+
+Reaching that other branch is what cannot be done. FastMM4Options.inc defines
+SimplifiedInterlockedExchangeByte unconditionally and names
+DontUseSimplifiedInterlockedExchangeByte as the way to turn it off, but that
+option undefines UseSimplifiedInterlockedExchangeByte, which nothing tests. The
+two symbols differ by their first three letters, so the option has no effect and
+the branch it was meant to select is unreachable. }
 
 procedure ReleaseLockByte(var Target: TSynchronizationVariable);
 
