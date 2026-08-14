@@ -869,24 +869,38 @@ jobs:
       # Move36_32BIT_SSE family, and that build passes whether or not the fix
       # is present. The other two configurations are run as coverage of the SSE
       # family and of the 64-bit skip, not as the regression check.
+      #
+      # The three configurations build the same executable name in the same
+      # directory, so each step deletes the previous one before compiling and
+      # stops on the compiler's exit code. Without both, a compilation that
+      # failed would leave the earlier configuration's executable in place, the
+      # step would run that instead, and its zero exit code would become the
+      # step's: the shell wrapper checks $LASTEXITCODE once, after the whole
+      # script, so the compiler's code is overwritten by the run that follows.
       # =========================================================================
       - name: Compile and run FpuStackTest 32-bit (plain movers, guards issue 85)
         timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisable32BitSSE', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\FpuStackTest.exe'
 
       - name: Compile and run FpuStackTest 32-bit (SSE movers)
         timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\FpuStackTest.exe'
 
       - name: Compile and run FpuStackTest 64-bit (reports that it skipped)
         timeout-minutes: 2
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\FpuStackTest.exe'
