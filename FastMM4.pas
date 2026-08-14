@@ -3077,11 +3077,13 @@ const
   moreover, it can make subsequent SSE code slower.
   What the penalty is differs by vendor and by generation. AMD keeps the halves
   of a vector register independent and has no such transition. On Intel through
-  Broadwell it is a save and restore stall, and from Skylake a false dependency
-  instead. Agner Fog measured on Haswell that touching one ymm register puts
-  every vector register into a dirty upper state, so a later non-VEX write to an
-  xmm register takes a false dependency on its own previous value. The
-  measurement is at:
+  Broadwell, a legacy SSE instruction executed while the upper halves are dirty
+  triggers a transition assist that saves those halves and later restores them,
+  and the assist is the cost. From Skylake there is no assist, and the cost
+  appears instead as a false dependency: a non-VEX write to an xmm register
+  merges into the upper half that register already held, so it waits on a value
+  it does not use. The two mechanisms and the measurements behind them are set
+  out at:
   https://stackoverflow.com/a/43881748/6910868
 
   Leaving VZEROUPPER out of the AVX2 routines is therefore a trade rather than a
@@ -3091,7 +3093,7 @@ const
   changes what the register holds, not the state the hardware tracks, and only
   VZEROUPPER or VZEROALL clear that. On an AVX2 part older than Skylake, meaning
   Haswell and Broadwell, legacy SSE code that runs afterwards can still pay the
-  transition. The AVX1 routines call VZEROUPPER on entry and on exit and do not
+  transition assist. The AVX1 routines call VZEROUPPER on entry and on exit and do not
   have that exposure.}
   {On ERMSB, see p. 3.7.6 of the
   Intel 64 and IA-32 Architectures Optimization Reference Manual}
