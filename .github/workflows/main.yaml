@@ -5,6 +5,7 @@ on:
     branches:
       - master
     paths:
+      - .github/workflows/main.yaml
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
@@ -13,11 +14,13 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/FpuStackTest.dpr
 
   pull_request:
     branches:
       - master
     paths:
+      - .github/workflows/main.yaml
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
@@ -26,6 +29,7 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/FpuStackTest.dpr
 
   workflow_dispatch:
 
@@ -331,7 +335,7 @@ jobs:
 
   build_windows:
     runs-on: windows-latest
-    env: 
+    env:
       fpc: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
       nasm: 'C:\Program Files\NASM\nasm.exe'
 
@@ -359,23 +363,22 @@ jobs:
 
       - name: Output the installation log
         run: |
-          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" | ForEach-Object { 
+          Get-ChildItem -Path "$env:TEMP\Setup Log *.txt" | ForEach-Object {
             Write-Host "=== Log file: $($_.FullName) ==="
             Get-Content -Path $_.FullName
           }
-  
+
       - name: Compile by FreePascal 32-bit with -dDisableAsmCodeAlign
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisableAsmCodeAlign', 'SimpleTest.dpr')
-
 
       - name: Compile by FreePascal 32-bit with -dAlign16Bytes
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign16Bytes', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 32-bit with -dAlign32Bytes 
+      - name: Compile by FreePascal 32-bit with -dAlign32Bytes
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dAlign32Bytes', '-O4', 'SimpleTest.dpr')
@@ -395,9 +398,9 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dForceSingleThreaded', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 32-bit with -dDisablePauseAndSwitchToThread 
+      - name: Compile by FreePascal 32-bit with -dDisablePauseAndSwitchToThread
         run: |
-          cd $Env:GITHUB_WORKSPACE/Tests/Simple 
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisablePauseAndSwitchToThread', '-O4', 'SimpleTest.dpr')
 
       - name: Compile by FreePascal 32-bit with -dDontUseSmallBlocksLockedCriticalSection
@@ -405,7 +408,7 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDontUseSmallBlocksLockedCriticalSection', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 32-bit with -dDontUseMediumBlocksLockedCriticalSection 
+      - name: Compile by FreePascal 32-bit with -dDontUseMediumBlocksLockedCriticalSection
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDontUseMediumBlocksLockedCriticalSection', '-O4', 'SimpleTest.dpr')
@@ -445,13 +448,12 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDisableAsmCodeAlign', '-O4', 'SimpleTest.dpr')
 
-
       - name: Compile by FreePascal 64-bit with -dAlign16Bytes
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign16Bytes', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 64-bit with -dAlign32Bytes 
+      - name: Compile by FreePascal 64-bit with -dAlign32Bytes
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dAlign32Bytes', '-O4', 'SimpleTest.dpr')
@@ -471,9 +473,9 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dForceSingleThreaded', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 64-bit with -dDisablePauseAndSwitchToThread 
+      - name: Compile by FreePascal 64-bit with -dDisablePauseAndSwitchToThread
         run: |
-          cd $Env:GITHUB_WORKSPACE/Tests/Simple 
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDisablePauseAndSwitchToThread', '-O4', 'SimpleTest.dpr')
 
       - name: Compile by FreePascal 64-bit with -dDontUseSmallBlocksLockedCriticalSection
@@ -481,7 +483,7 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseSmallBlocksLockedCriticalSection', '-O4', 'SimpleTest.dpr')
 
-      - name: Compile by FreePascal 64-bit with -dDontUseMediumBlocksLockedCriticalSection 
+      - name: Compile by FreePascal 64-bit with -dDontUseMediumBlocksLockedCriticalSection
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dDontUseMediumBlocksLockedCriticalSection', '-O4','SimpleTest.dpr')
@@ -857,3 +859,48 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
+
+      # =========================================================================
+      # FPU stack regression - Windows
+      # Guards the x87 stack corruption fixed in the 32-bit fixed size move
+      # routines Move36 to Move68 (pleriche/FastMM4 issue 85). Only the
+      # -dDisable32BitSSE build reaches the repaired routines: an SSE capable
+      # host, which every runner is, otherwise installs the separate
+      # Move36_32BIT_SSE family, and that build passes whether or not the fix
+      # is present. The other two configurations are run as coverage of the SSE
+      # family and of the 64-bit skip, not as the regression check.
+      #
+      # The three configurations build the same executable name in the same
+      # directory, so each step deletes the previous one before compiling and
+      # stops on the compiler's exit code. Without both, a compilation that
+      # failed would leave the earlier configuration's executable in place, the
+      # step would run that instead, and its zero exit code would become the
+      # step's: the shell wrapper checks $LASTEXITCODE once, after the whole
+      # script, so the compiler's code is overwritten by the run that follows.
+      # =========================================================================
+      - name: Compile and run FpuStackTest 32-bit (plain movers, guards issue 85)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dDisable32BitSSE', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FpuStackTest.exe'
+
+      - name: Compile and run FpuStackTest 32-bit (SSE movers)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FpuStackTest.exe'
+
+      - name: Compile and run FpuStackTest 64-bit (reports that it skipped)
+        timeout-minutes: 2
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FpuStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', 'FpuStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FpuStackTest.exe'
