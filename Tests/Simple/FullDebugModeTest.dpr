@@ -279,7 +279,7 @@ end;
  with the new block rather than the freed one}
 procedure TestReallocateMoves;
 var
-  P: Pointer;
+  P, LBefore: Pointer;
   I: Integer;
   LOk: Boolean;
 begin
@@ -292,6 +292,7 @@ begin
   end;
   for I := 0 to 63 do
     PByte(P)[I] := Byte(I);
+  LBefore := P;
   ReallocMem(P, 400000);
   LOk := P <> nil;
   if LOk then
@@ -301,8 +302,12 @@ begin
         LOk := False;
     {Writing over the whole new block would fault if the pointer were stale}
     FillChar(P^, 400000, $5A);
-    FreeMem(P);
-  end;
+  end
+  else
+    {A failed reallocation clears P and leaves the original block allocated,
+     so that address is the one still to be freed.}
+    P := LBefore;
+  FreeMem(P);
   Check(LOk, 'a moved block returns a usable pointer with the data preserved');
 end;
 
@@ -329,7 +334,10 @@ begin
    remaining grows are served in place. Under FullDebugMode the first grow does
    move, because DebugGetMem sizes the block to the request plus the debug
    overhead and leaves no slack, so the original-address form reported nothing
-   stayed when in fact 28 of the 40 grows did.}
+   stayed when in fact most of the grows did: 28 of the 40 on the run this was
+   measured on, FreePascal 3.2.2 for win64. The count depends on the allocator
+   and the options, so it is the shape of the result that matters rather than
+   that number.}
   LPrevious := P;
   LOk := True;
   LStayed := False;
@@ -339,6 +347,11 @@ begin
     ReallocMem(P, 100 + LStep * 8);
     if P = nil then
     begin
+      {A failed reallocation clears P and leaves the block it was given still
+       allocated, so the address from the step before is the one that still has
+       to be freed. Losing it here would leak that block on the very run that
+       is already reporting a failure.}
+      P := LPrevious;
       LOk := False;
       Break;
     end;
@@ -354,16 +367,24 @@ begin
   end;
   if LOk then
   begin
+    LPrevious := P;
     ReallocMem(P, 50);
-    for I := 0 to 49 do
-      if PByte(P)[I] <> Byte(I) then
-        LOk := False;
+    if P = nil then
+    begin
+      {The shrink can fail the same way the grows can, and reading through a
+       nil P would crash the test rather than report it.}
+      P := LPrevious;
+      LOk := False;
+    end
+    else
+      for I := 0 to 49 do
+        if PByte(P)[I] <> Byte(I) then
+          LOk := False;
   end;
-  {Freed whichever way the checks went. Leaving the free inside the branch
-   above would leak the block on exactly the runs that already failed, and the
-   leak report would then arrive on top of the failure it did not cause. P is
-   nil only when a ReallocMem returned nil, and FreeMem(nil) is the case
-   TestFreeNilPointer covers.}
+  {Freed whichever way the checks went, and P names a live block on every path
+   out of the loop above. Leaving the free inside the branch would leak the
+   block on exactly the runs that already failed, and the leak report would
+   then arrive on top of the failure it did not cause.}
   FreeMem(P);
   Check(LOk, '40 grows and a shrink keep the contents intact');
   Check(LStayed, 'at least one grow stayed in the same block, and '
