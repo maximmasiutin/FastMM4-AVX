@@ -160,7 +160,17 @@ suits our need. Although "xchg" has exactly the same latency and costs in terms
 of CPU cycles as "cmpxchg", it is just simpler way to do the lock that we need,
 and, according to the Occam's razor principle, simple things are better. If you
 wish to restore old functionality of FastMM4 version 4.992, disable this option,
-e.g. by defining "DontUseSimplifiedInterlockedExchangeByte" }
+e.g. by defining "DontUseSimplifiedInterlockedExchangeByte".
+
+The claim of equal cost above is not measured here for this pair. What has been
+measured is a neighbouring pair, and it points the same way: "lock add [mem]"
+and "xchg reg, [mem]" come out at the same 17.8 cycles on a Haswell-DT Core
+i5-4430 and the same 16.8 cycles on a Kaby Lake-S Core i7-7700K, against 5.0 and
+5.6 cycles for the non-locking "add [mem], reg" on those same parts. So the lock
+is what costs and the choice of locked instruction did not move the figure for
+those two. That table does not include "lock cmpxchg", so it supports the
+reasoning behind this option rather than the option itself, see
+https://stackoverflow.com/a/44959466/6910868 }
 
 {$define SimplifiedInterlockedExchangeByte}
 
@@ -170,15 +180,43 @@ CriticalSections or "pause"-based spin-wait loops instead of Sleep() or
 SwitchToThread().
 Using Sleep(0) or SwitchToThread() while waiting for a lock is a default
 approach in the original version of FastMM.
-With the new approach, the Sleep() will never be called, and SwitchToThread()
-may only be called after 5000 cycles of "pause"-based spin-wait loop.
+With the new approach, the Sleep() will never be called on the small, medium
+and large block locks these 3 options cover, and SwitchToThread()
+may only be called after 5000 iterations of the "pause"-based spin-wait loop.
+The statement is about those three locks and not about every lock in the unit:
+TStaticCollector.Lock in FastMM4DataCollector.pas keeps the older shape, and
+calls Sleep(0) and Sleep(1) by default, or SwitchToThread() when
+NeverSleepOnThreadContention and UseSwitchToThread are defined. That collector
+is compiled for lock contention logging rather than for allocation, so it is
+not on the path these 3 options are chosen for.
+That count is a number of iterations and not a number of cycles and not an
+amount of time: Intel gives "pause" about 10 cycles on the microarchitectures
+before Skylake and as many as 140 on Skylake itself, so the same 5000
+iterations are a different wait on every part this is compiled for. The
+constant is cPauseSpinWaitLoopCount in the main .pas file, where the same
+point is made beside it.
 Testing has shown that the new approach provides significant gain in
 multi-threaded scenarios, especially in situations when the number of threads
 working with the memory manager is the same or higher than the number of
 physical cores.
-Critical Sections or "pause"-based spin-wait loops implemented as
-"test, test-and-set" are much more CPU-friendly and have definitely lower
-latency than Sleep() or SwitchToThread().
+"pause"-based spin-wait loops implemented as "test, test-and-set" are more
+CPU-friendly and have lower latency than Sleep() or SwitchToThread() while the
+wait is short. A Critical Section shares that property while it is uncontended,
+where entering it is one interlocked operation in user mode, and while
+contention resolves within its spin count, the case the spin count exists for:
+only once the spin count is exhausted does it wait on a semaphore and pay the
+same kernel transition, which InitializeCriticalSectionAndSpinCount documents at
+https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-initializecriticalsectionandspincount
+The two costs being traded
+are of very different sizes: each Sleep() or SwitchToThread() call can pay a
+context switch of 10000 cycles or more and a ring 3 to ring 0 transition of 1000 or
+more, where the "pause" instruction costs about 10 cycles before Skylake and as
+many as 140 from Skylake on. The measurements are at:
+https://stackoverflow.com/a/44875567/6910868
+
+Which of the two wins therefore depends on how long the lock is actually held,
+and the Intel manual quoted there puts the boundary at waits of a few hundred
+cycles, beyond which yielding to the operating system is the better trade.
 
 When these options are enabled, FastMM4-AVX checks:
  - whether the CPU supports SSE2 and thus the "pause" instruction, and
@@ -619,7 +657,10 @@ Combine it with the two options below for further fine-tuning.}
   instead of pause-based loop;
   however these instructions for FastMM synchronization are not as efficient
   as pause-based loop, so only enable it if your tests show clear benefit
-  in your scenarios }
+  in your scenarios.
+  A worked umonitor/umwait spin-wait loop, and how it stands in for a
+  pause-based test-test-and-set loop, is at
+  https://stackoverflow.com/a/78095037/6910868 }
 
   {.$define EnableWaitPKG}
 {$endif}

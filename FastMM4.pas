@@ -38,13 +38,13 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      https://stackoverflow.com/a/79993726
    - the number of iterations of "pause"-based spin-wait loops is 5000,
      before relinquishing to SwitchToThread();
-   - see https://stackoverflow.com/a/44916975 for more details on the
+   - see https://stackoverflow.com/a/44916975/6910868 for more details on the
      implementation of the "pause"-based spin-wait loops;
    - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
      than the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
-     see https://stackoverflow.com/a/44959764
+     see https://stackoverflow.com/a/44959764/6910868
      for discussion on releasing a lock, and https://stackoverflow.com/a/79993726
      for why the plain store is safe here;
      you may define "InterlockedRelease" to get the old behavior of the original
@@ -103,7 +103,7 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
-     see https://stackoverflow.com/q/45112065
+     see https://stackoverflow.com/q/45112065/6910868
    - compare instructions + conditional jump instructions are put together
      to allow macro-op fusion (which happens since Core2 processors, when
      the first instruction is a CMP or TEST instruction and the second
@@ -3087,12 +3087,44 @@ const
 
   {The distinction between AVX1 and AVX2 is on how it clears the registers
   and how it avoids AVX-SSE transition penalties.
-  AVX2 uses the VPXOR instruction, not available on AVX1. On most Intel
-  processors, VPXOR is faster is VXORPS. For example, on Sandybridge, VPXOR can
-  run on any of the 3 ALU execution ports, p0/p1/p5.  VXORPS can only run on p5.
-  Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. Newer CPU
-  doesn't have such a huge transition penalty, and VZEROUPPER is not needed,
-  moreover, it can make subsequent SSE code slower}
+  AVX2 uses the 256-bit VPXOR on YMM registers, a form AVX1 lacks; AVX1 has
+  only the 128-bit VPXOR on XMM registers. Through Broadwell the 256-bit
+  integer form issued to any of the three ALU ports p0/p1/p5 while VXORPS was
+  limited to p5, which is where the claim that VPXOR is the faster of the two
+  comes from. From Skylake the floating-point logicals issue to p0/p1/p5 as
+  well, so on those parts the difference is historical rather than current.
+  Measured port usage per microarchitecture is at
+  https://uops.info/html-instr/VXORPS_YMM_YMM_YMM.html
+  and https://uops.info/html-instr/VPXOR_YMM_YMM_YMM.html
+  Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. A newer CPU
+  does not have such a huge transition penalty, and the dirty upper state it
+  leaves behind is what can make subsequent SSE code slower.
+  What the penalty is differs by vendor and by generation. AMD keeps the halves
+  of a vector register independent and has no such transition. On Intel through
+  Broadwell, a legacy SSE instruction executed while the upper halves are dirty
+  triggers a transition assist that saves those halves and later restores them,
+  and the assist is the cost. From Skylake there is no assist, and the cost
+  appears instead as a false dependency: a non-VEX write to an xmm register
+  merges into the upper half that register already held, so it waits on a value
+  it does not use. The two mechanisms and the measurements behind them are set
+  out at:
+  https://stackoverflow.com/a/43881748/6910868
+
+  Leaving VZEROUPPER out of the AVX2 routines is therefore a trade rather than a
+  free choice, and which way it goes depends on how much legacy SSE code runs
+  afterwards. The instruction is four front-end uops on Intel from Sandy Bridge
+  to Ice Lake and is paid once, per
+  https://uops.info/html-instr/VZEROUPPER.html
+  while the false dependency it would break is paid on every later non-VEX write
+  to an xmm register, so omitting it pays off only when little such code
+  follows. No measurement of where that crossover falls for this allocator's
+  callers has been made here. It does not follow that the state is
+  clean when those routines return: zeroing a register with a VEX encoded vpxor
+  changes what the register holds, not the state the hardware tracks, and only
+  VZEROUPPER or VZEROALL clear that. On an AVX2 part older than Skylake, meaning
+  Haswell and Broadwell, legacy SSE code that runs afterwards can still pay the
+  transition assist. The AVX1 routines call VZEROUPPER on entry and on exit and do not
+  have that exposure.}
   {On ERMSB, see p. 3.7.6 of the
   Intel 64 and IA-32 Architectures Optimization Reference Manual}
 
@@ -4088,6 +4120,9 @@ asm
    jz   @NoWaitPKG
 
    // Start of Umonitor-related section
+   // The sequence below, including the re-read of the lock byte between arming
+   // the monitor and waiting on it, follows the worked umonitor/umwait spin-wait
+   // loop at https://stackoverflow.com/a/78095037/6910868
    mov  eax, cLockByteLocked
    push rcx
    push rdx
@@ -7014,7 +7049,17 @@ end;
 (see "Intel 64 and IA-32 Architectures Optimization Reference Manual,"
 Section 3.7.7, "Enhanced REP MOVSB and STOSB operation (ERMSB)").
 We first check the corresponding bit in the CPUID, and if it is supported,
-call this routine.}
+call this routine.
+
+The two constants below choose a destination aligned by 64 bytes, one cache
+line, and a length taken down to a multiple of 64 before the transfer. The
+64-byte figure is this implementation's choice rather than a value the
+measurements ask for: the Intel manual reports that a misaligned destination
+costs an ERMSB copy up to 25 per cent against the 16-byte aligned case, where a
+128-bit AVX copy loses only 5 per cent, so alignment is worth the head copy
+that buys it, but those measurements distinguish a misaligned destination from
+a 16-byte aligned one and do not compare 16 against 64, see
+https://stackoverflow.com/a/43837564/6910868 }
 
 const
   cAlignErmsDestinationBits = 6;
@@ -19722,7 +19767,16 @@ begin
       if VirtualQuery(Pointer(LIndNUI * 65536), LMBI, SizeOf(LMBI)) = 0 then
       begin
         {VirtualQuery may fail for addresses >2GB if a large address space is
-         not enabled.}
+         not enabled. A 32-bit process is given 2GB of user address space and
+         reaches above it only when its image is marked large address aware,
+         and on 32-bit Windows only if the system was also booted with /3GB or
+         increaseuserva, which raises the limit to at most 3GB. On 64-bit
+         Windows the flag alone gives such a process 4GB. Where neither
+         condition is met the remainder of the map is reported as system
+         reserved. The two rules are stated in the Microsoft documentation at
+         https://learn.microsoft.com/en-us/windows/win32/memory/memory-limits-for-windows-releases
+         and https://learn.microsoft.com/en-us/windows/win32/memory/4-gigabyte-tuning
+         see also https://stackoverflow.com/a/44863475/6910868 }
         LCharToFill := AnsiChar(csSysReserved);
         FillChar(AMemoryMap[LIndNUI], 65536 - LIndNUI, LCharToFill);
         Break;
