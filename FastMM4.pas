@@ -3070,7 +3070,7 @@ const
   {The distinction between AVX1 and AVX2 is on how it clears the registers
   and how it avoids AVX-SSE transition penalties.
   AVX2 uses the VPXOR instruction, not available on AVX1. On most Intel
-  processors, VPXOR is faster is VXORPS. For example, on Sandybridge, VPXOR can
+  processors, VPXOR is faster than VXORPS. For example, on Sandybridge, VPXOR can
   run on any of the 3 ALU execution ports, p0/p1/p5.  VXORPS can only run on p5.
   Also, AVX1 uses the VZEROUPPER instruction, while AVX2 does not. Newer CPU
   doesn't have such a huge transition penalty, and VZEROUPPER is not needed,

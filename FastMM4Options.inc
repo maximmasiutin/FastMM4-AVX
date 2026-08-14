@@ -181,7 +181,13 @@ SwitchToThread().
 Using Sleep(0) or SwitchToThread() while waiting for a lock is a default
 approach in the original version of FastMM.
 With the new approach, the Sleep() will never be called, and SwitchToThread()
-may only be called after 5000 cycles of "pause"-based spin-wait loop.
+may only be called after 5000 iterations of the "pause"-based spin-wait loop.
+That count is a number of iterations and not a number of cycles and not an
+amount of time: Intel gives "pause" about 10 cycles on the microarchitectures
+before Skylake and as many as 140 on Skylake itself, so the same 5000
+iterations are a different wait on every part this is compiled for. The
+constant is cPauseSpinWaitLoopCount in the main .pas file, where the same
+point is made beside it.
 Testing has shown that the new approach provides significant gain in
 multi-threaded scenarios, especially in situations when the number of threads
 working with the memory manager is the same or higher than the number of
