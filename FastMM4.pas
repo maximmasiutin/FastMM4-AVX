@@ -58,7 +58,12 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      which are set by default (inside the FastMM4Options.inc file) as
      conditional defines. If you undefine these options, you will get the
      old locking mechanism of the original FastMM4 based on loops of Sleep() or
-     SwitchToThread().
+     SwitchToThread();
+     see https://stackoverflow.com/a/79995198/6910868
+     for why waiting in a Sleep() loop can let the thread that released a lock
+     retake it before a woken waiter runs: Windows guarantees no order in which
+     waiting threads acquire a critical section, and Sleep(0) and Sleep(1) are
+     scheduling workarounds rather than ordering guarantees.
 
  - AVX, AVX2 or AVX512 instructions for faster memory copy
    - if the CPU supports AVX or AVX2, use the 32-byte YMM registers
