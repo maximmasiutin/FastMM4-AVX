@@ -5,6 +5,11 @@ unit FastMM4LockFreeStack;
 
 interface
 
+{$I FastMM4CompilerDefines.inc}
+
+{FreePascal declares NativeInt itself and cannot evaluate CompilerVersion, so
+ the comparison is reachable only where it is valid.}
+{$IFNDEF FPC}
 {$IF CompilerVersion <= 20}
 {$IFNDEF CPUX64}
 type
@@ -12,6 +17,7 @@ type
   NativeUInt = cardinal;
 {$ENDIF}
 {$IFEND}
+{$ENDIF}
 
 type
   PReferencedPtr = ^TReferencedPtr;
@@ -47,16 +53,16 @@ type
     class var obsIsInitialized: boolean;                //default is false
     class var obsTaskPopLoops : NativeInt;
     class var obsTaskPushLoops: NativeInt;
-    class function  PopLink(var chain: TReferencedPtr): PLinkedData; {$IF CompilerVersion >= 23}static;{$IFEND}
-    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); {$IF CompilerVersion >= 23}static;{$IFEND}
+    class function  PopLink(var chain: TReferencedPtr): PLinkedData; {$IFDEF XE2AndUp}static;{$ENDIF}
+    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); {$IFDEF XE2AndUp}static;{$ENDIF}
   {$ENDIF UNICODE}
     procedure MeasureExecutionTimes;
   public
     procedure Empty;
     procedure Initialize(ANumElements, AElementSize: integer);
     procedure Finalize;
-    function  IsEmpty: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
-    function  IsFull: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function  IsEmpty: boolean; {$IFDEF XE2AndUp}inline;{$ENDIF}
+    function  IsFull: boolean; {$IFDEF XE2AndUp}inline;{$ENDIF}
     function  Pop(var value): boolean;
     function  Push(const value): boolean;
     property  ElementSize: integer read FElementSize;
@@ -250,6 +256,12 @@ var
   oldAffinity: NativeUInt;
   currElement: PLinkedData;
   n          : integer;
+  //The averages are held at the width GetMinAndClear returns and clamped
+  //there, because NativeInt is Integer on a 32-bit compiler and narrowing an
+  //out-of-range average first would truncate it, or raise ERangeError under
+  //range checking, before the bounds below could apply.
+  popAverage : int64;
+  pushAverage: int64;
 
 begin
   if not obsIsInitialized then begin
@@ -270,9 +282,23 @@ begin
         TimeTestField[1, n] := GetCPUTimeStamp - TimeTestField[1, n];
       end;
       //Calculate first 4 minimum average for RemoveLink routine
-      obsTaskPopLoops := GetMinAndClear(0, 4) div 4;
+      //The counts are clamped because they are derived from timestamp deltas
+      //measured on a live system: a descheduled sample makes the average huge
+      //and the spin loop below it run for that long, while a zero average
+      //removes the spin entirely.
+      popAverage := GetMinAndClear(0, 4) div 4;
+      if popAverage < 1 then
+        popAverage := 1
+      else if popAverage > 10000 then
+        popAverage := 10000;
+      obsTaskPopLoops := NativeInt(popAverage);
       //Calculate first 4 minimum average for InsertLink routine
-      obsTaskPushLoops := GetMinAndClear(1, 4) div 4;
+      pushAverage := GetMinAndClear(1, 4) div 4;
+      if pushAverage < 1 then
+        pushAverage := 1
+      else if pushAverage > 10000 then
+        pushAverage := 10000;
+      obsTaskPushLoops := NativeInt(pushAverage);
 
       //This gives better performance (determined experimentally)
       obsTaskPopLoops := obsTaskPopLoops * 2;
