@@ -4,6 +4,22 @@
  tested elsewhere. The CompilerVersion comparisons below are safe where they
  sit, inside the branches that exclude FreePascal and Delphi 4 and 5, because
  a skipped conditional block is never evaluated.}
+
+{Delphi 4 is the oldest supported compiler. Delphi 3 and earlier lack the
+ overload directive, default parameter values and Int64, so a compile can
+ only fail; the bare string literal below stops Delphi 3 at this line with
+ the message visible in the error, since it has no $MESSAGE directive.
+ Delphi 3 defines VER100, Delphi 2 VER90, C++Builder 3 VER110 with BCB.}
+{$IFDEF VER90}
+  'FastMM4 requires Delphi 4 / C++Builder 4 or later; this compiler is too old.'
+{$ENDIF}
+{$IFDEF VER100}
+  'FastMM4 requires Delphi 4 / C++Builder 4 or later; this compiler is too old.'
+{$ENDIF}
+{$IFDEF VER110}
+  'FastMM4 requires Delphi 4 / C++Builder 4 or later; this compiler is too old.'
+{$ENDIF}
+
 {$IFNDEF fpc}
   {$IFNDEF BCB}
     {$IFDEF ver120}
