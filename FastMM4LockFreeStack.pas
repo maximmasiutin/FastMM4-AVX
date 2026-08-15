@@ -250,6 +250,12 @@ var
   oldAffinity: NativeUInt;
   currElement: PLinkedData;
   n          : integer;
+  //The averages are held at the width GetMinAndClear returns and clamped
+  //there, because NativeInt is Integer on a 32-bit compiler and narrowing an
+  //out-of-range average first would truncate it, or raise ERangeError under
+  //range checking, before the bounds below could apply.
+  popAverage : int64;
+  pushAverage: int64;
 
 begin
   if not obsIsInitialized then begin
@@ -274,17 +280,19 @@ begin
       //measured on a live system: a descheduled sample makes the average huge
       //and the spin loop below it run for that long, while a zero average
       //removes the spin entirely.
-      obsTaskPopLoops := GetMinAndClear(0, 4) div 4;
-      if obsTaskPopLoops < 1 then
-        obsTaskPopLoops := 1
-      else if obsTaskPopLoops > 10000 then
-        obsTaskPopLoops := 10000;
+      popAverage := GetMinAndClear(0, 4) div 4;
+      if popAverage < 1 then
+        popAverage := 1
+      else if popAverage > 10000 then
+        popAverage := 10000;
+      obsTaskPopLoops := NativeInt(popAverage);
       //Calculate first 4 minimum average for InsertLink routine
-      obsTaskPushLoops := GetMinAndClear(1, 4) div 4;
-      if obsTaskPushLoops < 1 then
-        obsTaskPushLoops := 1
-      else if obsTaskPushLoops > 10000 then
-        obsTaskPushLoops := 10000;
+      pushAverage := GetMinAndClear(1, 4) div 4;
+      if pushAverage < 1 then
+        pushAverage := 1
+      else if pushAverage > 10000 then
+        pushAverage := 10000;
+      obsTaskPushLoops := NativeInt(pushAverage);
 
       //This gives better performance (determined experimentally)
       obsTaskPopLoops := obsTaskPopLoops * 2;
