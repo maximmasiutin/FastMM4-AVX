@@ -129,7 +129,7 @@ const
   InvalidGetMemMsg = 'FastMM detekoval volání GetMem, které probìhlo po odinstalaci FastMM.';
   InvalidFreeMemMsg = 'FastMM detekoval volání FreeMem, které probìhlo po odinstalaci FastMM.';
   InvalidReallocMemMsg = 'FastMM detekoval volání ReallocMem, které probìhlo po odinstalaci FastMM.';
-  InvalidAllocMemMsg = 'FastMM detekoval volání ReallocMem, které probìhlo po odinstalaci FastMM.';
+  InvalidAllocMemMsg = 'FastMM detekoval volání AllocMem, které probìhlo po odinstalaci FastMM.';
 {$endif}
 
 implementation
