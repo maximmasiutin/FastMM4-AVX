@@ -7,9 +7,11 @@ interface
 
 {$I FastMM4CompilerDefines.inc}
 
-{FreePascal declares NativeInt itself and cannot evaluate CompilerVersion, so
- the comparison is reachable only where it is valid.}
-{$IFNDEF FPC}
+{BCB6OrDelphi6AndUp excludes FreePascal, which declares NativeInt itself, and
+ Delphi 4 and 5, which cannot parse the comparison. The boundary is <= 20 on
+ purpose: Delphi 2009's own NativeInt is the broken 8-byte kind, and the CAS
+ record below needs the 4-byte alias on that 32-bit-only compiler.}
+{$IFDEF BCB6OrDelphi6AndUp}
 {$IF CompilerVersion <= 20}
 {$IFNDEF CPUX64}
 type
