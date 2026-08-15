@@ -9,3 +9,6 @@ Compile_FastMM4_AVX512_Linux.sh text eol=lf
 Tests\Advanced\run-tests.sh text eol=lf
 FastMM4_AVX512_Linux.asm text eol=lf
 Dockerfile text eol=lf
+*.pas text=auto
+*.inc text=auto
+*.dpr text=auto
