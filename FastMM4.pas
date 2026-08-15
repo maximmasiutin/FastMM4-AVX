@@ -96,11 +96,13 @@ Changes in FastMM4-AVX compared to the original FastMM4:
    - on AVX-512, writing to xmm16-xmm31 registers will not affect the turbo
      clocks, and will not impose AVX-SSE transition penalties; therefore, when we
      have AVX-512, we now only use x(y/z)mm16-31 registers;
-   - the wide moves are used only for bulk copy while the block's lock is
-     held; no per-element or whole-register atomicity is assumed, because
-     only aligned 128-bit plain moves are architecturally atomic on CPUs
-     that enumerate AVX, while 256-/512-bit and masked moves carry no
-     documented guarantee, see
+   - the wide moves are used only for bulk copy of memory the calling
+     thread owns exclusively, such as a block's contents during
+     reallocation, and never for cross-thread synchronization, which goes
+     through the lock bytes instead; no per-element or whole-register
+     atomicity is assumed, because only aligned 128-bit plain moves are
+     architecturally atomic on CPUs that enumerate AVX, while 256-/512-bit
+     and masked moves carry no documented guarantee, see
      https://stackoverflow.com/a/79995416/6910868
 
  - Speed improvements due to code optimization and proper techniques
