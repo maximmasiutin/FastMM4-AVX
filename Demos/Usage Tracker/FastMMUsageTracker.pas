@@ -1025,7 +1025,7 @@ var
 begin
   eDLLName.Text := '';
   LChunkIndex := ARow * dgMemoryMap.ColCount + ACol;
-  eAddress.Text := Format('$%0.8x', [LChunkIndex shl 16]);
+  eAddress.Text := Format('$%0.8x', [UIntPtr(LChunkIndex) shl 16]);
 
   case FMemoryMapEx[LChunkIndex] of
 
@@ -1047,7 +1047,7 @@ begin
     csExSysExe:
       begin
         eState.Text := 'System Exe';
-        VirtualQuery(Pointer(LChunkIndex shl 16), LMBI, SizeOf(LMBI));
+        VirtualQuery(Pointer(UIntPtr(LChunkIndex) shl 16), LMBI, SizeOf(LMBI));
         if (GetModuleFileName(dword(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
         begin
           eDLLName.Text := LA_Char;
@@ -1057,7 +1057,7 @@ begin
     csExSysDLL:
       begin
         eState.Text := 'System/User DLL';
-        VirtualQuery(Pointer(LChunkIndex shl 16), LMBI, SizeOf(LMBI));
+        VirtualQuery(Pointer(UIntPtr(LChunkIndex) shl 16), LMBI, SizeOf(LMBI));
         if (GetModuleFileName(dword(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
         begin
           eDLLName.Text := LA_Char;
