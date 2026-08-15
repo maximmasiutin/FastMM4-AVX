@@ -694,11 +694,10 @@ jobs:
       # =========================================================================
       # Security Tests - Windows
       # =========================================================================
-      # Note: -dFullDebugMode needs FastMM_FullDebugMode.dll beside the
-      # executable. Both widths of that DLL are tracked in this repository under
-      # "FullDebugMode DLL/Precompiled", so the FullDebugMode steps below copy
-      # the matching one and run like any other step.
-      # -dDEBUG is OK on Windows CI (no external DLL requirement).
+      # Note: -dFullDebugMode needs the tracked DLL beside the executable, which
+      # the FullDebugMode group below copies. -dDEBUG needs nothing.
+
+      # 64-bit, release and debug, with and without the assembly path.
 
       - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
         run: |
@@ -724,6 +723,8 @@ jobs:
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
           & '.\IntegerOverflowTest.exe'
 
+      # 32-bit, the same four.
+
       - name: Compile and run Integer Overflow Test (32-bit Release with ASM)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
@@ -748,14 +749,11 @@ jobs:
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
           & '.\IntegerOverflowTest.exe'
 
-      # The four steps below are the only place FullDebugMode is exercised on
-      # Windows. The test adds probes there that the ordinary path cannot reach,
-      # since the debug allocator adds its own overhead to the caller's size and
-      # a size near the top of the range makes that addition wrap.
-      # Two of the four turn on range and overflow checking with -Criot, which
-      # is what tells a wrap that quietly returns an undersized block apart from
-      # one the compiler will trap: FastMM4 sets no check directive of its own
-      # and inherits whatever the program compiling it asks for.
+      # =========================================================================
+      # Security Tests - Windows FullDebugMode
+      # The debug allocator adds its overhead before any bound, which only these
+      # steps reach; -Criot traps a wrap the unchecked build would serve.
+      # =========================================================================
 
       - name: Compile and run Integer Overflow Test (64-bit FullDebugMode)
         run: |
