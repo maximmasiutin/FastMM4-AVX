@@ -276,10 +276,26 @@ If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
 
-- 1.0.13 (15 August 2026) Fixed inline assembler alignment directives for
-  Delphi 7 and other pre-XE compilers when ForceAsmCodeAlign was defined;
-  accept a nil pointer in DebugFreeMem under FreePascal; fixed two
-  InterlockedRelease defects.
+- 1.0.13 (15 August 2026) Correctness and portability release covering 48
+  pull requests since v1.0.12. Memory safety: report an invalid pointer
+  passed to FreeMem on every free path and enable SoftInvalidFreeMem
+  automatically on Delphi for Linux (issue #39); return a defined result
+  from FastFreeMem when the pointer is invalid; refuse a foreign pointer
+  in the large block path; fix integer overflow in the usage tracker and
+  the range check safety of the allocation size arithmetic; repair two
+  InterlockedRelease defects, refusing the build combinations that cannot
+  be supported; fix medium block lock finalization and the finalization
+  order on Linux (issue #55). FreePascal: repair FullDebugMode across the
+  free block check, the counter address, the reallocation var pointer and
+  the memory manager entries that left MemSize and FreeMemSize unhooked
+  (issue #68); accept a nil pointer in DebugFreeMem; correct the type
+  casts and the LP64 synchro variable. Compilers: honour ForceAsmCodeAlign
+  only from Delphi XE2, where the inline assembler has an align directive,
+  fixing the build break on Delphi 7 and other pre-XE compilers (issue
+  #81); correct an operand size and clear the compiler hints and notes
+  (issues #54, #55). Tests and CI: regression tests for the FPU stack, for
+  FreeMem with a nil pointer and for FullDebugMode, with Linux and Windows
+  coverage across two FreePascal versions.
 
 - 1.0.12 (5 March 2026) Security: Added production-build double-free detection
   in FastFreeMem (CWE-415), added advanced regression tests for double-free
