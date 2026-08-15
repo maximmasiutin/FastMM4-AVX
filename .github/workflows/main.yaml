@@ -694,7 +694,10 @@ jobs:
       # =========================================================================
       # Security Tests - Windows
       # =========================================================================
-      # Note: -dFullDebugMode requires external DLLs not available in CI.
+      # Note: -dFullDebugMode needs FastMM_FullDebugMode.dll beside the
+      # executable. Both widths of that DLL are tracked in this repository under
+      # "FullDebugMode DLL/Precompiled", so the FullDebugMode steps below copy
+      # the matching one and run like any other step.
       # -dDEBUG is OK on Windows CI (no external DLL requirement).
 
       - name: Compile and run Integer Overflow Test (64-bit Release with ASM)
@@ -743,6 +746,43 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dDontUseASMVersion', '-dDEBUG', '-g', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      # The four steps below are the only place FullDebugMode is exercised on
+      # Windows. The test adds probes there that the ordinary path cannot reach,
+      # since the debug allocator adds its own overhead to the caller's size and
+      # a size near the top of the range makes that addition wrap.
+      # Two of the four turn on range and overflow checking with -Criot, which
+      # is what tells a wrap that quietly returns an undersized block apart from
+      # one the compiler will trap: FastMM4 sets no check directive of its own
+      # and inherits whatever the program compiling it asks for.
+
+      - name: Compile and run Integer Overflow Test (64-bit FullDebugMode)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode64.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (64-bit FullDebugMode, range and overflow checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode64.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Criot', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O-', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit FullDebugMode)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'IntegerOverflowTest.dpr')
+          & '.\IntegerOverflowTest.exe'
+
+      - name: Compile and run Integer Overflow Test (32-bit FullDebugMode, range and overflow checks)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Criot', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O-', 'IntegerOverflowTest.dpr')
           & '.\IntegerOverflowTest.exe'
 
       # =========================================================================

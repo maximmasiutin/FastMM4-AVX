@@ -17140,7 +17140,28 @@ begin
   try
     {We need extra space for (a) The debug header, (b) the block debug trailer
      and (c) the trailing block size pointer for free blocks}
-    Result := FastGetMem(ASize + FullDebugBlockOverhead {$IFDEF LogLockContention}, LCollector{$ENDIF});
+    {A request within FullDebugBlockOverhead of the top of the size type makes
+     that addition wrap, and the wrapped total is a small number the allocator
+     will serve, so the caller would be handed a block far smaller than it asked
+     for and the footer would then be written outside it. The size is refused
+     before the addition rather than after, since FastGetMem never sees the
+     value the caller actually named.
+
+     The test is written in the parameter's own type, so the addition below is
+     exact rather than merely harmless. The type is unsigned under FreePascal
+     and signed under Delphi, where a size that has already wrapped arrives as
+     a negative number and one just below High(NativeInt) would overflow the
+     addition itself. Both are refused here, which is what lets this unit be
+     compiled with overflow checking on: it sets no overflow check directive of
+     its own and takes whatever the program compiling it sets.}
+{$IFDEF FPC}
+    if ASize > (High(ptruint) - FullDebugBlockOverhead) then
+{$ELSE}
+    if (ASize < 0) or (ASize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead))) then
+{$ENDIF}
+      Result := nil
+    else
+      Result := FastGetMem(ASize + FullDebugBlockOverhead {$IFDEF LogLockContention}, LCollector{$ENDIF});
     if Result <> nil then
     begin
       {Large blocks are always newly allocated (and never reused), so checking
@@ -17410,8 +17431,21 @@ begin
     {Get the current block size}
     LBlockSpace := GetAvailableSpaceInBlock(LActualBlock);
     {Can the block fit? We need space for the debug overhead and the block header
-     of the next block}
-    if LBlockSpace < (NativeUInt(ANewSize) + FullDebugBlockOverhead) then
+     of the next block. The same addition wraps here, and a wrapped total reads
+     as a size the existing block can already hold, so the block would be kept
+     and the caller told that its enormous request had been served in place. A
+     size that cannot have the overhead added to it is sent down the allocate
+     path instead, where DebugGetMem refuses it and the existing nil handling
+     reports the failure. The first test is again in the parameter's own type,
+     and it short-circuits, so the addition in the last operand is reached only
+     for a size it fits.}
+    if
+{$IFDEF FPC}
+      (ANewSize > (High(ptruint) - FullDebugBlockOverhead))
+{$ELSE}
+      (ANewSize < 0) or (ANewSize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead)))
+{$ENDIF}
+      or (LBlockSpace < (NativeUInt(ANewSize) + FullDebugBlockOverhead)) then
     begin
       {Get a new block of the requested size.}
       Result := DebugGetMem(ANewSize);
