@@ -242,19 +242,13 @@ end;
  caller receives a block far smaller than it asked for. These probes stand at
  both ends of that interval and at the two largest values there are.
 
- The overhead is stated here rather than read from FastMM4, which keeps it
- private: it is the full debug header, 128 bytes on 32-bit and 240 on 64-bit
- with the current stack trace depth, plus a NativeUInt trailer and one trailing
- free-block pointer. A value that drifts from the allocator's own only moves
- the probes inside an interval every member of which must be refused, so the
- checks stay valid; they stop naming the exact boundary, which is what the
- first two lines below are for.}
+ The overhead is the same sum the allocator forms: the full debug header, a
+ NativeUInt trailer and one trailing free-block pointer. FastMM4 declares the
+ header type in its interface, so the size is taken from it rather than written
+ out, and a change to the stack trace depth moves the probes with it.}
 function FullDebugOverheadForTest: NativeUInt;
 begin
-  if SizeOf(Pointer) = 8 then
-    Result := 240 + SizeOf(NativeUInt) + SizeOf(Pointer)
-  else
-    Result := 128 + SizeOf(NativeUInt) + SizeOf(Pointer);
+  Result := SizeOf(TFullDebugBlockHeader) + SizeOf(NativeUInt) + SizeOf(Pointer);
 end;
 
 {The debug entry points take the same signed size as the ordinary ones on

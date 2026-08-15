@@ -785,9 +785,7 @@ jobs:
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit
-      # Note: Debug modes (-dDEBUG, -dFullDebugMode) require external DLLs
-      # (e.g., FastMM_FullDebugMode.dll) not available in CI.
-      # Windows debug testing should be performed locally during development.
+      # These stay release-only; FullDebugMode is covered by the group above.
       # =========================================================================
       - name: Compile and run AdvancedTest 32-bit (Release)
         run: |
@@ -827,9 +825,7 @@ jobs:
 
       # =========================================================================
       # Advanced Tests - Windows 64-bit (AVX-512 obj already compiled above)
-      # Note: Debug modes (-dDEBUG, -dFullDebugMode) require external DLLs
-      # (e.g., FastMM_FullDebugMode.dll) not available in CI.
-      # Windows debug testing should be performed locally during development.
+      # These stay release-only; FullDebugMode is covered by the group above.
       # =========================================================================
       - name: Compile and run AdvancedTest 64-bit (Release)
         run: |
