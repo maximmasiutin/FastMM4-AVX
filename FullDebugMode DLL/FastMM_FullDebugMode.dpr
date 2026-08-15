@@ -66,6 +66,8 @@ time.}
 // JCL_DEBUG_EXPERT_INSERTJDBG OFF
 library FastMM_FullDebugMode;
 
+{$I ..\FastMM4CompilerDefines.inc}
+
 uses
   {$ifdef JCLDebug}JCLDebug,{$endif}
   {$ifdef madExcept}madStackTrace,{$endif}
@@ -84,12 +86,12 @@ uses
 
 {$ifend}
 
-{$IF CompilerVersion <= 20}
+{$IFDEF Delphi2009AndDown}
 type
   NativeUInt = Cardinal;
   PNativeUInt = ^NativeUInt;
   NativeInt = Integer;
-{$IFEND}
+{$ENDIF}
 
 {--------------------------Return Address Info Cache --------------------------}
 {$IFDEF JCLDebug}
@@ -116,29 +118,29 @@ type
     {Entry 0 is the root of the tree.}
     Entries: array[0..CReturnAddressCacheSize] of TReturnAddressInfo;
     NextNewEntryIndex: Integer;
-    {$IF CompilerVersion >= 23}
+    {$IFDEF XE2AndUp}
     function AddEntry(AReturnAddress: NativeUInt; const AReturnAddressInfoText: AnsiString): PReturnAddressInfo;
     procedure DeleteEntry(AEntry: PReturnAddressInfo);
     function FindEntry(AReturnAddress: NativeUInt): PReturnAddressInfo;
-    {$IFEND}
+    {$ENDIF}
   end;
 
 var
   LReturnAddressInfoCache: TReturnAddressInfoCache;
 
-{$IF CompilerVersion >= 23}
+{$IFDEF XE2AndUp}
 procedure TReturnAddressInfoCache.DeleteEntry(AEntry: PReturnAddressInfo);
 {$ELSE}
 procedure TReturnAddressInfoCache_DeleteEntry(AEntry: PReturnAddressInfo);
-{$IFEND}
+{$ENDIF}
 var
   LRemovedItemChildIndex, LMovedItemChildIndex: Integer;
   LMovedItem, LChildItem: PReturnAddressInfo;
 begin
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
   with LReturnAddressInfoCache do
     begin
-  {$IFEND}
+  {$ENDIF}
     {Is this entry currentlty in the tree?}
     if AEntry.ParentEntry = nil then
       Exit;
@@ -198,25 +200,25 @@ begin
     end;
     {Reset the parent for the removed item.}
     AEntry.ParentEntry := nil;
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
     end;
-  {$IFEND}
+  {$ENDIF}
 end;
 
-{$IF CompilerVersion >= 23}
+{$IFDEF XE2AndUp}
 function TReturnAddressInfoCache.AddEntry(AReturnAddress: NativeUInt; const AReturnAddressInfoText: AnsiString): PReturnAddressInfo;
 {$ELSE}
 function TReturnAddressInfoCache_AddEntry(AReturnAddress: NativeUInt; const AReturnAddressInfoText: AnsiString): PReturnAddressInfo;
-{$IFEND}
+{$ENDIF}
 var
   LParentItem, LChildItem: PReturnAddressInfo;
   LAddressBits: NativeUInt;
   LChildIndex: Integer;
 begin
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
   with LReturnAddressInfoCache do
     begin
-  {$IFEND}
+  {$ENDIF}
     {Get the address of the entry to reuse. (Entry 0 is the tree root.)}
     if NextNewEntryIndex = High(Entries) then
       NextNewEntryIndex := 0;
@@ -225,11 +227,11 @@ begin
     Result := @Entries[NextNewEntryIndex];
 
     {Delete it if it is already in use}
-    {$IF CompilerVersion >= 23}
+    {$IFDEF XE2AndUp}
     DeleteEntry(Result);
     {$ELSE}
     TReturnAddressInfoCache_DeleteEntry(Result);
-    {$IFEND}
+    {$ENDIF}
 
     {Step down the tree until an open slot is found in the required direction.}
     LParentItem := @Entries[0];
@@ -257,24 +259,24 @@ begin
     if Result.InfoTextLength > CMaxInfoTextLength then
       Result.InfoTextLength := CMaxInfoTextLength;
     System.Move(Pointer(AReturnAddressInfoText)^, Result.InfoText, Result.InfoTextLength * SizeOf(AnsiChar));
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
     end;
-  {$IFEND}
+  {$ENDIF}
 end;
 
-{$IF CompilerVersion >= 23}
+{$IFDEF XE2AndUp}
 function TReturnAddressInfoCache.FindEntry(AReturnAddress: NativeUInt): PReturnAddressInfo;
 {$ELSE}
 function TReturnAddressInfoCache_FindEntry(AReturnAddress: NativeUInt): PReturnAddressInfo;
-{$IFEND}
+{$ENDIF}
 var
   LAddressBits: NativeUInt;
   LParentItem: PReturnAddressInfo;
 begin
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
   with LReturnAddressInfoCache do
     begin
-  {$IFEND}
+  {$ENDIF}
     LAddressBits := AReturnAddress;
     LParentItem := @Entries[0];
     {Step down the tree until the item is found or there is no child item in the required direction.}
@@ -292,9 +294,9 @@ begin
       LParentItem := Result;
       LAddressBits := LAddressBits shr 1;
     end;
-  {$IF CompilerVersion < 23}
+  {$IFNDEF XE2AndUp}
     end;
-  {$IFEND}
+  {$ENDIF}
 end;
 {$ENDIF JCLDebug}
 
@@ -431,7 +433,7 @@ asm
   fldcw L8087CW
 end;
 
-{$if CompilerVersion > 22}
+{$IFDEF XE2AndUp}
 {Thread-safe version that avoids the global variable DefaultMXCSR.}
 procedure SetMXCSR(ANewMXCSR: Cardinal);
 var
@@ -447,7 +449,7 @@ asm
   ldmxcsr LMXCSR
 @exit:
 end;
-{$ifend}
+{$ENDIF}
 
 {$IFDEF MSWINDOWS}
 {Returns true if the return address is a valid call site.  This function is only safe to call while exceptions are
@@ -843,11 +845,11 @@ begin
       Result := NativeUIntToHexBuf(LAddress, Result);
 
       {If the info for the return address is not yet in the cache, add it.}
-      {$IF CompilerVersion >= 23}
+      {$IFDEF XE2AndUp}
       LPInfo := LReturnAddressInfoCache.FindEntry(LAddress);
       {$ELSE}
       LPInfo := TReturnAddressInfoCache_FindEntry(LAddress);
-      {$IFEND}
+      {$ENDIF}
 
       if LPInfo = nil then
       begin
@@ -868,18 +870,18 @@ begin
         {Remove UnitName from ProcedureName, no need to output it twice}
         P := PChar(LInfo.ProcedureName);
         if (StrLComp(P, PChar(LInfo.UnitName), Length(LInfo.UnitName)) = 0) and (P[Length(LInfo.UnitName)] = '.') then
-          AppendInfoToString(LTempStr, Copy(LInfo.ProcedureName, Length(LInfo.UnitName) + 2{$IF CompilerVersion < 23},Length( LInfo.ProcedureName )-Length( LInfo.UnitName )-1{$IFEND}))
+          AppendInfoToString(LTempStr, Copy(LInfo.ProcedureName, Length(LInfo.UnitName) + 2{$IFNDEF XE2AndUp},Length( LInfo.ProcedureName )-Length( LInfo.UnitName )-1{$ENDIF}))
         else
           AppendInfoToString(LTempStr, LInfo.ProcedureName);
 
         if LInfo.LineNumber <> 0 then
           AppendInfoToString(LTempStr, IntToStr(LInfo.LineNumber));
 
-        {$IF CompilerVersion >= 23}
+        {$IFDEF XE2AndUp}
         LPInfo := LReturnAddressInfoCache.AddEntry(LAddress, AnsiString(LTempStr));
         {$ELSE}
         LPInfo := TReturnAddressInfoCache_AddEntry(LAddress, AnsiString(LTempStr));
-        {$IFEND}
+        {$ENDIF}
       end;
 
       System.Move(LPInfo.InfoText, Result^, LPInfo.InfoTextLength);
@@ -1143,14 +1145,14 @@ exports
 
 begin
 {$ifdef JCLDebug}
-{$IF CompilerVersion < 23}
+{$IFNDEF XE2AndUp}
 {$IF defined( Win32 )} // Win32 or OSX32
   TestSSE := GetBriefSSEType;
   DefaultMXCSR := GetMXCSR and $FFC0;  // Remove flag bits;
 {$ELSEIF defined( Win64 )} // Win64
   TestSSE := $3; // SSE & SSE2 are available on X64
 {$IFEND}
-{$IFEND}
+{$ENDIF}
 
   JclStackTrackingOptions := JclStackTrackingOptions + [stAllModules];
 {$endif}

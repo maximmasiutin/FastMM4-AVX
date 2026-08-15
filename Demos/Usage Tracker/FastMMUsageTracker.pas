@@ -47,6 +47,8 @@ Change log:
 
 unit FastMMUsageTracker;
 
+{$I ..\..\FastMM4CompilerDefines.inc}
+
 interface
 
 uses
@@ -711,8 +713,8 @@ var
     LR_GlobalMemoryStatusEx: TMemoryStatusEx;
     LR_ProcessMemoryCounters: TProcessMemoryCounters;
     LR_SysBaseInfo: TSystem_Basic_Information;
-    LU_MinQuota: {$if CompilerVersion >= 23}NativeUInt{$else}Cardinal{$ifend};
-    LU_MaxQuota: {$if CompilerVersion >= 23}NativeUInt{$else}Cardinal{$ifend};
+    LU_MinQuota: {$IFDEF XE2AndUp}NativeUInt{$ELSE}Cardinal{$ENDIF};
+    LU_MaxQuota: {$IFDEF XE2AndUp}NativeUInt{$ELSE}Cardinal{$ENDIF};
     LI_I: Integer;
     LI_Max: Integer;
   begin

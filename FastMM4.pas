@@ -1861,24 +1861,24 @@ type
 
   {Make sure all the required types are available}
 {$IFDEF BCB6OrDelphi6AndUp}
-  {$if CompilerVersion < 20}
+  {$IFNDEF Delphi2009AndUp}
   PByte = PAnsiChar; {$define PByteIsPAnsiChar}
   {NativeInt didn't exist or was broken before Delphi 2009.}
   NativeInt = Integer;
-  {$ifend}
-  {$if CompilerVersion < 21}
+  {$ENDIF}
+  {$IFNDEF Delphi2010AndUp}
   {NativeUInt didn't exist or was broken before Delphi 2010.}
   NativeUInt = Cardinal;
-  {$ifend}
-  {$if CompilerVersion < 22}
+  {$ENDIF}
+  {$IFNDEF DelphiXEAndUp}
   {PNativeUInt didn't exist before Delphi XE.}
   PNativeUInt = ^Cardinal;
-  {$ifend}
-  {$if CompilerVersion < 23}
+  {$ENDIF}
+  {$IFNDEF XE2AndUp}
   {IntPtr and UIntPtr didn't exist before Delphi XE2.}
   IntPtr = Integer;
   UIntPtr = Cardinal;
-  {$ifend}
+  {$ENDIF}
 {$ELSE}
   {$IFNDEF fpc}
   PByte = PAnsiChar; {$define PByteIsPAnsiChar}

@@ -1,6 +1,7 @@
 unit FastMM4DataCollector;
 
 {$I FastMM4Options.inc}
+{$I FastMM4CompilerDefines.inc}
 
 interface
 
@@ -95,15 +96,15 @@ type
     function GetGen1_PromoteEvery_sec: integer;
     function GetOverflowCount: TGenerationOverflowCount;
     procedure Lock;
-    function Now_ms: int64; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function Now_ms: int64; {$IFDEF XE2AndUp}inline;{$ENDIF}
     procedure SetGen1_PromoteCountOver(const value: integer);
     procedure SetGen1_PromoteEvery_sec(const value: integer);
   private
     procedure AddToGeneration(generation: integer; const aData: TPointers;
       count: integer = 1);
-    procedure CheckPromoteGeneration(generation: integer); {$IF CompilerVersion >= 23}inline;{$IFEND}
-    function FindInGeneration(generation: integer; const aData: TPointers): integer; {$IF CompilerVersion >= 23}inline;{$IFEND}
-    function FindInsertionPoint(generation, count: integer): integer; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    procedure CheckPromoteGeneration(generation: integer); {$IFDEF XE2AndUp}inline;{$ENDIF}
+    function FindInGeneration(generation: integer; const aData: TPointers): integer; {$IFDEF XE2AndUp}inline;{$ENDIF}
+    function FindInsertionPoint(generation, count: integer): integer; {$IFDEF XE2AndUp}inline;{$ENDIF}
     procedure FlushAllGenerations;
     function InsertIntoGeneration(generation: integer; const dataInfo: TDataInfo): boolean;
     procedure PromoteGeneration(oldGen, newGen: integer);

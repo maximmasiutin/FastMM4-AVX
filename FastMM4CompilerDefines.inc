@@ -59,9 +59,39 @@
       {$define 64BIT}
       {$undef 32BIT}
     {$ifend}
+    {NativeInt arrived, and PByte stopped being PAnsiChar, in Delphi 2009.}
+    {$define Delphi2009AndUp}
+    {$IFDEF ver140}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver150}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver160}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver170}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver180}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver185}{$undef Delphi2009AndUp}{$ENDIF}
+    {$IFDEF ver190}{$undef Delphi2009AndUp}{$ENDIF}
+    {NativeUInt arrived in Delphi 2010.}
+    {$define Delphi2010AndUp}
+    {$IFDEF ver140}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver150}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver160}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver170}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver180}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver185}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver190}{$undef Delphi2010AndUp}{$ENDIF}
+    {$IFDEF ver200}{$undef Delphi2010AndUp}{$ENDIF}
+    {PNativeUInt arrived in Delphi XE.}
+    {$define DelphiXEAndUp}
+    {$IFDEF ver140}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver150}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver160}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver170}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver180}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver185}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver190}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver200}{$undef DelphiXEAndUp}{$ENDIF}
+    {$IFDEF ver210}{$undef DelphiXEAndUp}{$ENDIF}
     {XE2 is where the inline assembler gained the align directive, where
-     NativeInt became the pointer-width type throughout, and where a class
-     method of a record needs the static directive.}
+     IntPtr and UIntPtr arrived, and where a class method of a record needs
+     the static directive.}
     {$define XE2AndUp}
     {$IFDEF ver140}{$undef XE2AndUp}{$ENDIF}
     {$IFDEF ver150}{$undef XE2AndUp}{$ENDIF}
