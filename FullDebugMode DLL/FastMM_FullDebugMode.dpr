@@ -86,12 +86,16 @@ uses
 
 {$ifend}
 
+{FreePascal declares these itself and cannot evaluate CompilerVersion, so the
+ comparison is reachable only where it is valid.}
+{$IFNDEF FPC}
 {$IF CompilerVersion <= 20}
 type
   NativeUInt = Cardinal;
   PNativeUInt = ^NativeUInt;
   NativeInt = Integer;
 {$IFEND}
+{$ENDIF}
 
 {--------------------------Return Address Info Cache --------------------------}
 {$IFDEF JCLDebug}
