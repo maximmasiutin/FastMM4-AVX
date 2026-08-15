@@ -52,17 +52,30 @@ interface
 {$DEFINE MANIFEST} // WinSxS Support
 {$DEFINE ALLOW_LOAD_FILES}
 {$DEFINE LOAD_FROM_RESOURCE} // MS add support to extract dlls from resource to load via LoadLibrary
-{$IF Defined( LOAD_FROM_RESOURCE ) AND ( NOT Defined( FastMM4 ) AND NOT Defined( FastMM5 ) )}
-  {$DEFINE USE_STREAMS} 
-{$IFEND}
+
+{Each OR of defines used below is folded into one name here and tested with a
+ plain $IFDEF, following the repository rule that keeps conditional directives
+ readable by every supported compiler; nested $IFDEF cannot express an OR at
+ the point of use.}
+{$IFDEF ALLOW_LOAD_FILES}{$DEFINE LoadFilesOrResource}{$ENDIF}
+{$IFDEF LOAD_FROM_RESOURCE}{$DEFINE LoadFilesOrResource}{$ENDIF}
+{$IFDEF FastMM4}{$DEFINE FastMM4or5}{$ENDIF}
+{$IFDEF FastMM5}{$DEFINE FastMM4or5}{$ENDIF}
+{$IFDEF LINUX}{$DEFINE PosixTarget}{$ENDIF}
+{$IFDEF MACOS}{$DEFINE PosixTarget}{$ENDIF}
+{$IFDEF ANDROID}{$DEFINE PosixTarget}{$ENDIF}
+
+{$IFDEF LOAD_FROM_RESOURCE}{$IFNDEF FastMM4or5}
+  {$DEFINE USE_STREAMS}
+{$ENDIF}{$ENDIF}
 
 {$DEFINE GetModuleHandle_BuildImportTable} // Try GetModuleHandle for BuildImportTable
 
 {$DEFINE GetModuleHandle}
-{$IF Defined( GetModuleHandle ) AND ( NOT Defined( FastMM4 ) AND NOT Defined( FastMM5 ) )}
+{$IFDEF GetModuleHandle}{$IFNDEF FastMM4or5}
   {$DEFINE UnloadAllOnFinalize} // Unload all modules during finalization of this unit
   {$DEFINE GetModuleHandleCriticalSection} // thread-safe
-{$IFEND GetModuleHandle}
+{$ENDIF}{$ENDIF GetModuleHandle}
 
 {$IFDEF MANIFEST}
   {$OPTIMIZATION OFF}
@@ -121,7 +134,7 @@ type
     -------------------------------------------------- }
 
 // return value is nil if function fails
-function MemoryLoadLibrary( data: Pointer; var Module : PMemoryModule ): ShortInt; stdcall; {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}overload;{$IFEND}
+function MemoryLoadLibrary( data: Pointer; var Module : PMemoryModule ): ShortInt; stdcall; {$IFDEF LoadFilesOrResource}overload;{$ENDIF}
 {$IFDEF ALLOW_LOAD_FILES}
 function MemoryLoadLibraryFile( FileName : string; var Module : PMemoryModule ): ShortInt; stdcall;
 {$ENDIF ALLOW_LOAD_FILES}
@@ -131,10 +144,10 @@ function MemoryResourceExists( var ResourceName : string ) : HRSRC;
 {$ENDIF LOAD_FROM_RESOURCE}
 
 {$IFDEF GetModuleHandle}
-function MemoryGetModuleHandle( data: Pointer ): PMemoryModule; stdcall; {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}overload;{$IFEND}
-{$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+function MemoryGetModuleHandle( data: Pointer ): PMemoryModule; stdcall; {$IFDEF LoadFilesOrResource}overload;{$ENDIF}
+{$IFDEF LoadFilesOrResource}
 function MemoryGetModuleHandle( FileName : string{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean = False{$ENDIF} ): PMemoryModule; stdcall; overload;
-{$IFEND}
+{$ENDIF}
 {$ENDIF GetModuleHandle}
 
 // return value is nil if function fails
@@ -153,14 +166,14 @@ function MemoryEnumerateImports( ResourceName : string; var Modules : string; De
 implementation
 
 uses
-  {$IF Defined( FastMM4 ) OR Defined( FastMM5 )}
+  {$IFDEF FastMM4or5}
   ZLibMinimal,	
 	{$IFDEF FastMM5}FastMM5{$ELSE}FastMM4{$ENDIF}	
   {$ELSE}
   ZLib
-  {$IFEND}
+  {$ENDIF}
   {$IFDEF lzma},LZMA, LZMA2{$ENDIF}
-  {$IF ( Defined( GetModuleHandle ) AND Defined( GetModuleHandleCriticalSection ) )},SyncObjs{$IFEND}
+  {$IFDEF GetModuleHandle}{$IFDEF GetModuleHandleCriticalSection},SyncObjs{$ENDIF}{$ENDIF}
   {$IFDEF USE_STREAMS},Classes, JclCompression{$ENDIF}
   ;
 
@@ -596,7 +609,7 @@ begin
   Move( S[ 1 ], Buffer[ 0 ], Result );
 end;
 {$ENDIF}
-{$IF defined(LINUX) or defined(MACOS) or defined(ANDROID)}
+{$IFDEF PosixTarget}
 const
   UnknownModuleName = '<unknown>';
 var
@@ -627,7 +640,7 @@ begin
     ExceptAddr, MsgPtr, MsgEnd]);
   Result := StrLen(Buffer);
 end;
-{$IFEND LINUX or MACOS or ANDROID}
+{$ENDIF PosixTarget}
 {$IFEND}
 
   { +++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -1199,9 +1212,9 @@ type
     fItems : Array of packed record
                       Handle     : PMemoryModule;
                       Data       : Pointer;
-                      {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+                      {$IFDEF LoadFilesOrResource}
                       FileName   : string;
-                      {$IFEND}
+                      {$ENDIF}
                       {$IFDEF LOAD_FROM_RESOURCE}
                       IsResource : Boolean;
                       {$ENDIF LOAD_FROM_RESOURCE}
@@ -1214,11 +1227,11 @@ type
     fCrit  : TCriticalSection;
     {$ENDIF GetModuleHandleCriticalSection}
     procedure   DelID( ID : Word );
-    function    GetHandle( Data : Pointer ) : PMemoryModule; {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}overload;{$IFEND}
-    {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    function    GetHandle( Data : Pointer ) : PMemoryModule; {$IFDEF LoadFilesOrResource}overload;{$ENDIF}
+    {$IFDEF LoadFilesOrResource}
     function    GetHandle_( Name : String ) : PMemoryModule;
     function    GetName( Handle : PMemoryModule ) : String;
-    {$IFEND Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$ENDIF LoadFilesOrResource}
     {$IFDEF LOAD_FROM_RESOURCE}
     function    GetIsResource( Handle : PMemoryModule ) : boolean;
     {$ENDIF LOAD_FROM_RESOURCE}
@@ -1228,19 +1241,19 @@ type
   public
     constructor Create; reintroduce;
     destructor  Destroy; override;
-    procedure   Add( Handle : PMemoryModule; Data : Pointer{$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}; Name : String{$IFEND}{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} );
+    procedure   Add( Handle : PMemoryModule; Data : Pointer{$IFDEF LoadFilesOrResource}; Name : String{$ENDIF}{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} );
     procedure   Del( Handle : PMemoryModule ); overload;
     procedure   DelData( Data : Pointer );
-    {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$IFDEF LoadFilesOrResource}
     procedure   Del( Name : String{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} ); overload;
-    {$IFEND Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
-    {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$ENDIF LoadFilesOrResource}
+    {$IFDEF LoadFilesOrResource}
     function    GetHandle( Name : String{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} ) : PMemoryModule; overload;
-    {$IFEND Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$ENDIF LoadFilesOrResource}
     property    ID[ Name : String ]        : PMemoryModule read GetHandle_;
-    {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$IFDEF LoadFilesOrResource}
     property    Name[ ID : PMemoryModule ] : string        read GetName;
-    {$IFEND Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+    {$ENDIF LoadFilesOrResource}
     {$IFDEF LOAD_FROM_RESOURCE}
     property    IsResource[ ID : PMemoryModule ] : boolean read GetIsResource;
     {$ENDIF LOAD_FROM_RESOURCE}
@@ -1260,13 +1273,13 @@ begin
   fCrit := TCriticalSection.Create;
   {$ENDIF GetModuleHandleCriticalSection}
 
-  {$IF Defined( FastMM4 ) OR Defined( FastMM5 )}
+  {$IFDEF FastMM4or5}
   {$if Declared( FastMM_RegisterExpectedMemoryLeak )}
   FastMM_RegisterExpectedMemoryLeak( Self );
   {$ELSE}
   RegisterExpectedMemoryLeak( Self );
   {$IFEND}
-  {$IFEND}
+  {$ENDIF}
 end;
 
 destructor tModuleManager.Destroy;
@@ -1281,7 +1294,7 @@ begin
   inherited;
 end;
 
-procedure tModuleManager.Add( Handle : PMemoryModule; Data : Pointer{$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}; Name : String{$IFEND}{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} );
+procedure tModuleManager.Add( Handle : PMemoryModule; Data : Pointer{$IFDEF LoadFilesOrResource}; Name : String{$ENDIF}{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} );
 var
   i : Integer;
 begin
@@ -1302,9 +1315,9 @@ begin
       if IsResource then // Allow override for Compressed Resources
         fItems[ i ].Data     := Data;
       {$ENDIF}
-      {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+      {$IFDEF LoadFilesOrResource}
       fItems[ i ].FileName   := Name;
-      {$IFEND}
+      {$ENDIF}
       {$IFDEF LOAD_FROM_RESOURCE}
       fItems[ i ].IsResource := IsResource;
       {$ENDIF LOAD_FROM_RESOURCE}
@@ -1319,9 +1332,9 @@ begin
   SetLength( fItems, Length( fItems )+1 );
   fItems[ High( fItems ) ].Handle   := Handle;
   fItems[ High( fItems ) ].Data     := Data;
-  {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+  {$IFDEF LoadFilesOrResource}
   fItems[ High( fItems ) ].FileName := Name;
-  {$IFEND}
+  {$ENDIF}
   {$IFDEF LOAD_FROM_RESOURCE}
   fItems[ High( fItems ) ].IsResource := IsResource;
   {$ENDIF LOAD_FROM_RESOURCE}
@@ -1449,7 +1462,7 @@ begin
   {$ENDIF GetModuleHandleCriticalSection}
 end;
 
-{$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+{$IFDEF LoadFilesOrResource}
 procedure tModuleManager.Del( Name : String{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean{$ENDIF} );
 var
   i : Integer;
@@ -1532,7 +1545,7 @@ begin
   fCrit.Leave;
   {$ENDIF GetModuleHandleCriticalSection}
 end;
-{$IFEND Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+{$ENDIF LoadFilesOrResource}
 
 {$IFDEF LOAD_FROM_RESOURCE}
 function tModuleManager.GetIsResource( Handle : PMemoryModule ) : boolean;
@@ -2854,7 +2867,7 @@ end;
 {$ENDIF}
 
 {$IFDEF GetModuleHandle}
-function MemoryGetModuleHandle( data: Pointer ): PMemoryModule; stdcall; {$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}overload;{$IFEND}
+function MemoryGetModuleHandle( data: Pointer ): PMemoryModule; stdcall; {$IFDEF LoadFilesOrResource}overload;{$ENDIF}
 begin
   result := nil;
   if NOT Assigned( ModuleManager ) then
@@ -2862,7 +2875,7 @@ begin
   result := ModuleManager.GetHandle( data );
 end;
 
-{$IF Defined( ALLOW_LOAD_FILES ) OR Defined( LOAD_FROM_RESOURCE )}
+{$IFDEF LoadFilesOrResource}
 function MemoryGetModuleHandle( FileName : string{$IFDEF LOAD_FROM_RESOURCE}; IsResource : boolean = False{$ENDIF} ): PMemoryModule; stdcall;
 begin
   result := nil;
@@ -2870,12 +2883,12 @@ begin
     Exit;
   result := ModuleManager.GetHandle( FileName{$IFDEF LOAD_FROM_RESOURCE}, IsResource{$ENDIF} );
 end;
-{$IFEND}
+{$ENDIF}
 {$ENDIF GetModuleHandle}
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-{$IF Defined( GetModuleHandle ) AND ( NOT Defined( FastMM4 ) AND NOT Defined( FastMM5 ) )}
+{$IFDEF GetModuleHandle}{$IFNDEF FastMM4or5}
 initialization
   if NOT Assigned( ModuleManager ) then // LoadLibrary called before initialization
     ModuleManager := tModuleManager.Create;
@@ -2889,6 +2902,6 @@ finalization
   {$ENDIF UnloadAllOnFinalize}
   ModuleManager.free;
   ModuleManager := nil;
-{$IFEND}
+{$ENDIF}{$ENDIF}
 
 end.

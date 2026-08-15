@@ -464,7 +464,7 @@ var
   DefaultMXCSR : Cardinal = $1900;
 
 function GetMXCSR: Cardinal;
-{$IF Defined( Win32 )}
+{$IFDEF Win32}
 asm
 {$IFDEF PIC}
         XOR     EAX, EAX
@@ -484,7 +484,8 @@ asm
         POP     EAX
 @@NOSSE:
 end;
-{$ELSEIF defined( Win64 )}
+{$ELSE}
+{$IFDEF Win64}
 asm
         PUSH    0
         STMXCSR [RSP].DWord
@@ -492,13 +493,14 @@ asm
 end;
 {$ELSE}
 {$MESSAGE ERROR 'Unknown platform'}
-{$IFEND}
+{$ENDIF}
+{$ENDIF}
 {$IFEND}
 
 function IsValidCallSite(AReturnAddress: NativeUInt): boolean;
   {$IF NOT Declared( SetMXCSR )}
   procedure SetMXCSR(NewMXCSR: Cardinal);
-  {$IF defined(Win32)}
+  {$IFDEF Win32}
   begin
     if TestSSE = 0 then exit;
     DefaultMXCSR := NewMXCSR and $FFC0;  // Remove status flag bits
@@ -511,7 +513,8 @@ function IsValidCallSite(AReturnAddress: NativeUInt): boolean;
   {$ENDIF !PIC}
     end;
   end;
-  {$ELSEIF defined(Win64)}
+  {$ELSE}
+  {$IFDEF Win64}
   asm
           AND     ECX, $FFC0 // Remove flag bits
           MOV     DefaultMXCSR, ECX
@@ -519,7 +522,8 @@ function IsValidCallSite(AReturnAddress: NativeUInt): boolean;
   end;
   {$ELSE}
   {$MESSAGE ERROR 'Unknown platform'}
-  {$IFEND}
+  {$ENDIF}
+  {$ENDIF}
   {$IFEND}
 var
   LCallAddress: NativeUInt;
@@ -1150,12 +1154,14 @@ exports
 begin
 {$ifdef JCLDebug}
 {$IFNDEF XE2AndUp}
-{$IF defined( Win32 )} // Win32 or OSX32
+{$IFDEF Win32} // Win32 or OSX32
   TestSSE := GetBriefSSEType;
   DefaultMXCSR := GetMXCSR and $FFC0;  // Remove flag bits;
-{$ELSEIF defined( Win64 )} // Win64
+{$ELSE}
+{$IFDEF Win64} // Win64
   TestSSE := $3; // SSE & SSE2 are available on X64
-{$IFEND}
+{$ENDIF}
+{$ENDIF}
 {$ENDIF}
 
   JclStackTrackingOptions := JclStackTrackingOptions + [stAllModules];

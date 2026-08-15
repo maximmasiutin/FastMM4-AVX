@@ -1246,11 +1246,6 @@ interface
 
 {$Include FastMM4Options.inc}
 
-{$IFNDEF FPC}
-{$WARN UNSAFE_CODE OFF}
-{$WARN UNSAFE_TYPE OFF}
-{$ENDIF}
-
 
 {Defines to turn off options enabled by default}
 
@@ -1304,6 +1299,16 @@ interface
 {$ENDIF}
 
 {$I FastMM4CompilerDefines.inc}
+
+{The $WARN directive exists from Delphi 6 and the UNSAFE_CODE and UNSAFE_TYPE
+ warning names from Delphi 7, so these two lines sit below the include that
+ defines the version names; Delphi 4 and 5 rejected them as invalid compiler
+ directives while they stood unguarded above it. FreePascal never defines
+ BCB6OrDelphi7AndUp, so no separate FPC test is needed.}
+{$IFDEF BCB6OrDelphi7AndUp}
+  {$WARN UNSAFE_CODE OFF}
+  {$WARN UNSAFE_TYPE OFF}
+{$ENDIF}
 
 {$IFNDEF 64BIT}
   {do not support AVX unless we are in the 64-bit mode}
@@ -2345,26 +2350,28 @@ uses
 {$IFDEF UseReleaseStack}
   FastMM4LockFreeStack,
 {$ENDIF}
-{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+{$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
   FastMMMemoryModule,
-{$IFEND}
+{$ENDIF}{$ENDIF}{$ENDIF}
   FastMM4Messages;
 
-{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
-{$IF Defined( IncludeResource_madExcept )}
+{$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
+{$IFDEF IncludeResource_madExcept}
   {$IFDEF Win64}
     {$R FastMM_FullDebugMode_madExcept64.res}
   {$ELSE}
     {$R FastMM_FullDebugMode_madExcept.res}
   {$ENDIF}
-{$ELSEIF Defined( IncludeResource )}
-  {$IFDEF Win64}
-    {$R FastMM_FullDebugMode64.res}
-  {$ELSE}
-    {$R FastMM_FullDebugMode.res}
+{$ELSE}
+  {$IFDEF IncludeResource}
+    {$IFDEF Win64}
+      {$R FastMM_FullDebugMode64.res}
+    {$ELSE}
+      {$R FastMM_FullDebugMode.res}
+    {$ENDIF}
   {$ENDIF}
-{$IFEND Defined( IncludeResource_madExcept )}
-{$IFEND}
+{$ENDIF IncludeResource_madExcept}
+{$ENDIF}{$ENDIF}{$ENDIF}
 
 const
   MaxFileNameLength                  = 1024;
@@ -7683,9 +7690,9 @@ var
 
   {Handle to the FullDebugMode DLL}
   FullDebugModeDLL: HMODULE;
-  {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+  {$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
   FullDebugModeRDLL: PMemoryModule;
-  {$IFEND}
+  {$ENDIF}{$ENDIF}{$ENDIF}
 
   GetStackTrace: procedure (AReturnAddresses: PNativeUInt;
     AMaxDepth, ASkipFrames: Cardinal) = NoOpGetStackTrace;
@@ -8469,6 +8476,19 @@ end;
 
 
 
+{$IFNDEF BCB6OrDelphi7AndUp}
+{On Delphi 4 through 6 the assembler error paths below cannot reference
+ System.RunError directly - the assembler rejects the call with "Invalid
+ combination of opcode and operands" - and System.Error only exists from
+ Delphi 7 and C++Builder 6, so those paths call this wrapper instead. It is
+ compiled for FreePascal too, which also lacks BCB6OrDelphi7AndUp and still
+ assembles the 32-bit error paths that call it.}
+procedure RunErrorInvalidPtr;
+begin
+  System.RunError(Ord(reInvalidPtr));
+end;
+{$ENDIF}
+
 {Removes a medium block from the circular linked list of free blocks.
  Does not change any header flags. Medium blocks should be locked
  before calling this procedure.}
@@ -8596,7 +8616,7 @@ asm
   {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
   {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
   {$ENDIF}
 {$ENDIF}
 @Exit:
@@ -8669,7 +8689,7 @@ asm
   {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
   {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
   {$ENDIF}
 {$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
@@ -13066,7 +13086,7 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
 {$ENDIF}
 {$ENDIF}
   jmp @Exit
@@ -13092,7 +13112,7 @@ By default, it will not be compiled into FastMM4-AVX which uses more efficient a
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
 {$ENDIF}
   jmp @Exit
 {$ENDIF}
@@ -13753,7 +13773,7 @@ but we don't need them at this point}
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
 {$ENDIF}
 {$ENDIF}
   jmp @Done
@@ -13779,7 +13799,7 @@ but we don't need them at this point}
 {$IFDEF BCB6OrDelphi7AndUp}
   call System.Error
 {$ELSE}
-  call System.RunError
+  call RunErrorInvalidPtr
 {$ENDIF}
   jmp @Done
 {$ENDIF}
@@ -20440,9 +20460,9 @@ begin
   {Should FastMM be installed only if the FastMM_FullDebugMode.dll file is
    available?}
   if ( FullDebugModeDLL = 0 )
-      {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+      {$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
       AND ( MemoryResourceExists( {$IFNDEF 64BIT}'FastMM_FullDebugMode'{$ELSE}'FastMM_FullDebugMode64'{$ENDIF} ) = 0 )
-      {$IFEND} then
+      {$ENDIF}{$ENDIF}{$ENDIF} then
     Exit;
     {$ENDIF}
   {$ENDIF}
@@ -21728,9 +21748,9 @@ begin
       ReportLockContention;
 {$ENDIF}
 {$IFNDEF NeverUninstall}
-     {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically )} // MS
+     {$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically} // MS
      FastMM_FreeDebugSupportLibrary;
-     {$IFEND}
+     {$ENDIF}{$ENDIF}
 
       {Clean up: Free all memory. If this is a .DLL that owns its own MM, then
        it is necessary to prevent the main application from running out of
@@ -21982,16 +22002,16 @@ begin
     {$ENDIF}
 
     InitializationCodeHasRun := True;
-    {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+    {$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
     FastMM_LoadDebugSupportLibrary;
-    {$IFEND}
+    {$ENDIF}{$ENDIF}{$ENDIF}
   end;
 {$ELSE}
   InitializationCodeHasRun := True;
 {$ENDIF}
 end;
 
-{$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically )}
+{$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}
 function FastMM_IsDebugSupportLibraryLoaded: boolean;
 begin
   Result := ( FullDebugModeDLL <> 0 ) {$IFDEF MemoryLoadLibrarySupport}OR Assigned( FullDebugModeRDLL ){$ENDIF};
@@ -22043,7 +22063,7 @@ begin
     LogStackTrace := GetProcAddress(FullDebugModeDLL, 'LogStackTrace');
   end;
 
-  {$IF Defined( FullDebugMode ) AND Defined( LoadDebugDLLDynamically ) AND Defined( MemoryLoadLibrarySupport )}
+  {$IFDEF FullDebugMode}{$IFDEF LoadDebugDLLDynamically}{$IFDEF MemoryLoadLibrarySupport}
   if NOT InitializationCodeHasRun then // Resource is loaded after FastMM since we allocate Memory here ..
     Exit;
 
@@ -22057,7 +22077,7 @@ begin
       LogStackTrace := MemoryGetProcAddress(FullDebugModeRDLL, 'LogStackTrace');
       end;
     end;
-  {$IFEND}
+  {$ENDIF}{$ENDIF}{$ENDIF}
   Result := ( FullDebugModeDLL <> 0 ) {$IFDEF MemoryLoadLibrarySupport}OR Assigned( FullDebugModeRDLL ){$ENDIF};
 end;
 
@@ -22087,7 +22107,7 @@ begin
 
   Result := True;
 end;
-{$IFEND}
+{$ENDIF}{$ENDIF}
 
 initialization
   RunInitializationCode;
