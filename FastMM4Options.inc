@@ -122,8 +122,8 @@ calls will be used instead }
  also defined (see below) in which case it will call SwitchToThread instead of
  Sleep.
 
-*** Note: This option was added in FastMM4 version 4.68
-    on 3 July 2006, is provided only if you wish to restore old
+*** Note: This option was added in FastMM4 version 4.68,
+    is provided only if you wish to restore old
     functionality (e.g. for testing, etc.), and is not recommended
     for FastMM4-AVX, since it provides suboptimal performance compared
     to the new locking mechanism implemented in the FastMM4-AVX.
@@ -142,8 +142,8 @@ MediumBlocksLockedCriticalSection/LargeBlocksLockedCriticalSection is enabled}
  but FastMM4 loads it dynamically, so it would not fail even under very old
  versions of Windows.
 
-*** Note: This option was added in FastMM4 version 4.97
-    on 30 September 2010, is provided only if you wish to restore old
+*** Note: This option was added in FastMM4 version 4.97,
+    is provided only if you wish to restore old
     functionality (e.g. for testing, etc.), and is not recommended
     for FastMM4-AVX, since it provides suboptimal performance compared
     to the new locking mechanism implemented in the FastMM4-AVX.
