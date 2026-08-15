@@ -36,6 +36,39 @@ begin
     Write(Digits[I]);
 end;
 
+{Ask the allocator for a block and let it answer, rather than asking the
+ runtime to raise on our behalf.
+
+ FreePascal has a function form of GetMem that returns nil when the request is
+ refused, and returning nil is exactly what this test reads: an overflow size
+ must come back as nothing rather than as a block. Delphi has only the
+ procedure form, which raises where FreePascal answers, and the program is
+ killed before it can report anything, so the request goes through the memory
+ manager record instead. That is the same entry FastMM installs itself into,
+ so both compilers observe the allocator's own decision and neither observes
+ the runtime's reaction to it.
+
+ The cast is to NativeInt because that is what the record's field takes: plain
+ Integer on the compilers that have no NativeInt of their own, where FastMM4
+ declares one to match, and a 64-bit NativeInt on the compilers that do, where
+ truncating to Integer would turn the 64-bit test values into 32-bit ones. It
+ keeps the bit pattern either way, which is what matters here: FastMM reads the
+ size back as NativeUInt, so a value with the high bit set arrives as the large
+ number this test means rather than as a negative one.}
+function TryGetMem(ASize: NativeUInt): Pointer;
+{$IFNDEF FPC}
+var
+  LMemoryManager: TMemoryManager;
+{$ENDIF}
+begin
+{$IFDEF FPC}
+  Result := GetMem(ASize);
+{$ELSE}
+  GetMemoryManager(LMemoryManager);
+  Result := LMemoryManager.GetMem(NativeInt(ASize));
+{$ENDIF}
+end;
+
 procedure LogTest(const TestName: string; Passed: Boolean; const Details: string);
 begin
   Inc(TestsTotal);
@@ -62,7 +95,7 @@ begin
   WriteLn;
   WriteLn('=== Test 1: Normal Large Allocation ===');
 
-  P := GetMem(1024 * 1024);
+  P := TryGetMem(1024 * 1024);
   if P <> nil then
   begin
     Write('[PASS] Normal 1MB allocation - Pointer: $');
@@ -94,7 +127,7 @@ begin
   WriteLn(' bytes');
   WriteLn('This value should cause integer overflow in size calculation');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection - VULNERABILITY: GetMem returned pointer $');
@@ -118,7 +151,7 @@ begin
   WriteLn(' bytes');
   WriteLn('This value wraps to near-zero after adding overhead');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection #2 - VULNERABILITY: GetMem returned pointer $');
@@ -141,7 +174,7 @@ begin
   WriteHex(TestSize);
   WriteLn(' bytes');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection #3 - VULNERABILITY: GetMem returned pointer $');
@@ -173,7 +206,7 @@ begin
   WriteLn(' bytes');
   WriteLn('This value should cause integer overflow in size calculation');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection - VULNERABILITY: GetMem returned pointer $');
@@ -197,7 +230,7 @@ begin
   WriteLn(' bytes');
   WriteLn('This value wraps to near-zero after adding overhead');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection #2 - VULNERABILITY: GetMem returned pointer $');
@@ -220,7 +253,7 @@ begin
   WriteHex(TestSize);
   WriteLn(' bytes');
 
-  P := GetMem(TestSize);
+  P := TryGetMem(TestSize);
   if P <> nil then
   begin
     Write('[FAIL] Overflow protection #3 - VULNERABILITY: GetMem returned pointer $');
@@ -249,7 +282,7 @@ begin
   Write('Attempting to allocate: $');
   WriteHex(Size);
   WriteLn(' bytes (High(NativeUInt))');
-  P := GetMem(Size);
+  P := TryGetMem(Size);
   if P <> nil then
   begin
     Write('[FAIL] High(NativeUInt) allocation - VULNERABILITY: got pointer $');
@@ -268,7 +301,7 @@ begin
   Write('Attempting to allocate: $');
   WriteHex(Size);
   WriteLn(' bytes (High(NativeUInt)-1)');
-  P := GetMem(Size);
+  P := TryGetMem(Size);
   if P <> nil then
   begin
     Write('[FAIL] High(NativeUInt)-1 allocation - VULNERABILITY: got pointer $');
