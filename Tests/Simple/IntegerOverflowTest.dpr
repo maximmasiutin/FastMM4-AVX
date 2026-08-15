@@ -280,9 +280,11 @@ begin
   else
   begin
     LogTest(ATestName, False, 'DebugGetMem returned an undersized block');
-    {Freeing it is what exposes the corrupted metadata on an unfixed
-     allocator, which is more use than leaking it quietly.}
-    DebugFreeMem(P);
+    {The block is deliberately not freed. Its footer was written outside it, so
+     the free is what turns a reported failure into a terminated process, and
+     every check after this one would then run against a corrupted heap and
+     report nothing worth reading. The leak is the lesser evil and happens only
+     on a run that has already failed.}
   end;
 end;
 
@@ -339,7 +341,7 @@ type
    compile there. FastMM4 defines PByteIsPAnsiChar for the same reason.}
   PTestByte = ^Byte;
 var
-  P, LOriginal: Pointer;
+  P, LOriginal, LResult: Pointer;
   LIndex: Integer;
   LIntact: Boolean;
   LFirstWrapping: NativeUInt;
@@ -357,13 +359,24 @@ begin
     PTestByte(NativeUInt(P) + NativeUInt(LIndex))^ := CFillValue;
 
   LFirstWrapping := High(NativeUInt) - FullDebugOverheadForTest + 1;
-  LogTest('DebugReallocMem at the first size that wraps',
 {$IFDEF FPC}
-    DebugReallocMem(P, LFirstWrapping) = nil,
+  LResult := DebugReallocMem(P, LFirstWrapping);
 {$ELSE}
-    DebugReallocMem(P, SignedSize(LFirstWrapping)) = nil,
+  LResult := DebugReallocMem(P, SignedSize(LFirstWrapping));
 {$ENDIF}
+  LogTest('DebugReallocMem at the first size that wraps', LResult = nil,
     'Expected nil');
+  if LResult <> nil then
+  begin
+    {The reallocation was served, so the saved address names a block the
+     allocator may already have freed or moved. Reading it to see whether it
+     survived would be a use after free, and freeing either pointer on a heap
+     this request has just corrupted ends the process instead of reporting.
+     The check is recorded as failed and nothing further is touched.}
+    LogTest('the original block survives the refused reallocation', False,
+      'the reallocation was served, so the original block cannot be examined');
+    Exit;
+  end;
 
   LIntact := True;
   for LIndex := 0 to COriginalSize - 1 do
