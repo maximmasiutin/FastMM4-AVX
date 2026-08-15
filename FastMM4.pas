@@ -6,7 +6,7 @@ FastMM4-AVX (FreePascal support, efficient synchronization, AVX1/AVX2/AVX512/ERM
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.12 (5 March 2026)
+Version 1.0.13 (15 August 2026)
 
 Supported compilers: Embarcadero Delphi, FreePascal (FPC/Lazarus).
 
@@ -274,6 +274,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.13 (15 August 2026) Fixed inline assembler alignment directives for
+  Delphi 7 and other pre-XE compilers when ForceAsmCodeAlign was defined;
+  accept a nil pointer in DebugFreeMem under FreePascal; fixed two
+  InterlockedRelease defects.
 
 - 1.0.12 (5 March 2026) Security: Added production-build double-free detection
   in FastFreeMem (CWE-415), added advanced regression tests for double-free
@@ -1893,7 +1898,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.12';
+  FastMM4AvxVersion = '1.0.13';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 
