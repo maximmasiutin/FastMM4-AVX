@@ -126,7 +126,7 @@ const
   InvalidGetMemMsg = 'FastMM mendeteksi pemanggilan GetMem setelah FastMM di deinstalasi.';
   InvalidFreeMemMsg = 'FastMM mendeteksi pemanggilan FreeMem setelah FastMM di deinstalasi.';
   InvalidReallocMemMsg = 'FastMM mendeteksi pemanggilan ReallocMem setelah FastMM di deinstalasi.';
-  InvalidAllocMemMsg = 'FastMM mendeteksi pemanggilan ReallocMem setelah FastMM di deinstalasi.';
+  InvalidAllocMemMsg = 'FastMM mendeteksi pemanggilan AllocMem setelah FastMM di deinstalasi.';
 {$endif}
 
 implementation

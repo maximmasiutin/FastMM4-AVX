@@ -70,9 +70,9 @@ const
     + 'Pour utiliser FastMM4, FastMM4.pas doit être la toute première unité dans la section "uses" du fichier projet .dpr';
   OtherMMInstalledTitle = 'Impossible d''installer FastMM4 - un autre gestionnaire de mémoire est déjà installé';
   MemoryAllocatedMsg = 'FastMM4 ne peut pas être installé puisque des blocs de mémoire ont déjà été alloué par le gestionnaire de mémoire par défaut.'#13#10
-    + 'FastMM4.pas DOIT être la première unité dans la section "uses" du fichier projet .dpr; dans le cas contraire, des blocs de mémoire '#1310
-    + 'peuvent être alloués avant que FastMM4 ne prenne le contrôle, si vous utilisez un gestionnaire d''exception comme MadExcept '#1310
-    + '(ou tout autre outil qui modifie l''ordre d''initialisation des unités). Veuillez modifier sur la page de configuration de cet outil'#1310
+    + 'FastMM4.pas DOIT être la première unité dans la section "uses" du fichier projet .dpr; dans le cas contraire, des blocs de mémoire '#13#10
+    + 'peuvent être alloués avant que FastMM4 ne prenne le contrôle, si vous utilisez un gestionnaire d''exception comme MadExcept '#13#10
+    + '(ou tout autre outil qui modifie l''ordre d''initialisation des unités). Veuillez modifier sur la page de configuration de cet outil'#13#10
     + 'l''ordre d''initialisation des unités pour que FastMM4.pas soit initialisée avant tout autre unité';
   MemoryAllocatedTitle = 'Impossible d''installer FastMM4 - des blocs de mémoire ont déjà été alloués';
   {Leak checking messages}

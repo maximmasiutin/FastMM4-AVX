@@ -498,6 +498,7 @@ var
   procedure UpdateVMGraph(var AMemoryMap: TMemoryMapEx);
   var
     LInd, LIndTop, I1: Integer;
+    LTopChunk: NativeUInt;
     LChunkState: TChunkStatusEx;
     LMBI: TMemoryBasicInformation;
     LA_Char: array[0..MAX_PATH] of Char;
@@ -524,13 +525,18 @@ var
           end;
           if LMBI.RegionSize > 65536 then
           begin
-            LIndTop := (NativeUInt(LMBI.BaseAddress) + LMBI.RegionSize) shr 16;
-            {Clamp to array bounds: on 64-bit, regions above 4GB produce
-             indices beyond High(TMemoryMapEx). Without this clamp, the loop
-             below would write past the array end, corrupting the stack
-             (or triggering a range check error under {$R+}).}
-            if LIndTop > High(AMemoryMap) then
-              LIndTop := High(AMemoryMap);
+            {Compute the last chunk the region touches in NativeUInt and clamp
+             there, because on 64-bit the chunk index of a region ending above
+             4GB exceeds High(Integer), so an Integer would wrap before any
+             clamp on it runs. The minus one keeps a 64K-aligned region end
+             from marking the next region's first chunk, which the inclusive
+             loop below would otherwise claim for this region and then skip.
+             Without the clamp the loop would write past the array end,
+             corrupting the stack, or trigger a range check error under $R+.}
+            LTopChunk := (NativeUInt(LMBI.BaseAddress) + LMBI.RegionSize - 1) shr 16;
+            if LTopChunk > NativeUInt(High(AMemoryMap)) then
+              LTopChunk := NativeUInt(High(AMemoryMap));
+            LIndTop := Integer(LTopChunk);
             // Fill up multiple tables
             for I1 := LInd to LIndTop do
               AMemoryMap[I1] := LChunkState;

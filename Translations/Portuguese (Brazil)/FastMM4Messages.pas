@@ -126,7 +126,7 @@ const
   InvalidGetMemMsg = 'FastMM detectou uma chamada GetMem depois que o FastMM foi desinstalado.';
   InvalidFreeMemMsg = 'FastMM detectou uma chamada FreeMem depois que o FastMM foi desinstalado.';
   InvalidReallocMemMsg = 'FastMM detectou uma chamada ReallocMem depois que o FastMM foi desinstalado.';
-  InvalidAllocMemMsg = 'FastMM detectou uma chamada ReallocMem depois que o FastMM foi desinstalado.';
+  InvalidAllocMemMsg = 'FastMM detectou uma chamada AllocMem depois que o FastMM foi desinstalado.';
 {$endif}
 
 implementation
