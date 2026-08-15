@@ -138,11 +138,20 @@ begin
   end;
 end;
 
-{The three sizes are written as distances below High(NativeUInt) rather than as
- literal hex, so each one is the same probe at both pointer widths and none of
- them is a constant too wide for the type it is assigned to. A literal
- $FFFFFFFFFFFF0000 compiles on 32-bit only because the cast that narrows it is
- not range checked, which is the opposite of what this program is for.}
+{The sizes are written as distances below High(NativeUInt) rather than as
+ literal hex, so none of them is a constant too wide for the type it is
+ assigned to. A literal $FFFFFFFFFFFF0000 compiles on 32-bit only because the
+ cast that narrows it is not range checked, which is the opposite of what this
+ program is for.
+
+ Every distance has to stay smaller than the margin FastMM leaves below the top
+ of the range, which is about 2MB on 64-bit and about 128KB on 32-bit. A size
+ further down than that is under MaxSafeLargeBlockSize, so the overflow guard
+ never sees it and the allocation fails only because no such block can be
+ mapped, which is a pass the test has not earned. The first two distances are
+ small enough at either width. The third is not, so it is chosen at run time
+ from the pointer size rather than being made one value that is wrong on one of
+ them.}
 procedure TestOverflowAllocation;
 var
   P: Pointer;
@@ -198,9 +207,12 @@ begin
       'GetMem correctly returned nil');
   end;
 
-  {Third overflow test}
+  {Third overflow test, kept above MaxSafeLargeBlockSize at either width}
   WriteLn;
-  TestSize := High(NativeUInt) - $FFFFF;
+  if Is64Bit then
+    TestSize := High(NativeUInt) - $FFFFF
+  else
+    TestSize := High(NativeUInt) - $7FFF;
   Write('Attempting to allocate: $');
   WriteHex(TestSize);
   WriteLn(' bytes');
