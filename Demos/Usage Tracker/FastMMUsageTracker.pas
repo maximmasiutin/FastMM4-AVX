@@ -511,9 +511,9 @@ var
         VirtualQuery(Pointer(UIntPtr(LInd) shl 16), LMBI, SizeOf(LMBI));
         if LMBI.State = MEM_COMMIT then
         begin
-          if (GetModuleFileName(DWord(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
+          if (GetModuleFileName(HMODULE(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
           begin
-            if DWord(LMBI.AllocationBase) = SysInit.HInstance then
+            if HMODULE(LMBI.AllocationBase) = SysInit.HInstance then
               LChunkState := csExSysExe
             else
               LChunkState := csExSysDLL;
@@ -569,9 +569,9 @@ var
           MEM_Commit:
             begin
               LU_MEM_COMMIT := LU_MEM_COMMIT + LR_Info.RegionSize;
-              if (GetModuleFileName(dword(LR_Info.AllocationBase), LA_Char, MAX_PATH) <> 0) then
+              if (GetModuleFileName(HMODULE(LR_Info.AllocationBase), LA_Char, MAX_PATH) <> 0) then
               begin
-                if DWord(LR_Info.AllocationBase) = SysInit.HInstance then
+                if HMODULE(LR_Info.AllocationBase) = SysInit.HInstance then
                   Cells[2, LI_I] := 'Exe'
                 else
                   Cells[2, LI_I] := 'DLL';
@@ -1025,7 +1025,7 @@ var
 begin
   eDLLName.Text := '';
   LChunkIndex := ARow * dgMemoryMap.ColCount + ACol;
-  eAddress.Text := Format('$%0.8x', [LChunkIndex shl 16]);
+  eAddress.Text := Format('$%0.8x', [UIntPtr(LChunkIndex) shl 16]);
 
   case FMemoryMapEx[LChunkIndex] of
 
@@ -1047,8 +1047,8 @@ begin
     csExSysExe:
       begin
         eState.Text := 'System Exe';
-        VirtualQuery(Pointer(LChunkIndex shl 16), LMBI, SizeOf(LMBI));
-        if (GetModuleFileName(dword(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
+        VirtualQuery(Pointer(UIntPtr(LChunkIndex) shl 16), LMBI, SizeOf(LMBI));
+        if (GetModuleFileName(HMODULE(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
         begin
           eDLLName.Text := LA_Char;
         end;
@@ -1057,8 +1057,8 @@ begin
     csExSysDLL:
       begin
         eState.Text := 'System/User DLL';
-        VirtualQuery(Pointer(LChunkIndex shl 16), LMBI, SizeOf(LMBI));
-        if (GetModuleFileName(dword(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
+        VirtualQuery(Pointer(UIntPtr(LChunkIndex) shl 16), LMBI, SizeOf(LMBI));
+        if (GetModuleFileName(HMODULE(LMBI.AllocationBase), LA_Char, MAX_PATH) <> 0) then
         begin
           eDLLName.Text := LA_Char;
         end;
