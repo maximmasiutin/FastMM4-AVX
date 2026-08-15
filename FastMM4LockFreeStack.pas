@@ -270,9 +270,21 @@ begin
         TimeTestField[1, n] := GetCPUTimeStamp - TimeTestField[1, n];
       end;
       //Calculate first 4 minimum average for RemoveLink routine
+      //The counts are clamped because they are derived from timestamp deltas
+      //measured on a live system: a descheduled sample makes the average huge
+      //and the spin loop below it run for that long, while a zero average
+      //removes the spin entirely.
       obsTaskPopLoops := GetMinAndClear(0, 4) div 4;
+      if obsTaskPopLoops < 1 then
+        obsTaskPopLoops := 1
+      else if obsTaskPopLoops > 10000 then
+        obsTaskPopLoops := 10000;
       //Calculate first 4 minimum average for InsertLink routine
       obsTaskPushLoops := GetMinAndClear(1, 4) div 4;
+      if obsTaskPushLoops < 1 then
+        obsTaskPushLoops := 1
+      else if obsTaskPushLoops > 10000 then
+        obsTaskPushLoops := 10000;
 
       //This gives better performance (determined experimentally)
       obsTaskPopLoops := obsTaskPopLoops * 2;
