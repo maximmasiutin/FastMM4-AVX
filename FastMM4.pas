@@ -8477,16 +8477,16 @@ end;
 
 
 {$IFNDEF BCB6OrDelphi7AndUp}
-{$IFNDEF FPC}
 {On Delphi 4 through 6 the assembler error paths below cannot reference
  System.RunError directly - the assembler rejects the call with "Invalid
  combination of opcode and operands" - and System.Error only exists from
- Delphi 7 and C++Builder 6, so those paths call this wrapper instead.}
+ Delphi 7 and C++Builder 6, so those paths call this wrapper instead. It is
+ compiled for FreePascal too, which also lacks BCB6OrDelphi7AndUp and still
+ assembles the 32-bit error paths that call it.}
 procedure RunErrorInvalidPtr;
 begin
   System.RunError(Ord(reInvalidPtr));
 end;
-{$ENDIF}
 {$ENDIF}
 
 {Removes a medium block from the circular linked list of free blocks.
