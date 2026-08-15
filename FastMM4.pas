@@ -9237,8 +9237,20 @@ begin
   {Pad the block size to include the header and granularity. We also add a
    SizeOf(Pointer) overhead so a huge block size is a multiple of 16 bytes less
    SizeOf(Pointer) (so we can use a single move function for reallocating all
-   block types)}
-  LLargeUsedBlockSize := (ASize + LargeBlockHeaderSize + LargeBlockGranularity - 1 + BlockHeaderSize)
+   block types)
+
+   Each constant is added as NativeUInt. They are untyped integer constants, and
+   FreePascal widens the whole expression to int64 to hold them, so on 64-bit a
+   size at or above 2^63 overflows that signed intermediate rather than the
+   unsigned type the size actually has. The guard above does not stop it, since
+   MaxSafeLargeBlockSize sits only 2 MB below the top of the range and passes
+   almost the whole upper half through. Unchecked the wrap was invisible because
+   the mask discarded it; with overflow checking on, which the unit inherits from
+   the program compiling it, it terminated the process from inside the allocator
+   instead of returning nil. Written in NativeUInt the arithmetic is exact, and
+   no size the guard admits can carry it past the top.}
+  LLargeUsedBlockSize := (ASize + NativeUInt(LargeBlockHeaderSize)
+      + NativeUInt(LargeBlockGranularity) - 1 + NativeUInt(BlockHeaderSize))
     and LargeBlockGranularityMask;
   {Get the Large block}
   Result := VirtualAlloc(nil, LLargeUsedBlockSize, MEM_COMMIT or MEM_TOP_DOWN,

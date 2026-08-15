@@ -427,6 +427,33 @@ begin
   begin
     LogTest('High(NativeUInt)-1 allocation', True, 'Correctly returned nil');
   end;
+
+  {The largest size the signed half of the range can name. It is below
+   MaxSafeLargeBlockSize, so the allocator's own guard passes it through to the
+   large block path, where the padding is added. That padding is written in
+   NativeUInt for this size's sake: as untyped constants it widened to int64,
+   and a size at or above 2^63 overflowed the signed intermediate rather than
+   the unsigned type the size has. Unchecked the mask hid it; with overflow
+   checking on it ended the process inside the allocator. This probe is the
+   ordinary path, so it runs whether or not FullDebugMode is set.}
+  Size := NativeUInt(High(NativeInt));
+  Write('Attempting to allocate: $');
+  WriteHex(Size);
+  WriteLn(' bytes (High(NativeInt))');
+  P := TryGetMem(Size);
+  if P <> nil then
+  begin
+    Write('[FAIL] High(NativeInt) allocation - VULNERABILITY: got pointer $');
+    WriteHex(NativeUInt(P));
+    WriteLn;
+    Inc(TestsTotal);
+    Inc(TestsFailed);
+    FreeMem(P);
+  end
+  else
+  begin
+    LogTest('High(NativeInt) allocation', True, 'Correctly returned nil');
+  end;
 end;
 
 var
