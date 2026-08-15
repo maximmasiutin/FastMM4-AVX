@@ -7,13 +7,16 @@ interface
 
 {$I FastMM4CompilerDefines.inc}
 
-{NativeInt arrived with Delphi 2009 on 32-bit. FreePascal declares it itself.}
-{$IFDEF Delphi2009AndDown}
+{FreePascal declares NativeInt itself and cannot evaluate CompilerVersion, so
+ the comparison is reachable only where it is valid.}
+{$IFNDEF FPC}
+{$IF CompilerVersion <= 20}
 {$IFNDEF CPUX64}
 type
   NativeInt = integer;
   NativeUInt = cardinal;
 {$ENDIF}
+{$IFEND}
 {$ENDIF}
 
 type

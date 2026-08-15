@@ -86,12 +86,12 @@ uses
 
 {$ifend}
 
-{$IFDEF Delphi2009AndDown}
+{$IF CompilerVersion <= 20}
 type
   NativeUInt = Cardinal;
   PNativeUInt = ^NativeUInt;
   NativeInt = Integer;
-{$ENDIF}
+{$IFEND}
 
 {--------------------------Return Address Info Cache --------------------------}
 {$IFDEF JCLDebug}
