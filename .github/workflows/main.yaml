@@ -9,6 +9,7 @@ on:
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
+      - FastMM4CompilerDefines.inc
       - Tests/Advanced/**
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
@@ -24,6 +25,7 @@ on:
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
+      - FastMM4CompilerDefines.inc
       - Tests/Advanced/**
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
