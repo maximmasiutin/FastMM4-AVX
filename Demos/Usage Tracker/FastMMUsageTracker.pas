@@ -713,8 +713,12 @@ var
     LR_GlobalMemoryStatusEx: TMemoryStatusEx;
     LR_ProcessMemoryCounters: TProcessMemoryCounters;
     LR_SysBaseInfo: TSystem_Basic_Information;
-    LU_MinQuota: {$IFDEF XE2AndUp}NativeUInt{$ELSE}Cardinal{$ENDIF};
-    LU_MaxQuota: {$IFDEF XE2AndUp}NativeUInt{$ELSE}Cardinal{$ENDIF};
+    {These two are var parameters of GetProcessWorkingSetSize, whose values are
+     SIZE_T, so the width follows the pointer rather than the compiler release.
+     On a 32-bit target the two are the same size and Cardinal reaches every
+     compiler this demo builds on, NativeUInt having arrived in Delphi 2010.}
+    LU_MinQuota: {$IFDEF 64BIT}NativeUInt{$ELSE}Cardinal{$ENDIF};
+    LU_MaxQuota: {$IFDEF 64BIT}NativeUInt{$ELSE}Cardinal{$ENDIF};
     LI_I: Integer;
     LI_Max: Integer;
   begin
