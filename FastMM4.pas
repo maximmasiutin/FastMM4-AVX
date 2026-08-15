@@ -10657,7 +10657,7 @@ like IsMultithreaded or MediumBlocksLocked}
 {$ELSE !SmallBlocksLockedCriticalSection}
 
 { The 32-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
 A Sleep() loop also lets the thread that released a lock retake it before a woken
 waiter runs, because Windows guarantees no acquisition order; see
 https://stackoverflow.com/a/79995198/6910868 }
@@ -11372,7 +11372,7 @@ asm
 {$ELSE !SmallBlocksLockedCriticalSection}
 
 { The 64-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
 A Sleep() loop also lets the thread that released a lock retake it before a woken
 waiter runs, because Windows guarantees no acquisition order; see
 https://stackoverflow.com/a/79995198/6910868 }
@@ -12795,7 +12795,7 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
 {$ELSE !SmallBlocksLockedCriticalSection}
 
 { The 32-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
 A Sleep() loop also lets the thread that released a lock retake it before a woken
 waiter runs, because Windows guarantees no acquisition order; see
 https://stackoverflow.com/a/79995198/6910868 }
@@ -13501,7 +13501,7 @@ asm
 {$ELSE !SmallBlocksLockedCriticalSection}
 
 { The 64-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
 A Sleep() loop also lets the thread that released a lock retake it before a woken
 waiter runs, because Windows guarantees no acquisition order; see
 https://stackoverflow.com/a/79995198/6910868 }
