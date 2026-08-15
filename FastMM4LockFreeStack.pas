@@ -5,6 +5,15 @@ unit FastMM4LockFreeStack;
 
 interface
 
+{ Every CompilerVersion test in this unit sits inside an IFNDEF FPC, because
+  FreePascal defines no CompilerVersion and rejects the expression outright
+  rather than treating the missing symbol as zero. FreePascal needs none of
+  what these tests decide: it declares NativeInt itself, and it accepts the
+  class methods without the static directive Delphi requires from XE2. This
+  clears the first barrier only; the assembler routines below are written in
+  Delphi's dialect, .noframe and parameter names included, so the unit as a
+  whole still builds under Delphi alone. }
+{$IFNDEF FPC}
 {$IF CompilerVersion <= 20}
 {$IFNDEF CPUX64}
 type
@@ -12,6 +21,7 @@ type
   NativeUInt = cardinal;
 {$ENDIF}
 {$IFEND}
+{$ENDIF}
 
 type
   PReferencedPtr = ^TReferencedPtr;
@@ -47,16 +57,16 @@ type
     class var obsIsInitialized: boolean;                //default is false
     class var obsTaskPopLoops : NativeInt;
     class var obsTaskPushLoops: NativeInt;
-    class function  PopLink(var chain: TReferencedPtr): PLinkedData; {$IF CompilerVersion >= 23}static;{$IFEND}
-    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); {$IF CompilerVersion >= 23}static;{$IFEND}
+    class function  PopLink(var chain: TReferencedPtr): PLinkedData; {$IFNDEF FPC}{$IF CompilerVersion >= 23}static;{$IFEND}{$ENDIF}
+    class procedure PushLink(const link: PLinkedData; var chain: TReferencedPtr); {$IFNDEF FPC}{$IF CompilerVersion >= 23}static;{$IFEND}{$ENDIF}
   {$ENDIF UNICODE}
     procedure MeasureExecutionTimes;
   public
     procedure Empty;
     procedure Initialize(ANumElements, AElementSize: integer);
     procedure Finalize;
-    function  IsEmpty: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
-    function  IsFull: boolean; {$IF CompilerVersion >= 23}inline;{$IFEND}
+    function  IsEmpty: boolean; {$IFNDEF FPC}{$IF CompilerVersion >= 23}inline;{$IFEND}{$ENDIF}
+    function  IsFull: boolean; {$IFNDEF FPC}{$IF CompilerVersion >= 23}inline;{$IFEND}{$ENDIF}
     function  Pop(var value): boolean;
     function  Push(const value): boolean;
     property  ElementSize: integer read FElementSize;
