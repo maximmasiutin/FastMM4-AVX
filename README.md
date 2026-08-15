@@ -9,7 +9,7 @@ and FreePascal compiler support.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.12 (5 March 2026)
+Version: 1.0.13 (15 August 2026)
 
 ## Compiler Support
 
@@ -275,6 +275,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.13 (15 August 2026) Fixed inline assembler alignment directives for
+  Delphi 7 and other pre-XE compilers when ForceAsmCodeAlign was defined;
+  accept a nil pointer in DebugFreeMem under FreePascal; fixed two
+  InterlockedRelease defects.
 
 - 1.0.12 (5 March 2026) Security: Added production-build double-free detection
   in FastFreeMem (CWE-415), added advanced regression tests for double-free
