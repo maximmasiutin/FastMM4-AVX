@@ -19,10 +19,9 @@ Version: 1.0.13 (15 August 2026)
 ## Changes in FastMM4-AVX compared to the original FastMM4
 
  - Efficient synchronization
-   - improved synchronization between the threads. Proper synchronization
-     techniques are used depending on context and availability, including
-     pause-based spin-wait loops, umonitor/umwait (WaitPKG), SwitchToThread,
-     critical sections, etc.
+   - improved synchronization between the threads; proper synchronization
+     techniques are used depending on context and availability, including spin-wait
+     loops, umonitor / umwait, SwitchToThread, critical sections, etc.
    - used the "test, test-and-set" technique for the spin-wait loops; this
      technique is recommended by Intel (see Section 11.4.3 "Optimization with
      Spin-Locks" of the Intel 64 and IA-32 Architectures Optimization Reference
@@ -32,22 +31,26 @@ Version: 1.0.13 (15 August 2026)
      iteration of the spin-wait loop; if the variable is available upon
      the normal memory load of the first step ("test"), proceed to the
      second step ("test-and-set") which is done via the bus-locking atomic
-     "xchg" instruction; however, this two-steps approach of using "test" before
-     "test-and-set" can increase the cost for the un-contended case comparing
-     to just single-step "test-and-set", this may explain why the speed benefits
+     "xchg" instruction; however, this two-step approach of using "test" before
+     "test-and-set" can increase the cost for the uncontended case compared
+     to just single-step "test-and-set"; this may explain why the speed benefits
      of the FastMM4-AVX are more pronounced when the memory manager is called
      from multiple threads in parallel, while in single-threaded use scenario
      there may be no benefit compared to the original FastMM4;
+     the memory-operand form of "xchg" locks whether or not a LOCK prefix is
+     written, so the prefix written on it here is redundant, see
+     https://stackoverflow.com/a/79993726
    - the number of iterations of "pause"-based spin-wait loops is 5000,
      before relinquishing to SwitchToThread();
-   - see https://stackoverflow.com/a/44916975 for more details on the
+   - see https://stackoverflow.com/a/44916975/6910868 for more details on the
      implementation of the "pause"-based spin-wait loops;
    - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
-     then the bus-locking "xchg" instruction to write into the synchronization
+     than the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
-     see https://stackoverflow.com/a/44959764
-     for discussion on releasing a lock;
+     see https://stackoverflow.com/a/44959764/6910868
+     for discussion on releasing a lock, and https://stackoverflow.com/a/79993726
+     for why the plain store is safe here;
      you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
    - implemented dedicated lock and unlock procedures that operate with
@@ -63,7 +66,12 @@ Version: 1.0.13 (15 August 2026)
      which are set by default (inside the FastMM4Options.inc file) as
      conditional defines. If you undefine these options, you will get the
      old locking mechanism of the original FastMM4 based on loops of Sleep() or
-     SwitchToThread().
+     SwitchToThread();
+     see https://stackoverflow.com/a/79995198/6910868
+     for why waiting in a Sleep() loop can let the thread that released a lock
+     retake it before a woken waiter runs: Windows guarantees no order in which
+     waiting threads acquire a critical section, and Sleep(0) and Sleep(1) are
+     scheduling workarounds rather than ordering guarantees.
 
  - AVX, AVX2 or AVX512 instructions for faster memory copy
    - if the CPU supports AVX or AVX2, use the 32-byte YMM registers
@@ -115,7 +123,8 @@ Version: 1.0.13 (15 August 2026)
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
-     see https://stackoverflow.com/q/45112065. EnableAsmCodeAlign applies under
+     see https://stackoverflow.com/q/45112065/6910868
+     EnableAsmCodeAlign applies under
      FreePascal only. ForceAsmCodeAlign is honoured under FreePascal, and under
      Delphi from XE2 onwards; on older Delphi it is a no-op rather than an
      override, because that inline assembler has no align directive to emit.
@@ -149,8 +158,11 @@ Version: 1.0.13 (15 August 2026)
      redefined by FastMM4 for itself. Even if you set up these compiler options
      differently outside FastMM4, they will be silently redefined, and the new
      values will be used for FastMM4 only;
-   - the type of one-byte synchronization variables (accessed via "lock cmpxchg"
-     or "lock xchg") replaced from Boolean to Byte for stricter type checking;
+   - the type of one-byte synchronization variables (accessed via "lock cmpxchg",
+     or via "xchg" whose memory-operand form locks implicitly) changed from
+     Boolean to Byte for stricter type checking; the assembly spells the pair as
+     "lock cmpxchg" and "lock xchg", and the second prefix is redundant, see
+     https://stackoverflow.com/a/79993726
    - those fixed-block-size memory move procedures that are not needed
      (under the current bitness and alignment combinations) are
      explicitly excluded from compiling, to not rely on the compiler
@@ -298,11 +310,11 @@ FastMM4-AVX Version History:
     critical section wrapper procedures for Linux, added PurePascal guards for
     64-bit asm Move procedures, fixed POSIX WriteFile buffer passing.
 
-- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit Move36/44/52/60/68
-    procedures (pleriche/FastMM4 Issue #85) by replacing fild/fistp with rep movsd.
-    This eliminates FPU register usage entirely, preventing exceptions or memory
-    corruption when callers violate ABI by leaving values on FPU stack.
-    See https://stackoverflow.com/q/79833922/6910868 for details.
+- 1.0.10 (30 November 2025) Fixed FPU stack corruption in 32-bit
+    Move36/44/52/60/68 procedures (pleriche/FastMM4 Issue #85) by replacing
+    fild/fistp with rep movsd. This eliminates FPU register usage entirely,
+    preventing exceptions or memory corruption when callers violate ABI by leaving
+    values on FPU stack. See https://stackoverflow.com/q/79833922/6910868 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block
     allocations (CVE-2017-17426 class). 
@@ -319,9 +331,10 @@ FastMM4-AVX Version History:
 - 1.0.7 (22 March 2023) - implemented the optional use of user mode wait
     (WaitPKG) umonitor/umwait instructions to wait for a synchronization
     variable; it is disabled by default; define the "EnableWaitPKG" conditional
-    define to enable this feature; however it may not be as efficient
-    as the pause-based loop, so only use this feature it if your tests
-    show clear benefit in your scenarios.
+    define to enable this feature; however, it may not be as efficient
+    as the pause-based loop, so only use this feature if your tests
+    show a clear benefit in your scenarios; thanks to TetzkatLipHoka for the
+    updated FullDebugMode to v1.64 of the original FastMM4.
 
 - 1.0.6 (25 August 2021) - it can now be compiled with any alignment (8, 16, 32)
     regardless of the target (x86, x64) and whether inline assembly is used
@@ -344,7 +357,7 @@ FastMM4-AVX Version History:
     Rewritten some comments to be meaningful. Made it compile under FreePascal
     for Linux 64-bit and 32-bit. Also made it compile under FreePascal for
     Windows 32-bit and 64-bit. Memory move functions for 152, 184 and 216 bytes
-    were incorrect Linux. Move216AVX1 and Move216AVX2 Linux implementation had
+    were incorrect under Linux. Move216AVX1 and Move216AVX2 Linux implementation had
     invalid opcodes. Added support for the GetFPCHeapStatus(). Optimizations on
     single-threaded performance. If you define DisablePauseAndSwitchToThread,
     it will use EnterCriticalSection/LeaveCriticalSection. An attempt to free a

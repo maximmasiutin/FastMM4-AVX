@@ -86,7 +86,10 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      memory is lost by padding; however, if your CPU supports
      "Fast Short REP MOVSB" (Ice Lake or newer), you can disable AVX, and align
      by just 8 bytes, and this may even be faster because less memory is wasted
-     on alignment;
+     on alignment; all alignment options (8, 16, 32 bytes) work in both Release
+     and DEBUG/FullDebugMode builds; although some AVX-512 instructions may require
+     64-byte alignment, FastMM4-AVX does not support 64-byte alignment, but uses
+     unaligned move instructions (vmovdqu64) for 512-bit operations instead;
    - with AVX, memory copy is secure - all XMM/YMM/ZMM registers used to copy
      memory are cleared by vxorps/vpxor, so the leftovers of the copied memory
      are not exposed in the XMM/YMM/ZMM registers;
@@ -117,6 +120,12 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      and this may affect branch prediction, so the benefits of branch target
      alignment may not outweigh the disadvantage of affected branch prediction,
      see https://stackoverflow.com/q/45112065/6910868
+     EnableAsmCodeAlign applies under
+     FreePascal only. ForceAsmCodeAlign is honoured under FreePascal, and under
+     Delphi from XE2 onwards; on older Delphi it is a no-op rather than an
+     override, because that inline assembler has no align directive to emit.
+     The spelling differs by compiler: FreePascal takes a bare "align" and
+     Delphi takes the dotted ".align";
    - compare instructions + conditional jump instructions are put together
      to allow macro-op fusion (which happens since Core2 processors, when
      the first instruction is a CMP or TEST instruction and the second
@@ -315,9 +324,13 @@ FastMM4-AVX Version History:
     for improved clarity and accuracy across multiple files; Added support for AVX-512
     for Linux; Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
-- 1.0.7 (21 March 2023) - implemented the use of umonitor/umwait instructions;
-    thanks to TetzkatLipHoka for the updated FullDebugMode to v1.64
-    of the original FastMM4.
+- 1.0.7 (22 March 2023) - implemented the optional use of user mode wait
+    (WaitPKG) umonitor/umwait instructions to wait for a synchronization
+    variable; it is disabled by default; define the "EnableWaitPKG" conditional
+    define to enable this feature; however, it may not be as efficient
+    as the pause-based loop, so only use this feature if your tests
+    show a clear benefit in your scenarios; thanks to TetzkatLipHoka for the
+    updated FullDebugMode to v1.64 of the original FastMM4.
 
 - 1.0.6 (25 August 2021) - it can now be compiled with any alignment (8, 16, 32)
     regardless of the target (x86, x64) and whether inline assembly is used
@@ -1705,8 +1718,8 @@ of just one option: "Boolean short-circuit evaluation".}
 {$IFDEF FPC}
   {$IFDEF 64BIT}
     {$undef ASMVersion}
-    {Assembler is not yet supportd under 64-bit FreePascal,
-    because it incorrectly encodes relative values wither with +RIP or without}
+    {Assembler is not yet supported under 64-bit FreePascal,
+    because it incorrectly encodes relative values either with +RIP or without}
     {$define AuxAsmRoutines}
   {$ENDIF}
 {$ENDIF}
@@ -1909,7 +1922,7 @@ type
   TSmallBlockTypeState = record
     {The internal size of the block type}
     InternalBlockSize: Cardinal;
-    {Useable block size: The number of non-reserved bytes inside the block.}
+    {Usable block size: The number of non-reserved bytes inside the block.}
     UseableBlockSize: Cardinal;
     {The number of allocated blocks}
     AllocatedBlockCount: NativeUInt;
@@ -2401,7 +2414,12 @@ procedure free(__ptr:pointer);cdecl;external clib name 'free';
 function usleep(__useconds:dword):longint;cdecl;external clib name 'usleep';
 {$ENDIF}
 
-{Fixed size move procedures. The 64-bit versions assume 16-byte alignment.}
+{Fixed size move procedures. The 64-bit versions assume 16-byte alignment.
+These moves copy only memory the calling thread owns exclusively, and none of
+them is relied on for atomicity: only aligned 128-bit plain moves are
+architecturally atomic on CPUs that enumerate AVX, while 256-/512-bit and
+masked moves carry no documented guarantee, see
+https://stackoverflow.com/a/79995416/6910868 }
 {$IFDEF 64BIT}
 {$IFDEF Align32Bytes}
   {Used to exclude the procedures that we don't need, from compiling, to not
@@ -3395,7 +3413,7 @@ var
    {Since the size of TSmallBlockType is 64 bytes in 64-bit mode and 32 bytes in 32-bit mode,
    but the maximum scale factor of an index is 8 when calculating an offset on Intel CPUs,
    and the table contains more than 40 elements, one byte in the table is not enough to hold any
-   offfset value divided by 8, so, for 64-bit mode, we keep here just indexes, and use one additional shl command,
+   offset value divided by 8, so, for 64-bit mode, we keep here just indexes, and use one additional shl command,
    no offsets are precomputed}
   AllocSize2SmallBlockTypesIdx: array[0..(MaximumSmallBlockSize - 1) div SmallBlockGranularity] of Byte;
 {$ENDIF}
@@ -3537,7 +3555,7 @@ var
 
 {$IFDEF USE_CPUID}
   {See FastMMCpuFeature... constants.
-  We have packe the most interesting CPUID bits in one byte for faster comparison
+  We have packed the most interesting CPUID bits in one byte for faster comparison
   These features are mostly used for faster memory move operations}
   FastMMCpuFeaturesA: Byte;
   FastMMCpuFeaturesB: Byte;
@@ -3750,6 +3768,7 @@ const
 // iterations are a different wait on every part this constant is compiled for.
 // Measure on the target before changing it.
 // See https://stackoverflow.com/a/79993745/6910868
+// and https://stackoverflow.com/a/44916975/6910868 for the loop itself.
   cPauseSpinWaitLoopCount = 5000;
   cUMWaitTime             = 7000000;
 
@@ -3962,7 +3981,7 @@ loaded into byte ptr [ecx]. Else, clear ZF and load byte ptr [ecx] into AL.}
   {$IFDEF AllowAsmNoframe}
   .noframe
   {$ENDIF}
-  movzx rax, cl {Remove false dependency on remainig bits of the rax}
+  movzx rax, cl {Remove false dependency on remaining bits of the rax}
   xor rcx, rcx
   lock cmpxchg byte ptr [r8], dl  // cmpxchg also uses AL as an implicit operand
   xor rdx, rdx
@@ -7742,9 +7761,9 @@ end;
   ANum - the NativeUInt value to convert ;
   APBuffer - output buffer;
   ABufferLengthChars - the size of the output buffer in characters (not in bytes);
-                       since currently one char is one byte, the maxiumum lenght
+                       since currently one char is one byte, the maximum length
                        of the buffer in characters is the same as the size of the
-                       buffer in bytes, but if we switch to double-byte charaters
+                       buffer in bytes, but if we switch to double-byte characters
                        in future (e.g. UTF-16), this will differ}
 
 function NativeUIntToStrBuf(ANum: NativeUInt; APBuffer: PAnsiChar; ABufferLengthChars: Cardinal): PAnsiChar;
@@ -7790,7 +7809,7 @@ asm
   {Calculate leading digit: divide the number by 1e9}
   add eax, 1                  //Increment the number
   mov edx, $89705F41          //1e9 reciprocal
-  mul edx                     //Multplying with reciprocal
+  mul edx                     //Multiplying with reciprocal
   shr eax, 30                 //Save fraction bits
   mov ecx, edx                //First digit in bits <31:29>
   and edx, $1FFFFFFF          //Filter fraction part edx<28:0>
@@ -8409,7 +8428,7 @@ loop of Sleep() or SwitchToThread() as opposing to an efficient approach of Fast
 
 procedure LockMediumBlocks;
 asm
-{ This implemenation will not be compiled into FastMM4-AVX unless you
+{ This implementation will not be compiled into FastMM4-AVX unless you
   undefine the MediumBlocksLockedCriticalSection. You may only need
   this implementation if you would like to use the old locking mechanism of
   the original FastMM4 }
@@ -9559,7 +9578,7 @@ end;
 
 {This function is only needed to cope with an error that happens at runtime
 when using the "typed @ operator" compiler option. We are having just
-one typecast in this function to avoid using typecasts throught the
+one typecast in this function to avoid using typecasts throughout the
 entire FastMM4 module.}
 
 function NegCardinalMaskBit(A: Cardinal): Cardinal;
@@ -10637,8 +10656,11 @@ like IsMultithreaded or MediumBlocksLocked}
 
 {$ELSE !SmallBlocksLockedCriticalSection}
 
-{ The 32-bit implemenation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.}
+{ The 32-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
+A Sleep() loop also lets the thread that released a lock retake it before a woken
+waiter runs, because Windows guarantees no acquisition order; see
+https://stackoverflow.com/a/79995198/6910868 }
 @LockSmallBlockTypeLoop:
   mov eax, (cLockbyteLocked shl 8) or cLockByteAvailable
   mov edx, eax
@@ -11123,7 +11145,7 @@ asm
   ja @NotASmallBlock
   {Get the small block type pointer in rbx}
   movzx ecx, byte ptr [r8 + rdx]
-  {The offset in the array wan't be bigger than 2^32 anyway, but an ecx instruction takes one byte less than the rcx one}
+  {The offset in the array won't be bigger than 2^32 anyway, but an ecx instruction takes one byte less than the rcx one}
   shl ecx, SmallBlockTypeRecSizePowerOf2
   add rbx, rcx
   {Do we need to lock the block type?}
@@ -11349,8 +11371,11 @@ asm
 
 {$ELSE !SmallBlocksLockedCriticalSection}
 
-{ The 64-bit implemenation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.}
+{ The 64-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
+A Sleep() loop also lets the thread that released a lock retake it before a woken
+waiter runs, because Windows guarantees no acquisition order; see
+https://stackoverflow.com/a/79995198/6910868 }
 @LockSmallBlockTypeLoop:
   mov eax, (cLockbyteLocked shl 8) or cLockByteAvailable
   mov edx, eax
@@ -12318,7 +12343,7 @@ begin
       {Decrement the number of allocated blocks}
       Dec(LPSmallBlockPool^.BlocksInUse);
       {Small block pools are never freed in full debug mode. This increases the
-       likehood of success in catching objects still being used after being
+       likelihood of success in catching objects still being used after being
        destroyed.}
 {$IFNDEF FullDebugMode}
       {Is the entire pool now free? -> Free it.}
@@ -12769,8 +12794,11 @@ for flags like IsMultiThreaded or MediumBlocksLocked}
 
 {$ELSE !SmallBlocksLockedCriticalSection}
 
-{ The 32-bit implemenation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.}
+{ The 32-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
+A Sleep() loop also lets the thread that released a lock retake it before a woken
+waiter runs, because Windows guarantees no acquisition order; see
+https://stackoverflow.com/a/79995198/6910868 }
 @LockSmallBlockTypeLoop:
   mov eax, (cLockbyteLocked shl 8) or cLockByteAvailable
   {Attempt to grab the block type}
@@ -13472,8 +13500,11 @@ asm
 
 {$ELSE !SmallBlocksLockedCriticalSection}
 
-{ The 64-bit implemenation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
-By default, it will not be compiled into FastMM4-AVX which uses more efficient approach.}
+{ The 64-bit implementation from the original FastMM4 that employs a loop of Sleep() or SwitchToThread().
+By default, it will not be compiled into FastMM4-AVX which uses a more efficient approach.
+A Sleep() loop also lets the thread that released a lock retake it before a woken
+waiter runs, because Windows guarantees no acquisition order; see
+https://stackoverflow.com/a/79995198/6910868 }
 @LockSmallBlockTypeLoop:
   mov eax, (cLockbyteLocked shl 8) or cLockByteAvailable
   {Attempt to grab the block type}
@@ -18432,7 +18463,7 @@ begin
           begin
             {Step through all the blocks in the small block pool}
             LPSmallBlockPool := LPMediumBlock;
-            {Get the useable size inside a block}
+            {Get the usable size inside a block}
             LBlockSize := LPSmallBlockPool^.BlockType^.BlockSize - BlockHeaderSize - TotalDebugOverhead;
             {Get the first and last pointer for the pool}
             GetFirstAndLastSmallBlockInPool(LPSmallBlockPool, LCurPtr, LEndPtr);
@@ -18614,7 +18645,7 @@ end;
 
 {This function is only needed to copy with an error given when using
 the "typed @ operator" compiler option. We are having just one typecast
-in this function to avoid using typecasts throught the entire program.}
+in this function to avoid using typecasts throughout the entire program.}
 function GetNodeListFromNode(ANode: PMemoryLogNode): PMemoryLogNodes;
   {$IFDEF FASTMM4_ALLOW_INLINES}inline;{$ENDIF}
 begin
@@ -18723,7 +18754,7 @@ begin
   end;
 end;
 
-{Writes a log file containing a summary of the memory mananger state and a summary of allocated blocks grouped by
+{Writes a log file containing a summary of the memory manager state and a summary of allocated blocks grouped by
  class. The file will be saved in UTF-8 encoding (in supported Delphi versions). Returns True on success. }
 function LogMemoryManagerStateToFile(const AFileName: string; const AAdditionalDetails: string {$IFNDEF FPC}= ''{$ENDIF}): Boolean;
 const
@@ -19024,7 +19055,7 @@ var
     LPLeakedClasses: PLeakedClasses;
     LSmallBlockSize: Cardinal;
   begin
-    {Get the useable size inside a block}
+    {Get the usable size inside a block}
     LSmallBlockSize := APSmallBlockPool^.BlockType^.BlockSize - BlockHeaderSize;
   {$IFDEF FullDebugMode}
     Dec(LSmallBlockSize, FullDebugBlockOverhead);
