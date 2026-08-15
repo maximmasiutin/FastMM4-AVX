@@ -753,34 +753,44 @@ jobs:
       # Security Tests - Windows FullDebugMode
       # The debug allocator adds its overhead before any bound, which only these
       # steps reach; -Criot traps a wrap the unchecked build would serve.
+      # Each step deletes the executable an earlier step left and stops on the
+      # compiler's exit code, so a failed build cannot run a stale binary.
       # =========================================================================
 
       - name: Compile and run Integer Overflow Test (64-bit FullDebugMode)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\IntegerOverflowTest.exe
           Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode64.dll" .
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'IntegerOverflowTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\IntegerOverflowTest.exe'
 
       - name: Compile and run Integer Overflow Test (64-bit FullDebugMode, range and overflow checks)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\IntegerOverflowTest.exe
           Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode64.dll" .
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Criot', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O-', 'IntegerOverflowTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\IntegerOverflowTest.exe'
 
       - name: Compile and run Integer Overflow Test (32-bit FullDebugMode)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\IntegerOverflowTest.exe
           Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode.dll" .
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'IntegerOverflowTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\IntegerOverflowTest.exe'
 
       - name: Compile and run Integer Overflow Test (32-bit FullDebugMode, range and overflow checks)
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\IntegerOverflowTest.exe
           Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode.dll" .
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Criot', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O-', 'IntegerOverflowTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\IntegerOverflowTest.exe'
 
       # =========================================================================
