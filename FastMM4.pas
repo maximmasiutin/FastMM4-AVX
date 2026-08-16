@@ -171,6 +171,15 @@ Changes in FastMM4-AVX compared to the original FastMM4:
      memory functions are only used in Debug mode, i.e., in development
      environment, not in Release (production), the impact of this
      "vulnerability" is minimal (albeit this is a questionable statement)
+   - an allocation size is refused before the arithmetic on it can wrap, rather
+     than after: under FullDebugMode, a size that cannot have the debug block
+     overhead added to it is rejected in the parameter's own type, which is
+     unsigned on FreePascal and signed on Delphi, where the old code handed back
+     a block far smaller than requested and then wrote the block footer outside
+     it (issue #163); on the ordinary path the large block padding is added in
+     NativeUInt, so a 64-bit size at or above 2^63 can no longer overflow a
+     signed intermediate; and the POSIX VirtualAlloc shim takes a pointer-sized
+     size, so a large request reaches valloc untruncated;
    - removed all non-US-ASCII characters, to avoid using UTF-8 BOM, for
      better compatibility with very early versions of Delphi (e.g., Delphi 5),
      thanks to Valts Silaputnins;
