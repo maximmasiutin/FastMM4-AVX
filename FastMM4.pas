@@ -17138,8 +17138,12 @@ begin
 end;
 
 function DebugGetMem(ASize: {$IFDEF FPC}ptruint{$ELSE}{$IFDEF XE2AndUp}NativeInt{$ELSE}Integer{$ENDIF}{$ENDIF}): Pointer;
-{$IFDEF LogLockContention}
 var
+  {True when the size below is refused for its own sake rather than by the
+   allocator. The two reach the same nil, and only one of them means the
+   address space is exhausted.}
+  LSizeRefused: Boolean;
+{$IFDEF LogLockContention}
   LCollector: PStaticCollector;
   LStackTrace: TStackTrace;
 {$ENDIF}
@@ -17167,10 +17171,11 @@ begin
      compiled with overflow checking on: it sets no overflow check directive of
      its own and takes whatever the program compiling it sets.}
 {$IFDEF FPC}
-    if ASize > (High(ptruint) - FullDebugBlockOverhead) then
+    LSizeRefused := ASize > (High(ptruint) - FullDebugBlockOverhead);
 {$ELSE}
-    if (ASize < 0) or (ASize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead))) then
+    LSizeRefused := (ASize < 0) or (ASize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead)));
 {$ENDIF}
+    if LSizeRefused then
       Result := nil
     else
       Result := FastGetMem(ASize + FullDebugBlockOverhead {$IFDEF LogLockContention}, LCollector{$ENDIF});
@@ -17231,10 +17236,13 @@ begin
         Result := nil;
       end;
     end
-    else
+    else if not LSizeRefused then
     begin
       {The process ran out of address space:  Release the address space slack so that some subsequent GetMem calls will
-      succeed in order for any error logging, etc. to complete successfully.}
+      succeed in order for any error logging, etc. to complete successfully.
+      A size the guard above refused never reached the allocator, so it says
+      nothing about the address space and must not spend the slack, which is
+      reserved so that a later genuine failure can still be reported.}
       if AddressSpaceSlackPtr <> nil then
       begin
         VirtualFree(AddressSpaceSlackPtr, 0, MEM_RELEASE);
