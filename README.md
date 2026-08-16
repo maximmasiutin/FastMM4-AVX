@@ -9,7 +9,7 @@ and FreePascal compiler support.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.13 (15 August 2026)
+Version: 1.0.14 (16 August 2026)
 
 ## Compiler Support
 
@@ -295,6 +295,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.14 (16 August 2026) Security: refuse a FullDebugMode allocation size
+  that cannot have the debug overhead added to it (issue #163), and let a
+  large allocation reach valloc untruncated on POSIX, where the VirtualAlloc
+  shim declared its size as Cardinal; restored compilation under Delphi 4.
 
 - 1.0.13 (15 August 2026) Fixed inline assembler alignment directives for
   Delphi 7 and other pre-XE compilers when ForceAsmCodeAlign was defined;

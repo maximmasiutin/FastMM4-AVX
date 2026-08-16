@@ -6,7 +6,7 @@ FastMM4-AVX (FreePascal support, efficient synchronization, AVX1/AVX2/AVX512/ERM
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.13 (15 August 2026)
+Version 1.0.14 (16 August 2026)
 
 Supported compilers: Embarcadero Delphi, FreePascal (FPC/Lazarus).
 
@@ -291,6 +291,11 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.14 (16 August 2026) Security: refuse a FullDebugMode allocation size
+  that cannot have the debug overhead added to it (issue #163), and let a
+  large allocation reach valloc untruncated on POSIX, where the VirtualAlloc
+  shim declared its size as Cardinal; restored compilation under Delphi 4.
 
 - 1.0.13 (15 August 2026) Fixed inline assembler alignment directives for
   Delphi 7 and other pre-XE compilers when ForceAsmCodeAlign was defined;
@@ -1853,7 +1858,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.13';
+  FastMM4AvxVersion = '1.0.14';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 
