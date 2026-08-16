@@ -10,8 +10,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  FastMM4 in '../../FastMM4.pas',
-  FastMM4Messages in '../../FastMM4Messages.pas',
+  FastMM4 in '..\..\FastMM4.pas',
+  FastMM4Messages in '..\..\FastMM4Messages.pas',
   Classes,
   SysUtils;
 

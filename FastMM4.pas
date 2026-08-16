@@ -7568,12 +7568,12 @@ begin
 end;
 
 {$IFNDEF MACOS}
-function VirtualAlloc(lpvAddress: Pointer; dwSize, flAllocationType, flProtect: Cardinal): Pointer; stdcall;
+function VirtualAlloc(lpvAddress: Pointer; dwSize: NativeUInt; flAllocationType, flProtect: Cardinal): Pointer; stdcall;
 begin
   Result := valloc(dwSize);
 end;
 
-function VirtualFree(lpAddress: Pointer; dwSize, dwFreeType: Cardinal): LongBool; stdcall;
+function VirtualFree(lpAddress: Pointer; dwSize: NativeUInt; dwFreeType: Cardinal): LongBool; stdcall;
 begin
   free(lpAddress);
   Result := True;
@@ -9237,8 +9237,20 @@ begin
   {Pad the block size to include the header and granularity. We also add a
    SizeOf(Pointer) overhead so a huge block size is a multiple of 16 bytes less
    SizeOf(Pointer) (so we can use a single move function for reallocating all
-   block types)}
-  LLargeUsedBlockSize := (ASize + LargeBlockHeaderSize + LargeBlockGranularity - 1 + BlockHeaderSize)
+   block types)
+
+   Each constant is added as NativeUInt. They are untyped integer constants, and
+   FreePascal widens the whole expression to int64 to hold them, so on 64-bit a
+   size at or above 2^63 overflows that signed intermediate rather than the
+   unsigned type the size actually has. The guard above does not stop it, since
+   MaxSafeLargeBlockSize sits only 2 MB below the top of the range and passes
+   almost the whole upper half through. Unchecked the wrap was invisible because
+   the mask discarded it; with overflow checking on, which the unit inherits from
+   the program compiling it, it terminated the process from inside the allocator
+   instead of returning nil. Written in NativeUInt the arithmetic is exact, and
+   no size the guard admits can carry it past the top.}
+  LLargeUsedBlockSize := (ASize + NativeUInt(LargeBlockHeaderSize)
+      + NativeUInt(LargeBlockGranularity) - 1 + NativeUInt(BlockHeaderSize))
     and LargeBlockGranularityMask;
   {Get the Large block}
   Result := VirtualAlloc(nil, LLargeUsedBlockSize, MEM_COMMIT or MEM_TOP_DOWN,
@@ -17126,8 +17138,12 @@ begin
 end;
 
 function DebugGetMem(ASize: {$IFDEF FPC}ptruint{$ELSE}{$IFDEF XE2AndUp}NativeInt{$ELSE}Integer{$ENDIF}{$ENDIF}): Pointer;
-{$IFDEF LogLockContention}
 var
+  {True when the size below is refused for its own sake rather than by the
+   allocator. The two reach the same nil, and only one of them means the
+   address space is exhausted.}
+  LSizeRefused: Boolean;
+{$IFDEF LogLockContention}
   LCollector: PStaticCollector;
   LStackTrace: TStackTrace;
 {$ENDIF}
@@ -17140,7 +17156,29 @@ begin
   try
     {We need extra space for (a) The debug header, (b) the block debug trailer
      and (c) the trailing block size pointer for free blocks}
-    Result := FastGetMem(ASize + FullDebugBlockOverhead {$IFDEF LogLockContention}, LCollector{$ENDIF});
+    {A request within FullDebugBlockOverhead of the top of the size type makes
+     that addition wrap, and the wrapped total is a small number the allocator
+     will serve, so the caller would be handed a block far smaller than it asked
+     for and the footer would then be written outside it. The size is refused
+     before the addition rather than after, since FastGetMem never sees the
+     value the caller actually named.
+
+     The test is written in the parameter's own type, so the addition below is
+     exact rather than merely harmless. The type is unsigned under FreePascal
+     and signed under Delphi, where a size that has already wrapped arrives as
+     a negative number and one just below High(NativeInt) would overflow the
+     addition itself. Both are refused here, which is what lets this unit be
+     compiled with overflow checking on: it sets no overflow check directive of
+     its own and takes whatever the program compiling it sets.}
+{$IFDEF FPC}
+    LSizeRefused := ASize > (High(ptruint) - FullDebugBlockOverhead);
+{$ELSE}
+    LSizeRefused := (ASize < 0) or (ASize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead)));
+{$ENDIF}
+    if LSizeRefused then
+      Result := nil
+    else
+      Result := FastGetMem(ASize + FullDebugBlockOverhead {$IFDEF LogLockContention}, LCollector{$ENDIF});
     if Result <> nil then
     begin
       {Large blocks are always newly allocated (and never reused), so checking
@@ -17198,10 +17236,13 @@ begin
         Result := nil;
       end;
     end
-    else
+    else if not LSizeRefused then
     begin
       {The process ran out of address space:  Release the address space slack so that some subsequent GetMem calls will
-      succeed in order for any error logging, etc. to complete successfully.}
+      succeed in order for any error logging, etc. to complete successfully.
+      A size the guard above refused never reached the allocator, so it says
+      nothing about the address space and must not spend the slack, which is
+      reserved so that a later genuine failure can still be reported.}
       if AddressSpaceSlackPtr <> nil then
       begin
         VirtualFree(AddressSpaceSlackPtr, 0, MEM_RELEASE);
@@ -17410,8 +17451,21 @@ begin
     {Get the current block size}
     LBlockSpace := GetAvailableSpaceInBlock(LActualBlock);
     {Can the block fit? We need space for the debug overhead and the block header
-     of the next block}
-    if LBlockSpace < (NativeUInt(ANewSize) + FullDebugBlockOverhead) then
+     of the next block. The same addition wraps here, and a wrapped total reads
+     as a size the existing block can already hold, so the block would be kept
+     and the caller told that its enormous request had been served in place. A
+     size that cannot have the overhead added to it is sent down the allocate
+     path instead, where DebugGetMem refuses it and the existing nil handling
+     reports the failure. The first test is again in the parameter's own type,
+     and it short-circuits, so the addition in the last operand is reached only
+     for a size it fits.}
+    if
+{$IFDEF FPC}
+      (ANewSize > (High(ptruint) - FullDebugBlockOverhead))
+{$ELSE}
+      (ANewSize < 0) or (ANewSize > (High(NativeInt) - NativeInt(FullDebugBlockOverhead)))
+{$ENDIF}
+      or (LBlockSpace < (NativeUInt(ANewSize) + FullDebugBlockOverhead)) then
     begin
       {Get a new block of the requested size.}
       Result := DebugGetMem(ANewSize);

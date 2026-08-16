@@ -13,8 +13,8 @@ program IntegerOverflowTest;
 {$Q+}
 
 uses
-  FastMM4 in '../../FastMM4.pas',
-  FastMM4Messages in '../../FastMM4Messages.pas';
+  FastMM4 in '..\..\FastMM4.pas',
+  FastMM4Messages in '..\..\FastMM4Messages.pas';
 
 var
   TestsPassed: Integer;
@@ -234,6 +234,154 @@ begin
   end;
 end;
 
+{$IFDEF FullDebugMode}
+{The debug allocator adds its own header, trailer and free-block pointer to
+ every request before passing the total to the ordinary allocator. A request
+ within that overhead of the top of the size type makes the addition wrap, and
+ the wrapped total is a small number the ordinary allocator will serve, so the
+ caller receives a block far smaller than it asked for. These probes stand at
+ both ends of that interval and at the two largest values there are.
+
+ The overhead is the same sum the allocator forms: the full debug header, a
+ NativeUInt trailer and one trailing free-block pointer. FastMM4 declares the
+ header type in its interface, so the size is taken from it rather than written
+ out, and a change to the stack trace depth moves the probes with it.}
+function FullDebugOverheadForTest: NativeUInt;
+begin
+  Result := SizeOf(TFullDebugBlockHeader) + SizeOf(NativeUInt) + SizeOf(Pointer);
+end;
+
+{The debug entry points take the same signed size as the ordinary ones on
+ Delphi, so the probes convert through SignedSize for the reason TryGetMem
+ does: this program compiles with range checking on, and the values it exists
+ to test are out of the signed range by construction.}
+function TryDebugGetMem(ASize: NativeUInt): Pointer;
+begin
+{$IFDEF FPC}
+  Result := DebugGetMem(ASize);
+{$ELSE}
+  Result := DebugGetMem(SignedSize(ASize));
+{$ENDIF}
+end;
+
+procedure CheckDebugGetMemRefuses(const ATestName: string; ASize: NativeUInt);
+var
+  P: Pointer;
+begin
+  P := TryDebugGetMem(ASize);
+  if P = nil then
+    LogTest(ATestName, True, 'Correctly returned nil')
+  else
+  begin
+    LogTest(ATestName, False, 'DebugGetMem returned an undersized block');
+    {The block is deliberately not freed. Its footer was written outside it, so
+     the free is what turns a reported failure into a terminated process, and
+     every check after this one would then run against a corrupted heap and
+     report nothing worth reading. The leak is the lesser evil and happens only
+     on a run that has already failed.}
+  end;
+end;
+
+procedure TestFullDebugModeBoundaries;
+var
+  LOverhead, LLastSafe, LFirstWrapping: NativeUInt;
+begin
+  WriteLn;
+  WriteLn('=== Test 4: FullDebugMode overhead boundary ===');
+  LOverhead := FullDebugOverheadForTest;
+  LLastSafe := High(NativeUInt) - LOverhead;
+  LFirstWrapping := LLastSafe + 1;
+
+  {The first of these does not wrap when the overhead is added, and has to be
+   refused by the ordinary size limit; the rest wrap, and have to be refused
+   before the addition happens at all.}
+  CheckDebugGetMemRefuses('DebugGetMem at the last size that does not wrap', LLastSafe);
+  CheckDebugGetMemRefuses('DebugGetMem at the first size that wraps', LFirstWrapping);
+  CheckDebugGetMemRefuses('DebugGetMem at High(NativeUInt)-1', High(NativeUInt) - 1);
+  CheckDebugGetMemRefuses('DebugGetMem at High(NativeUInt)', High(NativeUInt));
+
+{$IFNDEF FPC}
+  {The size the signed parameter overflows on, which is a different value from
+   the ones above and exists only on the compilers that declare the debug entry
+   points with a signed size. It is positive, so it passes any test written
+   against the unsigned interpretation, and adding the overhead to it overflows
+   the parameter's own type. A build with overflow checking on is where that
+   shows: unchecked it wraps to a negative number the allocator then refuses,
+   so the outcome looks right and the arithmetic is not.
+
+   FreePascal declares the same parameter unsigned, where this size is an
+   ordinary large request rather than a boundary of any kind, so the probe is
+   not run there. It would leave the debug path entirely and land in the large
+   block allocator, which is a different question from the one this test asks.}
+  CheckDebugGetMemRefuses('DebugGetMem at the largest signed size',
+    NativeUInt(High(NativeInt)));
+  CheckDebugGetMemRefuses('DebugGetMem one below the largest signed size',
+    NativeUInt(High(NativeInt)) - 1);
+{$ENDIF}
+end;
+
+{A reallocation to a wrapping size must fail without disturbing the block the
+ caller already holds. The address is saved first because the two compilers
+ differ on what they do with the pointer: under FreePascal the memory manager
+ entry takes it as a var parameter and clears it on failure, so the caller's
+ own copy is the only way back to a block that is still allocated.}
+procedure TestFullDebugModeReallocBoundary;
+const
+  COriginalSize = 64;
+  CFillValue = $5A;
+type
+  {A byte pointer of this program's own, because PByte is PAnsiChar on the
+   compilers before Delphi 2009 and assigning a number through it does not
+   compile there. FastMM4 defines PByteIsPAnsiChar for the same reason.}
+  PTestByte = ^Byte;
+var
+  P, LOriginal, LResult: Pointer;
+  LIndex: Integer;
+  LIntact: Boolean;
+  LFirstWrapping: NativeUInt;
+begin
+  WriteLn;
+  WriteLn('=== Test 5: FullDebugMode reallocation boundary ===');
+  P := TryDebugGetMem(COriginalSize);
+  if P = nil then
+  begin
+    LogTest('DebugReallocMem setup', False, 'the original block could not be allocated');
+    Exit;
+  end;
+  LOriginal := P;
+  for LIndex := 0 to COriginalSize - 1 do
+    PTestByte(NativeUInt(P) + NativeUInt(LIndex))^ := CFillValue;
+
+  LFirstWrapping := High(NativeUInt) - FullDebugOverheadForTest + 1;
+{$IFDEF FPC}
+  LResult := DebugReallocMem(P, LFirstWrapping);
+{$ELSE}
+  LResult := DebugReallocMem(P, SignedSize(LFirstWrapping));
+{$ENDIF}
+  LogTest('DebugReallocMem at the first size that wraps', LResult = nil,
+    'Expected nil');
+  if LResult <> nil then
+  begin
+    {The reallocation was served, so the saved address names a block the
+     allocator may already have freed or moved. Reading it to see whether it
+     survived would be a use after free, and freeing either pointer on a heap
+     this request has just corrupted ends the process instead of reporting.
+     The check is recorded as failed and nothing further is touched.}
+    LogTest('the original block survives the refused reallocation', False,
+      'the reallocation was served, so the original block cannot be examined');
+    Exit;
+  end;
+
+  LIntact := True;
+  for LIndex := 0 to COriginalSize - 1 do
+    if PTestByte(NativeUInt(LOriginal) + NativeUInt(LIndex))^ <> CFillValue then
+      LIntact := False;
+  LogTest('the original block survives the refused reallocation', LIntact,
+    'its contents must be unchanged');
+  DebugFreeMem(LOriginal);
+end;
+{$ENDIF FullDebugMode}
+
 procedure TestBoundaryConditions;
 var
   P: Pointer;
@@ -279,6 +427,33 @@ begin
   begin
     LogTest('High(NativeUInt)-1 allocation', True, 'Correctly returned nil');
   end;
+
+  {The largest size the signed half of the range can name. It is below
+   MaxSafeLargeBlockSize, so the allocator's own guard passes it through to the
+   large block path, where the padding is added. That padding is written in
+   NativeUInt for this size's sake: as untyped constants it widened to int64,
+   and a size at or above 2^63 overflowed the signed intermediate rather than
+   the unsigned type the size has. Unchecked the mask hid it; with overflow
+   checking on it ended the process inside the allocator. This probe is the
+   ordinary path, so it runs whether or not FullDebugMode is set.}
+  Size := NativeUInt(High(NativeInt));
+  Write('Attempting to allocate: $');
+  WriteHex(Size);
+  WriteLn(' bytes (High(NativeInt))');
+  P := TryGetMem(Size);
+  if P <> nil then
+  begin
+    Write('[FAIL] High(NativeInt) allocation - VULNERABILITY: got pointer $');
+    WriteHex(NativeUInt(P));
+    WriteLn;
+    Inc(TestsTotal);
+    Inc(TestsFailed);
+    FreeMem(P);
+  end
+  else
+  begin
+    LogTest('High(NativeInt) allocation', True, 'Correctly returned nil');
+  end;
 end;
 
 var
@@ -312,6 +487,10 @@ begin
   TestOverflowAllocation;
 
   TestBoundaryConditions;
+{$IFDEF FullDebugMode}
+  TestFullDebugModeBoundaries;
+  TestFullDebugModeReallocBoundary;
+{$ENDIF}
 
   WriteLn;
   WriteLn('================================================================================');
