@@ -59,8 +59,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  FastMM4 in '../../FastMM4.pas',
-  FastMM4Messages in '../../FastMM4Messages.pas',
+  FastMM4 in '..\..\FastMM4.pas',
+  FastMM4Messages in '..\..\FastMM4Messages.pas',
   {$IFNDEF FPC}
   {$IFDEF POSIX}
   {For getpid, which is what makes the temporary name here unique among the
