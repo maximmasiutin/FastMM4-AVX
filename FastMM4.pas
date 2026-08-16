@@ -7568,12 +7568,12 @@ begin
 end;
 
 {$IFNDEF MACOS}
-function VirtualAlloc(lpvAddress: Pointer; dwSize, flAllocationType, flProtect: Cardinal): Pointer; stdcall;
+function VirtualAlloc(lpvAddress: Pointer; dwSize: NativeUInt; flAllocationType, flProtect: Cardinal): Pointer; stdcall;
 begin
   Result := valloc(dwSize);
 end;
 
-function VirtualFree(lpAddress: Pointer; dwSize, dwFreeType: Cardinal): LongBool; stdcall;
+function VirtualFree(lpAddress: Pointer; dwSize: NativeUInt; dwFreeType: Cardinal): LongBool; stdcall;
 begin
   free(lpAddress);
   Result := True;
