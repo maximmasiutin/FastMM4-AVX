@@ -49,9 +49,14 @@ FastMM4_AVX512_Linux.o
 # Test build artifacts
 /Tests/Simple/SimpleTest.dproj
 /Tests/Simple/SimpleTest.res
+/Tests/Simple/*.o
+/Tests/Simple/ppas.bat
+/Tests/Simple/ppas.sh
 /Tests/Advanced/AdvancedTest
 /Tests/Advanced/AdvancedTest64
 /Tests/Advanced/*.o
+/Tests/Advanced/ppas.bat
+/Tests/Advanced/ppas.sh
 libimpFastMM4.a
 
 # SonarQube scanner
