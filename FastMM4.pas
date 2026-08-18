@@ -6853,7 +6853,7 @@ end;
 {$IFDEF EnableERMS}
 
 // According to the Intel Optimization Reference Manual (Section 3.7.6.2, Memcpy Considerations), rep movsb outperforms AVX copy on blocks of 2048 bytes and above
-// No source/destination distance check guards the rep movsb these routines select, because FastMM only calls them for a reallocation copy between two separately allocated blocks, which never overlap; a forward copy whose destination lies 1 to 63 bytes below the source would otherwise be pathologically slow on FSRM CPUs, which is why glibc and the MSVC v14.50 CRT test the distance in memmove, see https://stackoverflow.com/a/79996071/6910868
+// No source/destination distance check guards the rep movsb these routines select, because FastMM only calls them for a reallocation copy between two separately allocated blocks, which never overlap; a forward copy whose destination lies 1 to 63 bytes below the source is pathologically slow on some CPUs with Fast Short REP MOVSB (FSRM), such as Ice Lake, Tiger Lake and the Alder Lake P-core, which is why glibc, on Intel CPUs with FSRM, and the MSVC v14.50 CRT, on every CPU, test the distance in memmove, see https://stackoverflow.com/a/79996071/6910868
 
 const
   cLeastErmsAdvantageLengh = 2048;
@@ -7051,10 +7051,11 @@ a 16-byte aligned one and do not compare 16 against 64, see
 https://stackoverflow.com/a/43837564/6910868
 
 The rep movsb below runs without a source/destination distance check, where
-glibc and the MSVC v14.50 CRT both refuse rep movsb in memmove when a forward
-copy's destination lies 1 to 63 bytes below the source, because that close
-forward overlap is pathologically slow on CPUs with Fast Short REP MOV, such
-as Ice Lake, Tiger Lake and the Alder Lake P-core, see
+glibc, on Intel CPUs with Fast Short REP MOVSB (FSRM), and the MSVC v14.50
+CRT, on every CPU, refuse rep movsb in memmove when a forward copy's
+destination lies 1 to 63 bytes below the source, because that close forward
+overlap is pathologically slow on some FSRM CPUs, such as Ice Lake, Tiger
+Lake and the Alder Lake P-core, see
 https://stackoverflow.com/a/79996071/6910868
 for the measurements and both library fixes. FastMM needs no such check:
 this routine is only called for a reallocation copy between two separately

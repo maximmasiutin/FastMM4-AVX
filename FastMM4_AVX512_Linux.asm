@@ -301,12 +301,13 @@ MoveX32LpAvx512WithErms:
 ; Both 256 and 2048 are full-block sizes as measured, while the comparison
 ; above runs on a counter with the 8-byte tail already removed.
 ; See https://stackoverflow.com/a/43837564/6910868
-; No source/destination distance check guards the rep movsb below, where glibc
-; and the MSVC v14.50 CRT both refuse rep movsb in memmove when a forward
-; copy's destination lies 1 to 63 bytes below the source, the close-overlap
-; case that is pathologically slow on CPUs with Fast Short REP MOV. FastMM
-; needs no such check, because this routine only runs a reallocation copy
-; between two separately allocated blocks, which never overlap.
+; No source/destination distance check guards the rep movsb below, where
+; glibc, on Intel CPUs with Fast Short REP MOVSB (FSRM), and the MSVC v14.50
+; CRT, on every CPU, refuse rep movsb in memmove when a forward copy's
+; destination lies 1 to 63 bytes below the source, the close-overlap case
+; that is pathologically slow on some FSRM CPUs. FastMM needs no such check,
+; because this routine only runs a reallocation copy between two separately
+; allocated blocks, which never overlap.
 ; See https://stackoverflow.com/a/79996071/6910868
 	jg		@DontDoRepMovsbLinux
 
