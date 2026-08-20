@@ -89,3 +89,16 @@ link*.res
 
 # Local tooling metadata
 /.project/
+
+# FullDebugMode writes its event log beside the test binary as it runs, named
+# after the executable, so the pattern matches whichever test produced it.
+/Tests/Simple/*_MemoryManager_EventLog.txt
+
+# FreePascal import libraries for the test binaries. Globbed rather than named,
+# unlike the assembly listing above, because nothing hand-written is called
+# libimp anything and a second test would otherwise need a second line here.
+/Tests/Simple/libimp*.a
+
+# Language server trace, written into whatever directory the editor was started
+# from rather than into a state directory of its own.
+/lsp-debug.log
