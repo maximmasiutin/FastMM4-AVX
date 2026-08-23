@@ -136,18 +136,58 @@ def line_number(text: str, position: int) -> int:
     return text.count("\n", 0, position) + 1
 
 
+def mask_comments(text: str) -> str:
+    """Blank every Pascal comment, keeping each character's position.
+
+    A guard commented out is a guard removed, so guards and guarded uses are
+    matched against this text rather than the raw source. Positions are
+    preserved, so an offset found here still names its line in the original.
+    Scope anchors keep matching the raw source, since several of them are
+    themselves comments.
+    """
+    out = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        char = text[index]
+        if char == "'":  # a quoted brace must not open a comment
+            index += 1
+            while index < length and text[index] != "'" and text[index] != "\n":
+                index += 1
+            index += 1
+            continue
+        closing = None
+        if char == "{":
+            closing = "}"
+        elif text.startswith("(*", index):
+            closing = "*)"
+        elif text.startswith("//", index):
+            closing = "\n"
+        if closing is None:
+            index += 1
+            continue
+        stop = text.find(closing, index + len(closing))
+        stop = length if stop < 0 else stop + (0 if closing == "\n" else len(closing))
+        for position in range(index, stop):
+            if out[position] != "\n":
+                out[position] = " "
+        index = stop
+    return "".join(out)
+
+
 def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = None) -> str | None:
     start = text.find(rule.start)
     end = text.find(rule.end, start + len(rule.start)) if start >= 0 else -1
     scoped = start >= 0 and end >= 0
-    use = text.find(rule.guarded_use, start, end) if scoped else -1
+    active = mask_comments(text)
+    use = active.find(rule.guarded_use, start, end) if scoped else -1
 
     # Each guard must appear after the one before it, so a component moved out
     # of sequence is reported rather than accepted because a later one matched.
     found: list[int] = []
     cursor = start
     for guard in rule.guards:
-        at = text.find(guard, cursor, end) if scoped and cursor >= 0 else -1
+        at = active.find(guard, cursor, end) if scoped and cursor >= 0 else -1
         found.append(at)
         cursor = at + len(guard) if at >= 0 else -1
 
@@ -189,6 +229,9 @@ def run_fixture_tests(fixtures: Path) -> list[str]:
     # each other, which is what a verifier ignoring inter-guard order accepts.
     if check_rule(read("reordered.pas"), fixture_rule()) is None:
         errors.append("reordered fixture was accepted; its two guards are in the wrong order")
+    # One guard present in the text but commented out, which the compiler drops.
+    if check_rule(read("commented.pas"), fixture_rule()) is None:
+        errors.append("commented fixture was accepted; one of its guards is commented out")
     return errors
 
 
@@ -237,7 +280,7 @@ def main() -> int:
         return 1
     guards = sum(len(rule.guards) for rule in RULES)
     print(f"Guard ordering OK: {len(RULES)} source rules, {guards} guard components; "
-          "valid, invalid and reordered fixtures verified")
+          "valid, invalid, reordered and commented fixtures verified")
     return 0
 
 
