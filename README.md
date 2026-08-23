@@ -542,5 +542,5 @@ Fast Memory Manager
 Run the fast source validation and its positive/negative fixture tests with:
 
 ```shell
-python Tests/verify_guard_ordering.py
+python3 Tests/verify_guard_ordering.py
 ```
