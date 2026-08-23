@@ -35,6 +35,13 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
+  {SysUtils is load-bearing here and is not to be dropped for tidiness. It
+   declares Exception, which the handler below catches by name, and it installs
+   the runtime hook that turns a hardware fault into a catchable Pascal
+   exception. Built without it, this program does not compile, and past the
+   identifiers an access violation would become runtime error 216 and kill the
+   process instead of failing a named check. Sibling tests that used the unit
+   only to format numbers no longer include it.}
   {$IFDEF FPC}
   SysUtils,
   Classes;
