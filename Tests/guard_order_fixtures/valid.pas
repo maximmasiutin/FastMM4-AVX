@@ -1,7 +1,8 @@
 procedure FixtureProcedure;
 begin
   {fixture-start}
-  ValidateGuard;
+  ValidateBounds;
+  ValidateAlignment;
   GuardedUse;
   {fixture-end}
 end;

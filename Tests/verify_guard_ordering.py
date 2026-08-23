@@ -20,53 +20,94 @@ class Rule:
     guarded_use: str
 
 
+SMALL_BOUNDS_PASCAL = (
+    "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
+    "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
+    "mod SmallBlockTypeRecSize <> 0")
+
+
+def small_bounds_asm(accumulator: str, block_type: str, reject: str) -> tuple[str, ...]:
+    """Every component of the assembly BlockType bounds and alignment guard.
+
+    Naming each lea, compare and branch pins which comparison is which, so
+    moving one bound out of sequence cannot be covered by the other matching.
+    """
+    return (
+        f"lea {accumulator}, SmallBlockTypes",
+        f"cmp {block_type}, {accumulator}",
+        f"jb {reject}",
+        f"lea {accumulator}, SmallBlockTypes[NumSmallBlockTypes * SmallBlockTypeRecSize]",
+        f"cmp {block_type}, {accumulator}",
+        f"jae {reject}",
+        f"lea {accumulator}, SmallBlockTypes",
+        f"neg {accumulator}",
+        f"add {accumulator}, {block_type}",
+        f"test {accumulator}, (SmallBlockTypeRecSize - 1)",
+        f"jnz {reject}",
+    )
+
+
 RULES = (
+    Rule("FastFreeMem", "Pascal", "pool pointer before BlockType read",
+         "{Get a pointer to the block pool}", "{Validate that BlockType points within",
+         ("if NativeUInt(LPSmallBlockPool) < $10000 then",),
+         "LPSmallBlockType := LPSmallBlockPool^.BlockType;"),
     Rule("FastFreeMem", "Pascal", "small BlockType before clear",
-         "{Get the block type}", "{Lock the block type}",
-         ("if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
-          "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
-          "mod SmallBlockTypeRecSize <> 0"),
+         "LPSmallBlockType := LPSmallBlockPool^.BlockType;", "{Lock the block type}",
+         SMALL_BOUNDS_PASCAL,
          "FillChar(APointer^, LPSmallBlockType^.BlockSize"),
     Rule("FastFreeMem", "Pascal", "medium size before clear",
          "{Guard: validate medium block size BEFORE", "Result := FreeMediumBlock(APointer);",
          ("if (LBlockSize < MinimumMediumBlockSize)",
           "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
          "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
+    Rule("FastFreeMem", "32-bit ASM", "pool pointer before BlockType read",
+         "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
+         ("cmp edx, $10000", "jb @InvalidSmallBlock"),
+         "mov ebx, TSmallBlockPoolHeader[edx].BlockType"),
     Rule("FastFreeMem", "32-bit ASM", "small BlockType before clear",
-         "cmp edx, $10000", "{Do we need to lock the block type?}",
-         ("cmp ebx, eax", "jb @InvalidSmallBlock", "jae @InvalidSmallBlock",
-          "test eax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallBlock"),
+         "mov ebx, TSmallBlockPoolHeader[edx].BlockType", "{Do we need to lock the block type?}",
+         small_bounds_asm("eax", "ebx", "@InvalidSmallBlock"),
          "call System.@FillChar"),
     Rule("FastFreeMem", "32-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by eax",
          ("cmp edx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
           "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
          "call System.@FillChar"),
+    Rule("FastFreeMem", "64-bit ASM", "pool pointer before BlockType read",
+         "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
+         ("cmp rdx, $10000", "jb @InvalidSmallBlock"),
+         "mov rbx, TSmallBlockPoolHeader[rdx].BlockType"),
     Rule("FastFreeMem", "64-bit ASM", "small BlockType before clear",
-         "cmp rdx, $10000", "{Do we need to lock the block type?}",
-         ("cmp rbx, rax", "jb @InvalidSmallBlock", "jae @InvalidSmallBlock",
-          "test rax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallBlock"),
+         "mov rbx, TSmallBlockPoolHeader[rdx].BlockType", "{Do we need to lock the block type?}",
+         small_bounds_asm("rax", "rbx", "@InvalidSmallBlock"),
          "call System.@FillChar"),
     Rule("FastFreeMem", "64-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by rcx",
          ("cmp rdx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
           "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
          "call System.@FillChar"),
+    Rule("FastReallocMem", "Pascal", "pool pointer before BlockType read",
+         "{-----------------------------------Small block", "{Is it an upsize or a downsize?}",
+         ("if NativeUInt(LBlockHeader) < $10000 then",),
+         "LPSmallBlockType := PSmallBlockPoolHeader(LBlockHeader)^.BlockType;"),
     Rule("FastReallocMem", "Pascal", "small BlockType before size read",
-         "{Get the block type}", "{Is it an upsize or a downsize?}",
-         ("if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
-          "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
-          "mod SmallBlockTypeRecSize <> 0"),
+         "LPSmallBlockType := PSmallBlockPoolHeader(LBlockHeader)^.BlockType;",
+         "{Is it an upsize or a downsize?}",
+         SMALL_BOUNDS_PASCAL,
          "LOldAvailableSize := LPSmallBlockType^.BlockSize"),
     Rule("FastReallocMem", "Pascal", "medium size before arithmetic",
          "{-------------------------------Medium block", "{Is the next block free?}",
          ("if (LOldAvailableSize < MinimumMediumBlockSize)",
           "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
          "LOldBlockSize := LOldAvailableSize"),
+    Rule("FastReallocMem", "32-bit ASM", "pool pointer before BlockType read",
+         "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
+         ("cmp ecx, $10000", "jb @InvalidSmallReallocPtr"),
+         "mov ebx, TSmallBlockPoolHeader[ecx].BlockType"),
     Rule("FastReallocMem", "32-bit ASM", "small BlockType before size read",
-         "cmp ecx, $10000", "{Is it an upsize or a downsize?}",
-         ("cmp ebx, eax", "jb @InvalidSmallReallocPtr", "jae @InvalidSmallReallocPtr",
-          "test eax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallReallocPtr"),
+         "mov ebx, TSmallBlockPoolHeader[ecx].BlockType", "{Is it an upsize or a downsize?}",
+         small_bounds_asm("eax", "ebx", "@InvalidSmallReallocPtr"),
          "movzx ecx, TSmallBlockType[ebx].BlockSize"),
     Rule("FastReallocMem", "32-bit ASM", "medium size before address arithmetic",
          "{-------------------------------Medium block", "{Subtract the block header size",
@@ -74,10 +115,13 @@ RULES = (
           "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
           "ja @InvalidMediumReallocPtr"),
          "lea edi, [eax + ecx]"),
+    Rule("FastReallocMem", "64-bit ASM", "pool pointer before BlockType read",
+         "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
+         ("cmp rcx, $10000", "jb @InvalidSmallReallocPtr"),
+         "mov rbx, TSmallBlockPoolHeader[rcx].BlockType"),
     Rule("FastReallocMem", "64-bit ASM", "small BlockType before size read",
-         "cmp rcx, $10000", "{Is it an upsize or a downsize?}",
-         ("cmp rbx, rax", "jb @InvalidSmallReallocPtr", "jae @InvalidSmallReallocPtr",
-          "test rax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallReallocPtr"),
+         "mov rbx, TSmallBlockPoolHeader[rcx].BlockType", "{Is it an upsize or a downsize?}",
+         small_bounds_asm("rax", "rbx", "@InvalidSmallReallocPtr"),
          "movzx ecx, TSmallBlockType[rbx].BlockSize"),
     Rule("FastReallocMem", "64-bit ASM", "medium size before address arithmetic",
          "{-------------------------------Medium block", "{Subtract the block header size",
@@ -126,18 +170,25 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
 
 
 def fixture_rule() -> Rule:
-    return Rule("FixtureProcedure", "fixture", "guard before guarded use",
-                "{fixture-start}", "{fixture-end}", ("ValidateGuard;",), "GuardedUse;")
+    return Rule("FixtureProcedure", "fixture", "guards in order before guarded use",
+                "{fixture-start}", "{fixture-end}",
+                ("ValidateBounds;", "ValidateAlignment;"), "GuardedUse;")
 
 
 def run_fixture_tests(fixtures: Path) -> list[str]:
     errors: list[str] = []
-    valid = (fixtures / "valid.pas").read_text(encoding="utf-8")
-    invalid = (fixtures / "invalid.pas").read_text(encoding="utf-8")
-    if failure := check_rule(valid, fixture_rule()):
+
+    def read(name: str) -> str:
+        return (fixtures / name).read_text(encoding="utf-8")
+
+    if failure := check_rule(read("valid.pas"), fixture_rule()):
         errors.append("valid fixture was rejected:\n" + failure)
-    if check_rule(invalid, fixture_rule()) is None:
-        errors.append("invalid fixture was accepted; its guard is deliberately reversed")
+    if check_rule(read("invalid.pas"), fixture_rule()) is None:
+        errors.append("invalid fixture was accepted; its guards sit after the guarded use")
+    # Two guards, both before the guarded use, in the wrong order relative to
+    # each other, which is what a verifier ignoring inter-guard order accepts.
+    if check_rule(read("reordered.pas"), fixture_rule()) is None:
+        errors.append("reordered fixture was accepted; its two guards are in the wrong order")
     return errors
 
 
@@ -186,7 +237,7 @@ def main() -> int:
         return 1
     guards = sum(len(rule.guards) for rule in RULES)
     print(f"Guard ordering OK: {len(RULES)} source rules, {guards} guard components; "
-          "valid and invalid fixtures verified")
+          "valid, invalid and reordered fixtures verified")
     return 0
 
 
