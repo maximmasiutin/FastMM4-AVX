@@ -4,5 +4,6 @@ begin
   GuardedUse;
   ValidateBounds;
   ValidateAlignment;
+  Exit;
   {fixture-end}
 end;

@@ -7,6 +7,7 @@ begin
   {fixture-start}
   ValidateAlignment;
   ValidateBounds;
+  Exit;
   GuardedUse;
   {fixture-end}
 end;

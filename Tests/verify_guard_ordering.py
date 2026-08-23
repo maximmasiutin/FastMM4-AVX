@@ -34,10 +34,20 @@ DIRECTIVE = re.compile(r"\{\$[^}]*\}")
 
 SOFT = "{$IFDEF SoftInvalidFreeMem}"
 
+# The only conditionals a guard sequence may be split by. Any other directive
+# between two components can compile one of them out, so it is a defect rather
+# than formatting: a component inside {$IFDEF NeverDefined} is not compiled.
+ALLOWED_DIRECTIVES = (SOFT, "{$ELSE}", "{$ENDIF}")
+
 # A Pascal guard is protective only because its body leaves the routine, so
 # the terminator is required as the last component, the way each assembly rule
 # requires its rejecting branch.
 EXIT = "Exit;"
+
+# The terminators, and what may not appear between one and the condition it
+# terminates.
+TERMINATORS = (EXIT, "else")
+CONDITION = re.compile(r"\bif\b", re.IGNORECASE)
 
 # Each component carries the connector that joins it to the next, so the
 # condition is required to reject on any one of its tests rather than only on
@@ -125,22 +135,24 @@ RULES = (
          "{Guard: validate large block before calling FreeLargeBlock.",
          "{Invalid pointer or double-free detected",
          ("if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or",
-          "(LargeBlockGranularity - 1) <> 0) or",
+          "((LBlockHeader and DropMediumAndLargeFlagsMask) and (LargeBlockGranularity - 1) <> 0) or",
           "((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0)",
           "else"),
          "Result := FreeLargeBlock(APointer);"),
     Rule("FastFreeMem", "32-bit ASM", "large block validated before FreeLargeBlock",
          "@NotASmallOrMediumBlock:", "@DontFreeLargeBlock:",
-         ("and ecx, DropMediumAndLargeFlagsMask", "jz @DontFreeLargeBlock",
+         # The moves are part of the guard: each selects the operand its test
+         # reads, so a deleted move leaves the test measuring something else.
+         ("mov ecx, edx", "and ecx, DropMediumAndLargeFlagsMask", "jz @DontFreeLargeBlock",
           "test ecx, LargeBlockGranularity - 1", "jnz @DontFreeLargeBlock",
-          "sub ecx, LargeBlockHeaderSize",
+          "mov ecx, eax", "sub ecx, LargeBlockHeaderSize",
           "test ecx, MinimumPageSizeMask", "jnz @DontFreeLargeBlock"),
          "call FreeLargeBlock"),
     Rule("FastFreeMem", "64-bit ASM", "large block validated before FreeLargeBlock",
          "@NotASmallOrMediumBlock:", "@DoubleFreeDetected:",
-         ("and rax, DropMediumAndLargeFlagsMask", "jz @DoubleFreeDetected",
+         ("mov rax, rdx", "and rax, DropMediumAndLargeFlagsMask", "jz @DoubleFreeDetected",
           "test rax, LargeBlockGranularity - 1", "jnz @DoubleFreeDetected",
-          "sub rax, LargeBlockHeaderSize",
+          "mov rax, rcx", "sub rax, LargeBlockHeaderSize",
           "test rax, MinimumPageSizeMask", "jnz @DoubleFreeDetected"),
          "call FreeLargeBlock"),
     Rule("FastReallocMem", "Pascal", "pool pointer before BlockType read",
@@ -260,15 +272,31 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         found.append(at)
         cursor = at + len(guard) if at >= 0 else -1
 
-    # A rejecting branch must sit directly after the compare or test whose
-    # flags it reads; anything else between the two writes flags of its own.
     detached = []
     for index, (guard, at) in enumerate(zip(rule.guards, found)):
-        if index == 0 or not guard.startswith(BRANCHES) or at < 0:
+        if index == 0 or at < 0:
             continue
         previous = found[index - 1]
-        gap = DIRECTIVE.sub("", active[previous + len(rule.guards[index - 1]):at])
-        if previous >= 0 and gap.strip():
+        if previous < 0:
+            continue
+        between = active[previous + len(rule.guards[index - 1]):at]
+        gap = DIRECTIVE.sub("", between)
+        # A conditional other than the one this rule names could compile the
+        # component out while its text stays where the search finds it. The
+        # span before a terminator is exempt: it holds the rejection body,
+        # which selects its own error routine per compiler.
+        if guard not in TERMINATORS and any(
+                directive.strip() not in ALLOWED_DIRECTIVES
+                for directive in DIRECTIVE.findall(between)):
+            detached.append(guard)
+        # A rejecting branch must sit directly after the compare or test whose
+        # flags it reads; anything else between the two writes flags of its own.
+        if guard.startswith(BRANCHES) and gap.strip():
+            detached.append(guard)
+        # A Pascal terminator belongs to the condition it follows, so no other
+        # condition may open in between: an unrelated later "if ... then Exit"
+        # would otherwise satisfy a guard whose own body falls through.
+        if guard in TERMINATORS and CONDITION.search(gap):
             detached.append(guard)
 
     if scoped and use >= 0 and not detached and all(at >= 0 and at < use for at in found):
@@ -284,7 +312,7 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
              f"  scope-start {rule.start!r}: {position(start)}",
              f"  scope-end   {rule.end!r}: {position(end)}"]
     for guard, at in zip(rule.guards, found):
-        note = " (detached from the check it branches on)" if guard in detached else ""
+        note = " (detached from the check it belongs to)" if guard in detached else ""
         lines.append(f"  guard       {guard!r}: {position(at)}{note}")
     lines.append(f"  guarded-use {rule.guarded_use!r}: {position(use)}")
     return "\n".join(lines)
@@ -293,7 +321,7 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
 def fixture_rule() -> Rule:
     return Rule("FixtureProcedure", "fixture", "guards in order before guarded use",
                 "{fixture-start}", "{fixture-end}",
-                ("ValidateBounds;", "ValidateAlignment;"), "GuardedUse;")
+                ("ValidateBounds;", "ValidateAlignment;", EXIT), "GuardedUse;")
 
 
 def run_fixture_tests(fixtures: Path) -> list[str]:
@@ -313,6 +341,14 @@ def run_fixture_tests(fixtures: Path) -> list[str]:
     # One guard present in the text but commented out, which the compiler drops.
     if check_rule(read("commented.pas"), fixture_rule()) is None:
         errors.append("commented fixture was accepted; one of its guards is commented out")
+    # The terminator belongs to a later, unrelated condition, so the guard's
+    # own body falls through to the guarded use.
+    if check_rule(read("detached.pas"), fixture_rule()) is None:
+        errors.append("detached fixture was accepted; its Exit belongs to another condition")
+    # One guard sits inside a conditional nothing defines, so the compiler
+    # never sees it although its text is present.
+    if check_rule(read("disabled.pas"), fixture_rule()) is None:
+        errors.append("disabled fixture was accepted; one guard is compiled out")
     return errors
 
 
@@ -361,7 +397,7 @@ def main() -> int:
         return 1
     guards = sum(len(rule.guards) for rule in RULES)
     print(f"Guard ordering OK: {len(RULES)} source rules, {guards} guard components; "
-          "valid, invalid, reordered and commented fixtures verified")
+          "six fixtures verified")
     return 0
 
 
