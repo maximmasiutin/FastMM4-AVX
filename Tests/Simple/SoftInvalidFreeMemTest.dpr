@@ -663,6 +663,121 @@ begin
   end;
 end;
 
+// -----------------------------------------------------------------------------
+// Deterministic CRT foreign-pointer marathon. One allocation is live at a time,
+// so the 1 MB size class does not make the test consume gigabytes of memory.
+// -----------------------------------------------------------------------------
+procedure TestForeignPointerMarathon;
+const
+  TestName = 'ForeignPointerMarathon';
+  IterationCount = 10000;
+  SizeCount = 6;
+  SizeSeed = 3;
+  SizeStep = 5;
+  AllocationSizes: array[0..SizeCount - 1] of PtrUInt =
+    (16, 64, 512, 8192, 131072, 1048576);
+var
+  I, SizeIndex: Integer;
+  BaseP, P, NewP: Pointer;
+  AllocationSize, NewSize: PtrUInt;
+  Res: Integer;
+  FreeOutcome: TFreeOutcome;
+  ReallocOutcome: TReallocOutcome;
+  ExcClass: string;
+begin
+  Log('  iterations per operation: ' + IntToStr(IterationCount));
+  Log('  deterministic size seed: ' + IntToStr(SizeSeed));
+  Log('  deterministic size step: ' + IntToStr(SizeStep));
+  Log('  controlled header value: $0080');
+
+  for I := 0 to IterationCount - 1 do
+  begin
+    SizeIndex := (SizeSeed + I * SizeStep) mod SizeCount;
+    AllocationSize := AllocationSizes[SizeIndex];
+    BaseP := cmalloc(AllocationSize);
+    if BaseP = nil then
+    begin
+      TestFail(TestName, 'cmalloc returned nil during FreeMem iteration ' +
+        IntToStr(I));
+      Exit;
+    end;
+    { Keep the fake FastMM header inside the CRT-owned allocation so the
+      owning allocator's metadata before BaseP is never modified. }
+    P := PByte(BaseP) + SizeOf(Pointer);
+    WriteFakeHeader(P, $0080);
+    FreeOutcome := DoFreeMemAndClassify(P, Res, ExcClass);
+    cfree(BaseP);
+    case FreeOutcome of
+      foSoftRejected: ;
+      foAccessViolation:
+        begin
+          TestFail(TestName, 'FreeMem AV at iteration ' + IntToStr(I) +
+            ': ' + ExcClass);
+          Exit;
+        end;
+      foReturnedNonZero:
+        begin
+          TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) +
+            ' at iteration ' + IntToStr(I));
+          Exit;
+        end;
+      foOtherException:
+        begin
+          TestFail(TestName, 'FreeMem exception at iteration ' + IntToStr(I) +
+            ': ' + ExcClass);
+          Exit;
+        end;
+    end;
+  end;
+
+  for I := 0 to IterationCount - 1 do
+  begin
+    SizeIndex := (SizeSeed + I * SizeStep) mod SizeCount;
+    AllocationSize := AllocationSizes[SizeIndex];
+    NewSize := AllocationSize * 2;
+    BaseP := cmalloc(AllocationSize);
+    if BaseP = nil then
+    begin
+      TestFail(TestName, 'cmalloc returned nil during ReallocMem iteration ' +
+        IntToStr(I));
+      Exit;
+    end;
+    P := PByte(BaseP) + SizeOf(Pointer);
+    WriteFakeHeader(P, $0080);
+    NewP := P;
+    ReallocOutcome := DoReallocMemAndClassify(NewP, P, NewSize, ExcClass);
+    case ReallocOutcome of
+      roRejectedPreserved, roRejectedNil:
+        cfree(BaseP);
+      roAccessViolation:
+        begin
+          cfree(BaseP);
+          TestFail(TestName, 'ReallocMem AV at iteration ' + IntToStr(I) +
+            ': ' + ExcClass);
+          Exit;
+        end;
+      roOtherException:
+        begin
+          cfree(BaseP);
+          TestFail(TestName, 'ReallocMem exception at iteration ' +
+            IntToStr(I) + ': ' + ExcClass);
+          Exit;
+        end;
+      roSucceeded:
+        begin
+          { Ownership is unclear after an unexpected successful realloc. Do not
+            guess which allocator owns either pointer and risk a double free. }
+          GAllocatorCorrupted := True;
+          TestFail(TestName, 'ReallocMem returned a new pointer at iteration ' +
+            IntToStr(I));
+          Exit;
+        end;
+    end;
+  end;
+
+  TestPass(TestName);
+end;
+
 procedure TestFinding3_FreeMemLargeForeign;
 const
   TestName = 'Finding3_FreeMemLargeForeign (PR #62)';
@@ -1012,6 +1127,16 @@ begin
     32-bit ASM, 64-bit ASM, and Pure Pascal - CI matrix compiles the same
     program under each target. }
   RunExploitShapeVectors;
+
+  { Phase 1c: Bounded deterministic CRT foreign-pointer marathon. The same
+    executable runs under the ASM and Pure Pascal CI configurations. }
+  if not GAllocatorCorrupted then
+  try
+    TestForeignPointerMarathon;
+  except
+    on E: Exception do
+      TestFail('ForeignPointerMarathon', E.ClassName + ': ' + E.Message);
+  end;
 
   { Phase 2: Controlled foreign pointer tests (deterministic fill patterns) }
   {$IFDEF MSWINDOWS}
