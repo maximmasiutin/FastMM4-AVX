@@ -15,6 +15,7 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
 
   pull_request:
@@ -31,6 +32,7 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
 
   workflow_dispatch:
@@ -911,6 +913,32 @@ jobs:
       # SoftInvalidFreeMem Tests - Windows
       # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
       # =========================================================================
+      - name: Run concurrent foreign-pointer stress (64/32-bit, 2 seconds)
+        timeout-minutes: 1
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run checked concurrent foreign-pointer stress (64/32-bit, 1 second)
+        timeout-minutes: 1
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dCheckedStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dCheckedStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Compile and run SoftInvalidFreeMemTest 64-bit (ASM, overflow+range checks)
         timeout-minutes: 2
         run: |
