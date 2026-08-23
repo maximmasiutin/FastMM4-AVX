@@ -12,8 +12,49 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  Classes,
-  SysUtils;
+  Classes;
+
+{The two SysUtils routines this program used, IntToStr and ExtractFileName, are
+ written out here instead, so nothing in it depends on that unit directly. Str
+ formats into a ShortString the caller owns, which needs no allocator at all.
+ Classes still brings SysUtils in behind it, so this removes the dependency
+ from the source rather than from the binary.}
+procedure IntToShortStr(AValue: Integer; var AText: ShortString);
+begin
+  Str(AValue, AText);
+end;
+
+{Only the forward slash separates components everywhere. A backslash and a
+ colon are Windows syntax, and both are legal characters in a Unix name, so
+ accepting them on every platform would cut /tmp/Realloc:debug down to "debug"
+ and /tmp/Realloc\debug down to "debug" as well. The colon is narrower still:
+ it separates only as a drive letter, at the second character and nowhere
+ else.}
+function IsPathDelimiter(const APath: string; AIndex: Integer): Boolean;
+var
+  Delimiter: Boolean;
+begin
+  Delimiter := APath[AIndex] = '/';
+  {$IFDEF MSWINDOWS}
+  if not Delimiter then
+    Delimiter := (APath[AIndex] = '\')
+      or ((APath[AIndex] = ':') and (AIndex = 2));
+  {$ENDIF}
+  IsPathDelimiter := Delimiter;
+end;
+
+function FileNameOf(const APath: string): string;
+var
+  i: Integer;
+begin
+  Result := APath;
+  for i := Length(APath) downto 1 do
+    if IsPathDelimiter(APath, i) then
+    begin
+      Result := Copy(APath, i + 1, Length(APath) - i);
+      Exit;
+    end;
+end;
 
 procedure RunBenchmark;
 const
@@ -110,9 +151,10 @@ var
   w: Word;
   LThreads: array of TBenchmarkThread;
   LFastMMCpuSmallestMonitorLineSize, LFastMMCpuLargestMonitorLineSize: Word;
+  LThreadCountText: ShortString;
 
 begin
-  WriteLn('Usage: '+ExtractFileName(ParamStr(0))+ ' <numthreads>'{$IFDEF EnableWaitPKG}+' [disable_waitpkg]'{$ENDIF});
+  WriteLn('Usage: '+FileNameOf(ParamStr(0))+ ' <numthreads>'{$IFDEF EnableWaitPKG}+' [disable_waitpkg]'{$ENDIF});
   VNumThreads := CDefaultNumThreads;
   if (ParamCount >= 1) then
   begin
@@ -132,7 +174,8 @@ begin
   end;
   {$ENDIF}
 
-  WriteLn('Running with '+IntToStr(VNumThreads)+' threads...');
+  IntToShortStr(VNumThreads, LThreadCountText);
+  WriteLn('Running with ', LThreadCountText, ' threads...');
   w := GetFastMMCpuFeatures;
   for i := Low(A) to High(A) do
     GetMem(A[i], i+1);

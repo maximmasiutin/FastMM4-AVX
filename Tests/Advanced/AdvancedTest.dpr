@@ -32,6 +32,14 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
+  {SysUtils is load-bearing here and is not to be dropped for tidiness. It
+   declares Exception and EInvalidPointer, which the handlers below catch by
+   name, and it installs the runtime hook that turns a hardware fault into a
+   catchable Pascal exception. Removing it breaks the program twice over: the
+   handlers below fail to compile, because the exception classes they name are
+   then undeclared, and even were those names supplied from elsewhere, an
+   access violation would become runtime error 216 and kill the process rather
+   than fail a named check.}
   {$IFDEF FPC}
   SysUtils,
   Classes;

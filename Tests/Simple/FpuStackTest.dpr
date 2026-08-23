@@ -39,12 +39,18 @@ program FpuStackTest;
 
 uses
   FastMM4 in '..\..\FastMM4.pas',
-  FastMM4Messages in '..\..\FastMM4Messages.pas',
-  SysUtils;
+  FastMM4Messages in '..\..\FastMM4Messages.pas';
 
 const
   TEST_PASSED = 0;
   TEST_FAILED = 1;
+
+type
+  {Declared here rather than taken from SysUtils, which this program otherwise
+   has no use for. The bound is the one both Delphi and FreePascal use for this
+   type, and only the first CHighSize bytes are ever touched.}
+  TByteArray = array[0..32767] of Byte;
+  PByteArray = ^TByteArray;
 
 var
   GFailures: Integer = 0;
@@ -52,6 +58,23 @@ var
 procedure Say(const AText: string);
 begin
   WriteLn(AText);
+  Flush(Output);
+end;
+
+{Integer to text through Str into a ShortString the caller owns. This is here
+ rather than IntToStr so the program needs nothing from SysUtils: a test of the
+ allocator is better off not pulling in a unit it does not otherwise use.}
+procedure IntToShortStr(AValue: Integer; var AText: ShortString);
+begin
+  Str(AValue, AText);
+end;
+
+procedure SayValue(const APrefix: ShortString; AValue: Integer);
+var
+  LDigits: ShortString;
+begin
+  IntToShortStr(AValue, LDigits);
+  WriteLn(APrefix, LDigits);
   Flush(Output);
 end;
 
@@ -127,6 +150,7 @@ var
    runtime set up is saved here and put back in the finally below, which is
    what makes the restore happen even when an allocation raises.}
   LSavedControlWord: Word;
+  LUpsizeCount: ShortString;
 begin
   Say('the x87 stack across a small block upsize');
   LDataKept := True;
@@ -173,8 +197,9 @@ begin
   LTopAfter := (LAfter shr 11) and 7;
 
   Check(LTopBefore = 1, 'seven values loaded, so the stack pointer reads one');
+  IntToShortStr(CHighSize - CLowSize + 1, LUpsizeCount);
   Check(LTopAfter = LTopBefore, 'the stack pointer is where it was after '
-    + IntToStr(CHighSize - CLowSize + 1) + ' upsizes');
+    + LUpsizeCount + ' upsizes');
   Check((LAfter and $0040) = 0, 'no stack fault is flagged');
   Check((LAfter and $0001) = 0, 'no invalid operation is flagged');
   Check(LDataKept, 'every upsized block kept its contents');
@@ -210,7 +235,7 @@ begin
   end
   else
   begin
-    Say('failures: ' + IntToStr(GFailures));
+    SayValue('failures: ', GFailures);
     ExitCode := TEST_FAILED;
   end;
 {$ELSE}
