@@ -53,6 +53,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Probe python interpreters
+        run: |
+          echo "which python: $(command -v python || echo absent)"
+          echo "which python3: $(command -v python3 || echo absent)"
+          python --version || true
+          python3 --version || true
+          dpkg -l python-is-python3 || true
+
       - name: Verify security guard ordering
         run: python3 Tests/verify_guard_ordering.py
 
@@ -372,6 +380,16 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
+
+      - name: Probe python interpreters
+        shell: pwsh
+        run: |
+          $p = Get-Command python -ErrorAction SilentlyContinue
+          $p3 = Get-Command python3 -ErrorAction SilentlyContinue
+          "python:  " + $(if ($p) { $p.Source } else { "absent" })
+          "python3: " + $(if ($p3) { $p3.Source } else { "absent" })
+          if ($p) { & $p.Source --version }
+          if ($p3) { & $p3.Source --version }
 
       - name: Disable Windows Error Reporting dialogs
         run: |
