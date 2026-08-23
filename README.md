@@ -539,8 +539,10 @@ Fast Memory Manager
 
 ## Guard-order regression check
 
-Run the fast source validation and its positive/negative fixture tests with:
+Run the fast source validation and its positive/negative fixture tests with Python 3.8 or later:
 
-```shell
-python3 Tests/verify_guard_ordering.py
-```
+    python3 Tests/verify_guard_ordering.py
+
+On Windows, where a stock Python installation provides `python.exe` and no `python3.exe`, run it as:
+
+    python Tests\verify_guard_ordering.py
