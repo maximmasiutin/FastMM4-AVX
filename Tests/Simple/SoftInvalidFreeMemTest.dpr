@@ -711,18 +711,25 @@ begin
       foSoftRejected: ;
       foAccessViolation:
         begin
+          { A fault inside FreeMem means a guard did not fire, so the allocator
+            may have been mutated mid-operation. Mark it, as the exception
+            handlers around the Phase 3 tests do for the same event. }
+          GAllocatorCorrupted := True;
           TestFail(TestName, 'FreeMem AV at iteration ' + IntToStr(I) +
             ': ' + ExcClass);
           Exit;
         end;
       foReturnedNonZero:
         begin
+          { A nonzero return is a clean refusal by the wrong code path rather
+            than a fault, so allocator state is not in question here. }
           TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) +
             ' at iteration ' + IntToStr(I));
           Exit;
         end;
       foOtherException:
         begin
+          GAllocatorCorrupted := True;
           TestFail(TestName, 'FreeMem exception at iteration ' + IntToStr(I) +
             ': ' + ExcClass);
           Exit;
@@ -752,6 +759,9 @@ begin
       roAccessViolation:
         begin
           cfree(BaseP);
+          { Same reasoning as the FreeMem loop: a fault inside the allocator
+            leaves its state in question, whichever entry point took it. }
+          GAllocatorCorrupted := True;
           TestFail(TestName, 'ReallocMem AV at iteration ' + IntToStr(I) +
             ': ' + ExcClass);
           Exit;
@@ -759,6 +769,7 @@ begin
       roOtherException:
         begin
           cfree(BaseP);
+          GAllocatorCorrupted := True;
           TestFail(TestName, 'ReallocMem exception at iteration ' +
             IntToStr(I) + ': ' + ExcClass);
           Exit;
@@ -1138,8 +1149,12 @@ begin
       TestFail('ForeignPointerMarathon', E.ClassName + ': ' + E.Message);
   end;
 
-  { Phase 2: Controlled foreign pointer tests (deterministic fill patterns) }
+  { Phase 2: Controlled foreign pointer tests (deterministic fill patterns).
+    Skipped once the allocator is in question, because these tests allocate
+    while reporting and a run against corrupt state can crash uncatchably,
+    which would replace the recorded failure with a bare process death. }
   {$IFDEF MSWINDOWS}
+  if not GAllocatorCorrupted then
   try
     TestFreeMemOnVirtualAlloc;
   except
@@ -1150,6 +1165,7 @@ begin
   end;
   {$ENDIF}
   {$IFDEF UNIX}
+  if not GAllocatorCorrupted then
   try
     TestFreeMemOnMmap;
   except
