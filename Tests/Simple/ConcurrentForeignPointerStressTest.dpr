@@ -76,8 +76,12 @@ type
     FWorkerId: Integer;
     FWorkerKind: TWorkerKind;
   protected
+    procedure Execute; override;
     function NextRandom: Cardinal;
     procedure RecordFailure(AFailure: TFailureKind; AIteration: Integer);
+    { Overridden by each worker kind. Execute wraps it so that the completed
+      count rises even when the body exits early or raises. }
+    procedure Run; virtual; abstract;
   public
     constructor Create(AWorkerKind: TWorkerKind; AWorkerId: Integer;
       ASeed: Cardinal);
@@ -93,12 +97,12 @@ type
 
   TForeignPointerThread = class(TStressThread)
   protected
-    procedure Execute; override;
+    procedure Run; override;
   end;
 
   TNormalAllocationThread = class(TStressThread)
   protected
-    procedure Execute; override;
+    procedure Run; override;
   end;
 
   TShutdownWatchdog = class(TThread)
@@ -111,12 +115,18 @@ type
     procedure Disarm;
   end;
 
+var
+  { Raised by each worker as it leaves Run, whether it finished, exited early
+    or raised. The watchdog reads it instead of trusting that the main thread
+    reaches Disarm promptly after the last WaitFor. }
+  CompletedWorkers: Integer = 0;
+
 function FailureName(AFailure: TFailureKind): ShortString;
 begin
   case AFailure of
     fkNone: FailureName := 'none';
     fkAllocation: FailureName := 'allocation failed';
-    fkFreeResult: FailureName := 'FreeMem accepted foreign pointer';
+    fkFreeResult: FailureName := 'FreeMem returned non-zero for foreign pointer';
     fkFreeException: FailureName := 'FreeMem raised an exception';
     fkReallocResult: FailureName := 'ReallocMem accepted foreign pointer';
     fkReallocException: FailureName := 'ReallocMem raised an exception';
@@ -157,6 +167,15 @@ begin
   FWorkerKind := AWorkerKind;
 end;
 
+procedure TStressThread.Execute;
+begin
+  try
+    Run;
+  finally
+    InterlockedIncrement(CompletedWorkers);
+  end;
+end;
+
 function TStressThread.NextRandom: Cardinal;
 begin
   FRandomState := Cardinal((UInt64(FRandomState) * 1664525 + 1013904223)
@@ -174,7 +193,7 @@ begin
   end;
 end;
 
-procedure TForeignPointerThread.Execute;
+procedure TForeignPointerThread.Run;
 var
   AllocationSize: PtrUInt;
   BaseP, ForeignP, NewP: Pointer;
@@ -245,7 +264,7 @@ begin
   end;
 end;
 
-procedure TNormalAllocationThread.Execute;
+procedure TNormalAllocationThread.Run;
 var
   AllocationSize, NewSize: PtrUInt;
   Iteration, SizeIndex: Integer;
@@ -320,7 +339,11 @@ begin
     Sleep(PollIntervalMS);
     Inc(Elapsed, PollIntervalMS);
   end;
-  if FArmed and not Terminated then
+  { Disarm runs only after the last WaitFor, so a main thread preempted in
+    that window would otherwise be halted here although every worker had
+    stopped. The completed count settles the question without that race. }
+  if FArmed and not Terminated
+    and (InterlockedExchangeAdd(CompletedWorkers, 0) < WorkerCount * 2) then
   begin
     WriteLn('[FAIL] concurrent stress shutdown timeout');
     Flush(Output);
@@ -343,6 +366,30 @@ begin
   Write(AThread.FailureIteration);
   Write(': ');
   WriteLn(FailureName(AThread.Failure));
+end;
+
+{ FreePascal stores an exception that escapes Execute in FatalException and
+  WaitFor does not re-raise it, so a worker killed by an allocator fault would
+  otherwise leave the run reporting success. }
+function ReportFatalException(AThread: TStressThread): Boolean;
+var
+  Raised: Boolean;
+begin
+  Raised := Assigned(AThread.FatalException);
+  ReportFatalException := Raised;
+  if not Raised then
+    Exit;
+  Write('[FAIL] ');
+  if AThread.WorkerKind = wkForeign then
+    Write('foreign')
+  else
+    Write('normal');
+  Write(' worker ');
+  Write(AThread.WorkerId);
+  Write(', seed ');
+  Write(AThread.InitialSeed);
+  Write(': unhandled ');
+  WriteLn(AThread.FatalException.ClassName);
 end;
 
 var
@@ -422,6 +469,10 @@ begin
       ReportWorkerFailure(NormalThreads[I]);
       Failed := True;
     end;
+    if ReportFatalException(ForeignThreads[I]) then
+      Failed := True;
+    if ReportFatalException(NormalThreads[I]) then
+      Failed := True;
   end;
 
   Write('Foreign operations: ');
