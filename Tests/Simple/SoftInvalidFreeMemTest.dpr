@@ -85,34 +85,108 @@ begin
     Log('[FAIL] ' + TestName);
 end;
 
-{ Failure report for a path that has just marked the allocator as in question.
-  It allocates nothing: every argument is either a literal, an Integer written
-  by Write, or a ShortString that lives on the caller's stack, so no string is
-  built on the heap between the fault and the report. The end-of-run summary
-  avoids the allocator for the same reason. }
-procedure TestFailIteration(const TestName, Detail: string; Iteration: Integer;
-  const ExcClass: ShortString; const ValueLabel: string = '';
-  Value: Integer = 0);
+{ Integer to text with no heap involved, and written through a var parameter
+  rather than returned, so there is no 256-byte function result temporary to
+  copy either. Str is a compiler intrinsic that formats straight into the
+  ShortString it is given. This is the IntToStr to use once the allocator is
+  in question. }
+procedure IntToShortStr(Value: Integer; var S: ShortString);
+begin
+  Str(Value, S);
+end;
+
+{ Append without allocating, truncating at the ShortString limit rather than
+  growing. Reading the source string does not allocate, whatever its type. }
+procedure AppendShort(var Dest: ShortString; const Src: ShortString);
+var
+  Room: Integer;
+begin
+  Room := 255 - Length(Dest);
+  if Room <= 0 then
+    Exit;
+  if Length(Src) < Room then
+    Room := Length(Src);
+  if Room > 0 then
+  begin
+    Move(Src[1], Dest[Length(Dest) + 1], Room);
+    SetLength(Dest, Length(Dest) + Room);
+  end;
+end;
+
+{ Append an Integer through the same path, with the digits formatted into a
+  local ShortString that never leaves the stack. }
+procedure AppendInt(var Dest: ShortString; Value: Integer);
+var
+  Digits: ShortString;
+begin
+  IntToShortStr(Value, Digits);
+  AppendShort(Dest, Digits);
+end;
+
+{ One line of log text carrying one or two numbers, built on the stack. }
+procedure LogValue(const Prefix: ShortString; Value: Integer);
+var
+  Msg: ShortString;
+begin
+  Msg := Prefix;
+  AppendShort(Msg, ' ');
+  AppendInt(Msg, Value);
+  WriteLn(Msg);
+  Flush(Output);
+end;
+
+procedure LogTwoValues(const Prefix: ShortString; First: Integer;
+  const Middle: ShortString; Second: Integer);
+var
+  Msg: ShortString;
+begin
+  Msg := Prefix;
+  AppendShort(Msg, ' ');
+  AppendInt(Msg, First);
+  AppendShort(Msg, Middle);
+  AppendShort(Msg, ' ');
+  AppendInt(Msg, Second);
+  WriteLn(Msg);
+  Flush(Output);
+end;
+
+{ Failure report for any path that has just seen a fault inside the allocator,
+  and the only reporter such a path may use. It allocates nothing: the message
+  is built in a ShortString on this procedure's own stack frame through the two
+  helpers above, then written once, so no heap string is created between the
+  fault and the report. The end-of-run summary avoids the allocator for the
+  same reason. Iteration is written only when it is not -1, and the value only
+  when its label is given. Marking GAllocatorCorrupted stays with the caller,
+  because only the caller knows whether the outcome was a fault or a clean
+  refusal by the wrong code path. }
+procedure TestFailNoAlloc(const TestName, Detail: ShortString;
+  const ExcClass: ShortString; Iteration: Integer = -1;
+  const ValueLabel: ShortString = ''; Value: Integer = 0);
+var
+  Msg: ShortString;
 begin
   Inc(GTestsFailed);
   GExitCode := TEST_FAILED;
-  Write('[FAIL] ');
-  Write(TestName);
-  Write(' - ');
-  Write(Detail);
+  Msg := '[FAIL] ';
+  AppendShort(Msg, TestName);
+  AppendShort(Msg, ' - ');
+  AppendShort(Msg, Detail);
   if ValueLabel <> '' then
   begin
-    Write(ValueLabel);
-    Write(Value);
+    AppendShort(Msg, ValueLabel);
+    AppendInt(Msg, Value);
   end;
-  Write(' at iteration ');
-  Write(Iteration);
+  if Iteration <> -1 then
+  begin
+    AppendShort(Msg, ' at iteration ');
+    AppendInt(Msg, Iteration);
+  end;
   if ExcClass <> '' then
   begin
-    Write(': ');
-    Write(ExcClass);
+    AppendShort(Msg, ': ');
+    AppendShort(Msg, ExcClass);
   end;
-  WriteLn;
+  WriteLn(Msg);
   Flush(Output);
 end;
 
@@ -147,7 +221,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   { The memory was not actually freed by FastMM (it is a foreign pointer),
     so we must free it with the C allocator. }
   cfree(P);
@@ -177,7 +252,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   cfree(P);
 end;
 
@@ -205,7 +281,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   cfree(P);
 end;
 
@@ -263,7 +340,8 @@ begin
     Ptrs[I] := cmalloc(128 + I * 256);
     if Ptrs[I] = nil then
     begin
-      TestFail(TestName, 'cmalloc returned nil at index ' + IntToStr(I));
+      TestFailNoAlloc(TestName, 'cmalloc returned nil at index', '', -1,
+        ' ', I);
       Exit;
     end;
   end;
@@ -279,7 +357,7 @@ begin
     if Res <> 0 then
     begin
       AllOK := False;
-      Log('  FreeMem returned ' + IntToStr(Res) + ' for index ' + IntToStr(I));
+      LogTwoValues('  FreeMem returned', Res, ' for index', I);
     end;
   end;
 
@@ -324,7 +402,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   HeapFree(Heap, 0, P);
 end;
 
@@ -374,7 +453,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   VirtualFree(Base, 0, MEM_RELEASE);
 end;
 {$ENDIF}
@@ -430,7 +510,8 @@ begin
   if Res = 0 then
     TestPass(TestName)
   else
-    TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) + ' instead of 0');
+    TestFailNoAlloc(TestName, 'FreeMem should have returned 0 but returned', '',
+      -1, ' ', Res);
   fpmunmap(Base, MapSize);
 end;
 {$ENDIF}
@@ -616,9 +697,21 @@ begin
     Outcome := DoReallocMemAndClassify(NewP, P, 256, ExcClass);
     case Outcome of
       roRejectedPreserved, roRejectedNil: TestPass(TestName);
-      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
-      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      roAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      roSucceeded:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'ReallocMem returned new pointer (guard missing)', '');
+        end;
+      roOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -650,9 +743,21 @@ begin
     Outcome := DoReallocMemAndClassify(NewP, P, 4096, ExcClass);
     case Outcome of
       roRejectedPreserved, roRejectedNil: TestPass(TestName);
-      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
-      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      roAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      roSucceeded:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'ReallocMem returned new pointer (guard missing)', '');
+        end;
+      roOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -720,9 +825,9 @@ var
   ReallocOutcome: TReallocOutcome;
   ExcClass: ShortString;
 begin
-  Log('  iterations per operation: ' + IntToStr(IterationCount));
-  Log('  deterministic size seed: ' + IntToStr(SizeSeed));
-  Log('  deterministic size step: ' + IntToStr(SizeStep));
+  LogValue('  iterations per operation:', IterationCount);
+  LogValue('  deterministic size seed:', SizeSeed);
+  LogValue('  deterministic size step:', SizeStep);
   Log('  controlled header value: $0080');
 
   for I := 0 to IterationCount - 1 do
@@ -732,8 +837,7 @@ begin
     BaseP := cmalloc(AllocationSize);
     if BaseP = nil then
     begin
-      TestFail(TestName, 'cmalloc returned nil during FreeMem iteration ' +
-        IntToStr(I));
+      TestFailNoAlloc(TestName, 'cmalloc returned nil during FreeMem', '', I);
       Exit;
     end;
     { Keep the fake FastMM header inside the CRT-owned allocation so the
@@ -751,7 +855,7 @@ begin
             handlers around the Phase 3 tests do for the same event, and report
             without allocating. }
           GAllocatorCorrupted := True;
-          TestFailIteration(TestName, 'FreeMem AV', I, ExcClass);
+          TestFailNoAlloc(TestName, 'FreeMem AV', ExcClass, I);
           Exit;
         end;
       foReturnedNonZero:
@@ -760,13 +864,13 @@ begin
             than a fault, so allocator state is not in question here. The
             non-allocating report is used anyway, to keep one reporting path
             through the loop. }
-          TestFailIteration(TestName, 'FreeMem returned', I, '', ' ', Res);
+          TestFailNoAlloc(TestName, 'FreeMem returned', '', I, ' ', Res);
           Exit;
         end;
       foOtherException:
         begin
           GAllocatorCorrupted := True;
-          TestFailIteration(TestName, 'FreeMem exception', I, ExcClass);
+          TestFailNoAlloc(TestName, 'FreeMem exception', ExcClass, I);
           Exit;
         end;
     end;
@@ -780,8 +884,8 @@ begin
     BaseP := cmalloc(AllocationSize);
     if BaseP = nil then
     begin
-      TestFail(TestName, 'cmalloc returned nil during ReallocMem iteration ' +
-        IntToStr(I));
+      TestFailNoAlloc(TestName, 'cmalloc returned nil during ReallocMem', '',
+        I);
       Exit;
     end;
     P := PByte(BaseP) + SizeOf(Pointer);
@@ -797,14 +901,14 @@ begin
           { Same reasoning as the FreeMem loop: a fault inside the allocator
             leaves its state in question, whichever entry point took it. }
           GAllocatorCorrupted := True;
-          TestFailIteration(TestName, 'ReallocMem AV', I, ExcClass);
+          TestFailNoAlloc(TestName, 'ReallocMem AV', ExcClass, I);
           Exit;
         end;
       roOtherException:
         begin
           cfree(BaseP);
           GAllocatorCorrupted := True;
-          TestFailIteration(TestName, 'ReallocMem exception', I, ExcClass);
+          TestFailNoAlloc(TestName, 'ReallocMem exception', ExcClass, I);
           Exit;
         end;
       roSucceeded:
@@ -812,8 +916,7 @@ begin
           { Ownership is unclear after an unexpected successful realloc. Do not
             guess which allocator owns either pointer and risk a double free. }
           GAllocatorCorrupted := True;
-          TestFailIteration(TestName, 'ReallocMem returned a new pointer', I,
-            '');
+          TestFailNoAlloc(TestName, 'ReallocMem returned a new pointer', '', I);
           Exit;
         end;
     end;
@@ -842,9 +945,19 @@ begin
     Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
     case Outcome of
       foSoftRejected: TestPass(TestName);
-      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
-      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      foAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      foReturnedNonZero:
+        { A clean refusal by the wrong path, not a fault: no mark. }
+        TestFailNoAlloc(TestName, 'FreeMem returned', '', -1, ' ', Res);
+      foOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -902,9 +1015,19 @@ begin
           TestPass(TestName)
         else
           TestFail(TestName, 'Tripwire corrupted (FillChar overran - guard missing)');
-      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
-      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      foAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      foReturnedNonZero:
+        { A clean refusal by the wrong path, not a fault: no mark. }
+        TestFailNoAlloc(TestName, 'FreeMem returned', '', -1, ' ', Res);
+      foOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     HeapFree(Heap, 0, Q);
@@ -952,9 +1075,19 @@ begin
           TestPass(TestName)
         else
           TestFail(TestName, 'Tripwire corrupted (FillChar overran - guard missing)');
-      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
-      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      foAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      foReturnedNonZero:
+        { A clean refusal by the wrong path, not a fault: no mark. }
+        TestFailNoAlloc(TestName, 'FreeMem returned', '', -1, ' ', Res);
+      foOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -986,9 +1119,19 @@ begin
           TestPass(TestName)
         else
           TestFail(TestName, 'Tripwire corrupted (guard missing)');
-      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
-      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      foAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      foReturnedNonZero:
+        { A clean refusal by the wrong path, not a fault: no mark. }
+        TestFailNoAlloc(TestName, 'FreeMem returned', '', -1, ' ', Res);
+      foOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -1015,9 +1158,19 @@ begin
     Outcome := DoFreeMemAndClassify(P, Res, ExcClass);
     case Outcome of
       foSoftRejected: TestPass(TestName);
-      foAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      foReturnedNonZero: TestFail(TestName, 'FreeMem returned ' + IntToStr(Res));
-      foOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      foAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      foReturnedNonZero:
+        { A clean refusal by the wrong path, not a fault: no mark. }
+        TestFailNoAlloc(TestName, 'FreeMem returned', '', -1, ' ', Res);
+      foOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     FreeGuardedRegion(Base);
@@ -1061,9 +1214,21 @@ begin
     Outcome := DoReallocMemAndClassify(NewP, P, 256, ExcClass);
     case Outcome of
       roRejectedPreserved, roRejectedNil: TestPass(TestName);
-      roAccessViolation: TestFail(TestName, 'AV (guard missing): ' + ExcClass);
-      roSucceeded: TestFail(TestName, 'ReallocMem returned new pointer (guard missing)');
-      roOtherException: TestFail(TestName, 'exception (guard missing): ' + ExcClass);
+      roAccessViolation:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'AV (guard missing)', ExcClass);
+        end;
+      roSucceeded:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'ReallocMem returned new pointer (guard missing)', '');
+        end;
+      roOtherException:
+        begin
+          GAllocatorCorrupted := True;
+          TestFailNoAlloc(TestName, 'exception (guard missing)', ExcClass);
+        end;
     end;
   finally
     HeapFree(Heap, 0, Q2);
