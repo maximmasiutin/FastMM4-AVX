@@ -295,7 +295,11 @@ begin
         RecordFailure(fkAllocation, Iteration);
         Exit;
       end;
-      if PByte(P)[0] <> Pattern then
+      { NewSize always exceeds AllocationSize, so the old final byte survives
+        the growth and is checked here as well as the first. Checking only the
+        first would miss corruption or truncation at the old end. }
+      if (PByte(P)[0] <> Pattern)
+        or (PByte(P)[AllocationSize - 1] <> (Pattern xor $FF)) then
       begin
         FreeMem(P);
         RecordFailure(fkPattern, Iteration);
@@ -392,6 +396,24 @@ begin
   WriteLn(AThread.FatalException.ClassName);
 end;
 
+function ReportIdleWorker(AThread: TStressThread): Boolean;
+var
+  Idle: Boolean;
+begin
+  Idle := AThread.Operations = 0;
+  ReportIdleWorker := Idle;
+  if not Idle then
+    Exit;
+  Write('[FAIL] ');
+  if AThread.WorkerKind = wkForeign then
+    Write('foreign')
+  else
+    Write('normal');
+  Write(' worker ');
+  Write(AThread.WorkerId);
+  WriteLn(' performed no operation');
+end;
+
 var
   ForeignThreads: array[0..WorkerCount - 1] of TForeignPointerThread;
   NormalThreads: array[0..WorkerCount - 1] of TNormalAllocationThread;
@@ -473,6 +495,25 @@ begin
       Failed := True;
     if ReportFatalException(NormalThreads[I]) then
       Failed := True;
+    { A worker that never ran leaves the advertised workload unexercised while
+      every other check stays silent, so idleness is a failure of its own. }
+    if ReportIdleWorker(ForeignThreads[I]) then
+      Failed := True;
+    if ReportIdleWorker(NormalThreads[I]) then
+      Failed := True;
+  end;
+
+  { Both foreign operation types are selected at random, so an unlucky run that
+    exercised only one would still report the other as covered. }
+  if TotalForeignFreeOperations = 0 then
+  begin
+    WriteLn('[FAIL] no foreign FreeMem operation was performed');
+    Failed := True;
+  end;
+  if TotalForeignReallocOperations = 0 then
+  begin
+    WriteLn('[FAIL] no foreign ReallocMem operation was performed');
+    Failed := True;
   end;
 
   Write('Foreign operations: ');
