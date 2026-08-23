@@ -34,10 +34,12 @@ DIRECTIVE = re.compile(r"\{\$[^}]*\}")
 
 SOFT = "{$IFDEF SoftInvalidFreeMem}"
 
-# The only conditionals a guard sequence may be split by. Any other directive
-# between two components can compile one of them out, so it is a defect rather
-# than formatting: a component inside {$IFDEF NeverDefined} is not compiled.
-ALLOWED_DIRECTIVES = (SOFT, "{$ELSE}", "{$ENDIF}")
+# A rule names every directive that stands inside its guard sequence, so no
+# unnamed one may appear between two components: any conditional there, even
+# {$ELSE} between an {$IFDEF} and the guard it protects, decides whether a
+# component is compiled at all.
+ELSE = "{$ELSE}"
+ENDIF = "{$ENDIF}"
 
 # A Pascal guard is protective only because its body leaves the routine, so
 # the terminator is required as the last component, the way each assembly rule
@@ -55,7 +57,10 @@ CONDITION = re.compile(r"\bif\b", re.IGNORECASE)
 SMALL_BOUNDS_PASCAL = (
     "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or",
     "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or",
-    "mod SmallBlockTypeRecSize <> 0",
+    # The last predicate carries "then", which fixes where the condition ends:
+    # a further test appended before it, such as "and False", is a different
+    # condition and fails the match.
+    "mod SmallBlockTypeRecSize <> 0) then",
     EXIT)
 
 
@@ -95,7 +100,7 @@ RULES = (
          # This one rejects with an else branch rather than an Exit, so the
          # else is the component that keeps the clear off the invalid path.
          ("if (LBlockSize < MinimumMediumBlockSize) or",
-          "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", "else"),
+          "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then", "else"),
          "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
     Rule("FastFreeMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
@@ -112,9 +117,9 @@ RULES = (
          # Each comparison has two rejecting branches, one per SoftInvalidFreeMem
          # alternative, and both have to stay on the flags it wrote.
          ("cmp edx, MinimumMediumBlockSize",
-          "jb @InvalidMediumBlock", "jb @CorruptMediumBlockSize",
+          SOFT, "jb @InvalidMediumBlock", ELSE, "jb @CorruptMediumBlockSize", ENDIF,
           "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
-          "ja @InvalidMediumBlock", "ja @CorruptMediumBlockSize"),
+          SOFT, "ja @InvalidMediumBlock", ELSE, "ja @CorruptMediumBlockSize", ENDIF),
          "call System.@FillChar"),
     Rule("FastFreeMem", "64-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
@@ -127,16 +132,16 @@ RULES = (
     Rule("FastFreeMem", "64-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by rcx",
          ("cmp rdx, MinimumMediumBlockSize",
-          "jb @InvalidMediumBlock", "jb @CorruptMediumBlockSize",
+          SOFT, "jb @InvalidMediumBlock", ELSE, "jb @CorruptMediumBlockSize", ENDIF,
           "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
-          "ja @InvalidMediumBlock", "ja @CorruptMediumBlockSize"),
+          SOFT, "ja @InvalidMediumBlock", ELSE, "ja @CorruptMediumBlockSize", ENDIF),
          "call System.@FillChar"),
     Rule("FastFreeMem", "Pascal", "large block validated before FreeLargeBlock",
          "{Guard: validate large block before calling FreeLargeBlock.",
          "{Invalid pointer or double-free detected",
          ("if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or",
           "((LBlockHeader and DropMediumAndLargeFlagsMask) and (LargeBlockGranularity - 1) <> 0) or",
-          "((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0)",
+          "((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0) then",
           "else"),
          "Result := FreeLargeBlock(APointer);"),
     Rule("FastFreeMem", "32-bit ASM", "large block validated before FreeLargeBlock",
@@ -167,7 +172,7 @@ RULES = (
     Rule("FastReallocMem", "Pascal", "medium size before arithmetic",
          "{-------------------------------Medium block", "{Is the next block free?}",
          ("if (LOldAvailableSize < MinimumMediumBlockSize) or",
-          "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", EXIT),
+          "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize)) then", EXIT),
          "LOldBlockSize := LOldAvailableSize"),
     Rule("FastReallocMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
@@ -281,13 +286,11 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
             continue
         between = active[previous + len(rule.guards[index - 1]):at]
         gap = DIRECTIVE.sub("", between)
-        # A conditional other than the one this rule names could compile the
-        # component out while its text stays where the search finds it. The
-        # span before a terminator is exempt: it holds the rejection body,
-        # which selects its own error routine per compiler.
-        if guard not in TERMINATORS and any(
-                directive.strip() not in ALLOWED_DIRECTIVES
-                for directive in DIRECTIVE.findall(between)):
+        # A conditional the rule has not named could compile the component out
+        # while its text stays where the search finds it. The span before a
+        # terminator is exempt: it holds the rejection body, which selects its
+        # own error routine per compiler.
+        if guard not in TERMINATORS and DIRECTIVE.findall(between):
             detached.append(guard)
         # A rejecting branch must sit directly after the compare or test whose
         # flags it reads; anything else between the two writes flags of its own.
@@ -299,7 +302,19 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         if guard in TERMINATORS and CONDITION.search(gap):
             detached.append(guard)
 
-    if scoped and use >= 0 and not detached and all(at >= 0 and at < use for at in found):
+    # A rejecting branch protects nothing if its own target label sits between
+    # it and the guarded use: the rejected pointer then lands on the operation
+    # the guard exists to keep it away from.
+    misdirected = []
+    for guard, at in zip(rule.guards, found):
+        if not guard.startswith(BRANCHES) or at < 0 or use < 0:
+            continue
+        label = guard.split(None, 1)[1].strip()
+        if label.startswith("@") and f"{label}:" in active[at:use]:
+            misdirected.append(guard)
+
+    if (scoped and use >= 0 and not detached and not misdirected
+            and all(at >= 0 and at < use for at in found)):
         return None
 
     source_text = whole_text or text
@@ -312,7 +327,11 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
              f"  scope-start {rule.start!r}: {position(start)}",
              f"  scope-end   {rule.end!r}: {position(end)}"]
     for guard, at in zip(rule.guards, found):
-        note = " (detached from the check it belongs to)" if guard in detached else ""
+        note = ""
+        if guard in detached:
+            note = " (detached from the check it belongs to)"
+        elif guard in misdirected:
+            note = " (its target label sits inside the span it guards)"
         lines.append(f"  guard       {guard!r}: {position(at)}{note}")
     lines.append(f"  guarded-use {rule.guarded_use!r}: {position(use)}")
     return "\n".join(lines)
