@@ -398,9 +398,14 @@ jobs:
         run: |
           reg add "HKCU\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f
 
+      # -f makes curl exit non-zero on an HTTP error instead of writing the
+      # error page into fpc_installer.exe, where it would surface later as a
+      # confusing failure of the install step. The retries cover a mirror that
+      # is briefly unavailable, which is the ordinary SourceForge failure.
       - name: Download FreePascal installer
         run: |
-          & 'curl.exe' @('-L', '-o', 'fpc_installer.exe', 'https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download')
+          & 'curl.exe' @('-fL', '--retry', '3', '--retry-all-errors', '--retry-delay', '5', '-o', 'fpc_installer.exe', 'https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Install FreePascal silently
         run: |
