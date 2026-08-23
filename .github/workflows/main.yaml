@@ -17,6 +17,8 @@ on:
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
+      - Tests/verify_guard_ordering.py
+      - Tests/guard_order_fixtures/**
 
   pull_request:
     branches:
@@ -34,6 +36,8 @@ on:
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
+      - Tests/verify_guard_ordering.py
+      - Tests/guard_order_fixtures/**
 
   workflow_dispatch:
 
@@ -48,6 +52,9 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
+
+      - name: Verify security guard ordering
+        run: python3 Tests/verify_guard_ordering.py
 
       - name: Update apt sources
         run: sudo apt-get update
