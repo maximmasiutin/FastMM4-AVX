@@ -85,6 +85,37 @@ begin
     Log('[FAIL] ' + TestName);
 end;
 
+{ Failure report for a path that has just marked the allocator as in question.
+  It allocates nothing: every argument is either a literal, an Integer written
+  by Write, or a ShortString that lives on the caller's stack, so no string is
+  built on the heap between the fault and the report. The end-of-run summary
+  avoids the allocator for the same reason. }
+procedure TestFailIteration(const TestName, Detail: string; Iteration: Integer;
+  const ExcClass: ShortString; const ValueLabel: string = '';
+  Value: Integer = 0);
+begin
+  Inc(GTestsFailed);
+  GExitCode := TEST_FAILED;
+  Write('[FAIL] ');
+  Write(TestName);
+  Write(' - ');
+  Write(Detail);
+  if ValueLabel <> '' then
+  begin
+    Write(ValueLabel);
+    Write(Value);
+  end;
+  Write(' at iteration ');
+  Write(Iteration);
+  if ExcClass <> '' then
+  begin
+    Write(': ');
+    Write(ExcClass);
+  end;
+  WriteLn;
+  Flush(Output);
+end;
+
 // =============================================================================
 // Test: FreeMem on a C-malloc pointer (small size, triggers small block path)
 // =============================================================================
@@ -534,8 +565,12 @@ type
   TReallocOutcome = (roRejectedPreserved, roRejectedNil, roAccessViolation,
                      roSucceeded, roOtherException);
 
+{ ExcClass is a ShortString rather than a string on purpose: it is filled after
+  a fault inside the allocator, and a ShortString lives on the caller's stack,
+  so capturing the class name costs no heap allocation on FPC, whose ClassName
+  is itself a ShortString. }
 function DoReallocMemAndClassify(var P: Pointer; OrigP: Pointer;
-  NewSize: NativeUInt; out ExcClass: string): TReallocOutcome;
+  NewSize: NativeUInt; out ExcClass: ShortString): TReallocOutcome;
 begin
   ExcClass := '';
   try
@@ -566,7 +601,7 @@ const
 var
   Base, P, NewP: Pointer;
   Outcome: TReallocOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -601,7 +636,7 @@ const
 var
   Base, P, NewP: Pointer;
   Outcome: TReallocOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -639,7 +674,7 @@ type
                   foOtherException);
 
 function DoFreeMemAndClassify(P: Pointer; out Res: Integer;
-  out ExcClass: string): TFreeOutcome;
+  out ExcClass: ShortString): TFreeOutcome;
 begin
   ExcClass := '';
   Res := 0;
@@ -683,7 +718,7 @@ var
   Res: Integer;
   FreeOutcome: TFreeOutcome;
   ReallocOutcome: TReallocOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   Log('  iterations per operation: ' + IntToStr(IterationCount));
   Log('  deterministic size seed: ' + IntToStr(SizeSeed));
@@ -713,25 +748,25 @@ begin
         begin
           { A fault inside FreeMem means a guard did not fire, so the allocator
             may have been mutated mid-operation. Mark it, as the exception
-            handlers around the Phase 3 tests do for the same event. }
+            handlers around the Phase 3 tests do for the same event, and report
+            without allocating. }
           GAllocatorCorrupted := True;
-          TestFail(TestName, 'FreeMem AV at iteration ' + IntToStr(I) +
-            ': ' + ExcClass);
+          TestFailIteration(TestName, 'FreeMem AV', I, ExcClass);
           Exit;
         end;
       foReturnedNonZero:
         begin
           { A nonzero return is a clean refusal by the wrong code path rather
-            than a fault, so allocator state is not in question here. }
-          TestFail(TestName, 'FreeMem returned ' + IntToStr(Res) +
-            ' at iteration ' + IntToStr(I));
+            than a fault, so allocator state is not in question here. The
+            non-allocating report is used anyway, to keep one reporting path
+            through the loop. }
+          TestFailIteration(TestName, 'FreeMem returned', I, '', ' ', Res);
           Exit;
         end;
       foOtherException:
         begin
           GAllocatorCorrupted := True;
-          TestFail(TestName, 'FreeMem exception at iteration ' + IntToStr(I) +
-            ': ' + ExcClass);
+          TestFailIteration(TestName, 'FreeMem exception', I, ExcClass);
           Exit;
         end;
     end;
@@ -762,16 +797,14 @@ begin
           { Same reasoning as the FreeMem loop: a fault inside the allocator
             leaves its state in question, whichever entry point took it. }
           GAllocatorCorrupted := True;
-          TestFail(TestName, 'ReallocMem AV at iteration ' + IntToStr(I) +
-            ': ' + ExcClass);
+          TestFailIteration(TestName, 'ReallocMem AV', I, ExcClass);
           Exit;
         end;
       roOtherException:
         begin
           cfree(BaseP);
           GAllocatorCorrupted := True;
-          TestFail(TestName, 'ReallocMem exception at iteration ' +
-            IntToStr(I) + ': ' + ExcClass);
+          TestFailIteration(TestName, 'ReallocMem exception', I, ExcClass);
           Exit;
         end;
       roSucceeded:
@@ -779,8 +812,8 @@ begin
           { Ownership is unclear after an unexpected successful realloc. Do not
             guess which allocator owns either pointer and risk a double free. }
           GAllocatorCorrupted := True;
-          TestFail(TestName, 'ReallocMem returned a new pointer at iteration ' +
-            IntToStr(I));
+          TestFailIteration(TestName, 'ReallocMem returned a new pointer', I,
+            '');
           Exit;
         end;
     end;
@@ -796,7 +829,7 @@ var
   Base, P: Pointer;
   Res: Integer;
   Outcome: TFreeOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -839,7 +872,7 @@ var
   Res: Integer;
   Heap: THandle;
   Outcome: TFreeOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -900,7 +933,7 @@ var
   Base, P: Pointer;
   Res: Integer;
   Outcome: TFreeOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -935,7 +968,7 @@ var
   Base, P: Pointer;
   Res: Integer;
   Outcome: TFreeOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -970,7 +1003,7 @@ var
   Base, P: Pointer;
   Res: Integer;
   Outcome: TFreeOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
@@ -1004,7 +1037,7 @@ var
   Base, P, NewP, Q2: Pointer;
   Heap: THandle;
   Outcome: TReallocOutcome;
-  ExcClass: string;
+  ExcClass: ShortString;
 begin
   if not AllocGuardedRegion(Base, P) then
   begin
