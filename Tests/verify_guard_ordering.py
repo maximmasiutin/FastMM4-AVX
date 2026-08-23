@@ -49,7 +49,7 @@ EXIT = "Exit;"
 # The terminators, and what may not appear between one and the condition it
 # terminates.
 TERMINATORS = (EXIT, "else")
-CONDITION = re.compile(r"\bif\b", re.IGNORECASE)
+CONDITION = re.compile(r"\b(if|while|for|repeat|case|with|try)\b", re.IGNORECASE)
 
 # The directives a rejection body may carry: the soft-failure choice and the
 # compiler that decides between Error and RunError.
@@ -189,7 +189,7 @@ RULES = (
          "movzx ecx, TSmallBlockType[ebx].BlockSize"),
     Rule("FastReallocMem", "32-bit ASM", "medium size before address arithmetic",
          "{-------------------------------Medium block", "{Subtract the block header size",
-         ("cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
+         (SOFT, "cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
           "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
           "ja @InvalidMediumReallocPtr"),
          "lea edi, [eax + ecx]"),
@@ -203,7 +203,7 @@ RULES = (
          "movzx ecx, TSmallBlockType[rbx].BlockSize"),
     Rule("FastReallocMem", "64-bit ASM", "medium size before address arithmetic",
          "{-------------------------------Medium block", "{Subtract the block header size",
-         ("cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
+         (SOFT, "cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
           "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
           "ja @InvalidMediumReallocPtr"),
          "lea rdi, [rsi + rcx]"),
@@ -329,15 +329,42 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
     # A rejecting branch protects nothing if its own target label sits between
     # it and the guarded use: the rejected pointer then lands on the operation
     # the guard exists to keep it away from.
+    # It also protects nothing if its target sits before the guard, where the
+    # branch would jump backwards into the code it has already run.
     misdirected = []
     for guard, at in zip(rule.guards, found):
         if not guard.startswith(BRANCHES) or at < 0 or use < 0:
             continue
         label = guard.split(None, 1)[1].strip()
-        if label.startswith("@") and f"{label}:" in active[at:use]:
+        if not label.startswith("@"):
+            continue
+        if f"{label}:" in active[at:use] or active.find(f"{label}:", use) < 0:
             misdirected.append(guard)
 
-    if (scoped and use >= 0 and not detached and not misdirected
+    # A conditional open across a component compiles it out however well the
+    # sequence reads, so the directives from the scope start to the guarded use
+    # are walked and every component is required to stand only inside the
+    # conditionals its own rule names.
+    named = [guard for guard in rule.guards if guard.startswith("{$")]
+    smothered = []
+    if scoped and use >= 0:
+        positions = {at for at in found if at >= 0}
+        open_directives: list[str] = []
+        cursor = start
+        for match in DIRECTIVE.finditer(active, start, max(use, start)):
+            for at in sorted(position for position in positions
+                             if cursor <= position < match.start()):
+                if any(directive not in named for directive in open_directives):
+                    smothered.append(rule.guards[found.index(at)])
+            cursor = match.start()
+            token = match.group().strip()
+            if token == ENDIF:
+                if open_directives:
+                    open_directives.pop()
+            elif token != ELSE:  # an else stays inside the conditional it splits
+                open_directives.append(token)
+
+    if (scoped and use >= 0 and not detached and not misdirected and not smothered
             and all(at >= 0 and at < use for at in found)):
         return None
 
@@ -354,6 +381,8 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         note = ""
         if guard in detached:
             note = " (detached from the check it belongs to)"
+        elif guard in smothered:
+            note = " (stands inside a conditional this rule does not name)"
         elif guard in misdirected:
             note = " (its target label sits inside the span it guards)"
         lines.append(f"  guard       {guard!r}: {position(at)}{note}")
