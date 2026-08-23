@@ -2155,6 +2155,12 @@ procedure GetMemoryMap(var AMemoryMap: TMemoryMap);
 {$ENDIF}
 {Returns the current installation state of the memory manager.}
 function FastMM_GetInstallationState: TFastMM_MemoryManagerInstallationState;
+{$IFDEF MediumSafeUnlinkingTest}
+{Test-only entry point. AMode 0 removes and reinserts a valid medium free
+ block; modes 1 through 7 deliberately corrupt one free-list relationship.
+ Returns true when the safe-unlinking rejection path was reached.}
+function FastMMTestMediumSafeUnlinking(AMode: Integer): Boolean;
+{$ENDIF}
 
 {$IFDEF EnableMemoryLeakReporting}
 {Registers expected memory leaks. Returns true on success. The list of leaked
@@ -8542,6 +8548,114 @@ begin
 end;
 {$ENDIF}
 
+{Validate ownership before following either attacker-influenced link, then
+ validate the reciprocal links before RemoveMediumFreeBlock writes through
+ them. This shared predicate keeps Pascal and both assembly widths identical.}
+function MediumFreeBlockLinksValid(APMediumFreeBlock: PMediumFreeBlock): Boolean;
+var
+  LPreviousFreeBlock,
+  LNextFreeBlock: PMediumFreeBlock;
+  LFirstPool,
+  LSlowPool,
+  LPool: PMediumBlockPoolHeader;
+  LPreviousAddress,
+  LNextAddress,
+  LPoolStart,
+  LPoolEnd: UIntPtr;
+  LPreviousOwned,
+  LNextOwned,
+  LAdvanceSlow: Boolean;
+begin
+  LNextFreeBlock := APMediumFreeBlock^.NextFreeBlock;
+  LPreviousFreeBlock := APMediumFreeBlock^.PreviousFreeBlock;
+  LPreviousAddress := UIntPtr(LPreviousFreeBlock);
+  LNextAddress := UIntPtr(LNextFreeBlock);
+
+  LPreviousOwned := (LPreviousAddress >= UIntPtr(@MediumBlockBins[0])) and
+    (LPreviousAddress <= UIntPtr(@MediumBlockBins[MediumBlockBinCount - 1])) and
+    (((LPreviousAddress - UIntPtr(@MediumBlockBins[0])) and
+      ((1 shl MediumFreeBlockSizePowerOf2) - 1)) = 0);
+  LNextOwned := (LNextAddress >= UIntPtr(@MediumBlockBins[0])) and
+    (LNextAddress <= UIntPtr(@MediumBlockBins[MediumBlockBinCount - 1])) and
+    (((LNextAddress - UIntPtr(@MediumBlockBins[0])) and
+      ((1 shl MediumFreeBlockSizePowerOf2) - 1)) = 0);
+
+  if (not LPreviousOwned) and
+     ((LPreviousAddress and (SmallBlockGranularity - 1)) <> 0) then
+  begin
+    Result := False;
+    Exit;
+  end;
+  if (not LNextOwned) and
+     ((LNextAddress and (SmallBlockGranularity - 1)) <> 0) then
+  begin
+    Result := False;
+    Exit;
+  end;
+
+  if not (LPreviousOwned and LNextOwned) then
+  begin
+    LPool := MediumBlockPoolsCircularList.NextMediumBlockPoolHeader;
+    LFirstPool := LPool;
+    LSlowPool := LPool;
+    LAdvanceSlow := False;
+    while LPool <> @MediumBlockPoolsCircularList do
+    begin
+      if LPool = nil then
+        Break;
+      LPoolStart := UIntPtr(LPool) + MediumBlockPoolHeaderSize;
+      LPoolEnd := UIntPtr(LPool) + MediumBlockPoolSize - SizeOf(TMediumFreeBlock);
+      if (not LPreviousOwned) and (LPreviousAddress >= LPoolStart) and
+         (LPreviousAddress <= LPoolEnd) then
+        LPreviousOwned := True;
+      if (not LNextOwned) and (LNextAddress >= LPoolStart) and
+         (LNextAddress <= LPoolEnd) then
+        LNextOwned := True;
+      if LPreviousOwned and LNextOwned then
+        Break;
+      LPool := LPool^.NextMediumBlockPoolHeader;
+      if (LPool = LFirstPool) or (LPool = LSlowPool) then
+        Break;
+      if LAdvanceSlow then
+      begin
+        if (LSlowPool = nil) or
+           (LSlowPool = @MediumBlockPoolsCircularList) then
+          Break;
+        LSlowPool := LSlowPool^.NextMediumBlockPoolHeader;
+      end;
+      LAdvanceSlow := not LAdvanceSlow;
+    end;
+  end;
+
+  Result := LPreviousOwned and LNextOwned;
+  if Result then
+    Result := LPreviousFreeBlock^.NextFreeBlock = APMediumFreeBlock;
+  if Result then
+    Result := LNextFreeBlock^.PreviousFreeBlock = APMediumFreeBlock;
+end;
+
+{$IFDEF MediumSafeUnlinkingTest}
+var
+  MediumSafeUnlinkingFailureSeen: Boolean;
+{$ENDIF}
+
+procedure RaiseInvalidPtrForSafeUnlinking;
+begin
+  {$IFDEF MediumSafeUnlinkingTest}
+  MediumSafeUnlinkingFailureSeen := True;
+  Exit;
+  {$ENDIF}
+  {$IFDEF FPC}
+  System.Error(TRuntimeError(reInvalidPtr));
+  {$ELSE}
+  {$IFDEF BCB6OrDelphi7AndUp}
+  System.Error(reInvalidPtr);
+  {$ELSE}
+  System.RunError(reInvalidPtr);
+  {$ENDIF}
+  {$ENDIF}
+end;
+
 {Removes a medium block from the circular linked list of free blocks.
  Does not change any header flags. Medium blocks should be locked
  before calling this procedure.}
@@ -8555,6 +8669,11 @@ var
   LBinNumber,
   LBinGroupNumber: Cardinal;
 begin
+  if not MediumFreeBlockLinksValid(APMediumFreeBlock) then
+  begin
+    RaiseInvalidPtrForSafeUnlinking;
+    Exit;
+  end;
   {Get the current previous and next blocks}
   LNextFreeBlock := APMediumFreeBlock^.NextFreeBlock;
   LPreviousFreeBlock := APMediumFreeBlock^.PreviousFreeBlock;
@@ -8607,6 +8726,11 @@ end;
 assembler;
 asm
   {On entry: eax = APMediumFreeBlock}
+  push eax
+  call MediumFreeBlockLinksValid
+  test al, al
+  pop eax
+  jz @CorruptFreeList
   {Get the current previous and next blocks}
   mov ecx, TMediumFreeBlock[eax].NextFreeBlock
   mov edx, TMediumFreeBlock[eax].PreviousFreeBlock
@@ -8621,6 +8745,9 @@ asm
   je @BinIsNowEmpty
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
 @Done:
+  jmp @Exit
+@CorruptFreeList:
+  call RaiseInvalidPtrForSafeUnlinking
   jmp @Exit
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 8{$ENDIF}
 @BinIsNowEmpty:
@@ -8681,6 +8808,11 @@ asm
   .noframe
 {$ENDIF}
   {On entry: rcx = APMediumFreeBlock}
+  push rcx
+  call MediumFreeBlockLinksValid
+  test al, al
+  pop rcx
+  jz @CorruptFreeList
   mov rax, rcx
   {Get the current previous and next blocks}
   mov rcx, TMediumFreeBlock[rax].NextFreeBlock
@@ -8733,7 +8865,7 @@ asm
   mov ecx, edx
   rol eax, cl
   and MediumBlockBinGroupBitmap, eax
-{$IFNDEF SoftInvalidFreeMem}
+  {$IFNDEF SoftInvalidFreeMem}
   jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
 @CorruptBinPointer:
@@ -8744,11 +8876,100 @@ asm
   {$ELSE}
   call RunErrorInvalidPtr
   {$ENDIF}
-{$ENDIF}
+  {$ENDIF}
+  jmp @Done
+@CorruptFreeList:
+  call RaiseInvalidPtrForSafeUnlinking
+  jmp @Done
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 2{$ENDIF}
 @Done:
 end;
 {$ENDIF}
+{$ENDIF}
+
+{$IFDEF MediumSafeUnlinkingTest}
+function FastMMTestMediumSafeUnlinking(AMode: Integer): Boolean;
+const
+  TestBlockSize = 8192;
+var
+  LBlocks: array[0..3] of Pointer;
+  LIndex: Integer;
+  LVictim,
+  LPrevious,
+  LNext,
+  LSavedVictimPrevious,
+  LSavedVictimNext,
+  LSavedPreviousNext,
+  LSavedNextPrevious: PMediumFreeBlock;
+  LFirstFreed,
+  LThirdFreed,
+  LLocked: Boolean;
+begin
+  MediumSafeUnlinkingFailureSeen := False;
+  for LIndex := 0 to 3 do
+    LBlocks[LIndex] := nil;
+  LFirstFreed := False;
+  LThirdFreed := False;
+  LLocked := False;
+  try
+    for LIndex := 0 to 3 do
+    begin
+      LBlocks[LIndex] := FastGetMem(TestBlockSize);
+      if LBlocks[LIndex] = nil then
+        System.RunError(Ord(reOutOfMemory));
+    end;
+
+    FastFreeMem(LBlocks[0]);
+    LFirstFreed := True;
+    FastFreeMem(LBlocks[2]);
+    LThirdFreed := True;
+
+    LockMediumBlocks;
+    LLocked := True;
+    LVictim := PMediumFreeBlock(LBlocks[2]);
+    LPrevious := LVictim^.PreviousFreeBlock;
+    LNext := LVictim^.NextFreeBlock;
+    LSavedVictimPrevious := LPrevious;
+    LSavedVictimNext := LNext;
+    LSavedPreviousNext := LPrevious^.NextFreeBlock;
+    LSavedNextPrevious := LNext^.PreviousFreeBlock;
+    try
+      case AMode of
+        0: ;
+        1: LPrevious^.NextFreeBlock := LNext;
+        2: LNext^.PreviousFreeBlock := LPrevious;
+        3: LVictim^.NextFreeBlock := PMediumFreeBlock(NativeUInt($DEADBEE0));
+        4: LVictim^.PreviousFreeBlock := PMediumFreeBlock(NativeUInt($DEADBEE0));
+        5: LVictim^.NextFreeBlock := PMediumFreeBlock(@MediumBlockPoolsCircularList);
+        6: LVictim^.NextFreeBlock := nil;
+        7: LVictim^.PreviousFreeBlock :=
+          PMediumFreeBlock(NativeUInt(LPrevious) + 1);
+      else
+        System.RunError(Ord(reInvalidOp));
+      end;
+      RemoveMediumFreeBlock(LVictim);
+    finally
+      LVictim^.PreviousFreeBlock := LSavedVictimPrevious;
+      LVictim^.NextFreeBlock := LSavedVictimNext;
+      LPrevious^.NextFreeBlock := LSavedPreviousNext;
+      LNext^.PreviousFreeBlock := LSavedNextPrevious;
+      UnlockMediumBlocks;
+      LLocked := False;
+    end;
+  finally
+    if LLocked then
+      UnlockMediumBlocks;
+    if (LBlocks[1] <> nil) then
+      FastFreeMem(LBlocks[1]);
+    if (LBlocks[3] <> nil) then
+      FastFreeMem(LBlocks[3]);
+    if (LBlocks[0] <> nil) and not LFirstFreed then
+      FastFreeMem(LBlocks[0]);
+    if (LBlocks[2] <> nil) and not LThirdFreed then
+      FastFreeMem(LBlocks[2]);
+  end;
+  Result := MediumSafeUnlinkingFailureSeen;
+end;
 {$ENDIF}
 
 {Inserts a medium block into the appropriate medium block bin.}

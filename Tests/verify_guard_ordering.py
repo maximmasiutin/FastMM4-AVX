@@ -460,6 +460,16 @@ def main() -> int:
     source = args.source or tests_dir.parent / "FastMM4.pas"
     text = source.read_text(encoding="utf-8-sig")
     errors = run_fixture_tests(tests_dir / "guard_order_fixtures")
+    manual_win64_frame = re.compile(
+        r"\b(?:sub|add)\s+rsp\s*,\s*(?:40|\$28)\b", re.IGNORECASE
+    )
+    for match in manual_win64_frame.finditer(text):
+        line = text.count("\n", 0, match.start()) + 1
+        errors.append(
+            f"FastMM4.pas:{line}: manual Win64 call-frame adjustment "
+            f"{match.group(0)!r} is forbidden; use the existing internal-call "
+            "convention or a Pascal wrapper"
+        )
     sections = source_sections(text)
     for rule in RULES:
         section, base = sections[(rule.procedure, rule.architecture)]
