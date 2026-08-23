@@ -910,8 +910,8 @@ jobs:
           & '.\CriticalSectionTest.exe'
 
       # =========================================================================
-      # SoftInvalidFreeMem Tests - Windows
-      # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
+      # Concurrent foreign-pointer stress - Windows
+      # The first step runs without checking switches; the second adds -Co -Cr.
       # =========================================================================
       - name: Run concurrent foreign-pointer stress (64/32-bit, 2 seconds)
         timeout-minutes: 3
@@ -939,6 +939,10 @@ jobs:
           & '.\ConcurrentForeignPointerStressTest.exe'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      # =========================================================================
+      # SoftInvalidFreeMem Tests - Windows
+      # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
+      # =========================================================================
       - name: Compile and run SoftInvalidFreeMemTest 64-bit (ASM, overflow+range checks)
         timeout-minutes: 2
         run: |
