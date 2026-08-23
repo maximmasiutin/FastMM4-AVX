@@ -51,6 +51,10 @@ EXIT = "Exit;"
 TERMINATORS = (EXIT, "else")
 CONDITION = re.compile(r"\bif\b", re.IGNORECASE)
 
+# The directives a rejection body may carry: the soft-failure choice and the
+# compiler that decides between Error and RunError.
+REJECTION_DIRECTIVES = (SOFT, ELSE, ENDIF, "{$IFDEF BCB6OrDelphi7AndUp}")
+
 # Each component carries the connector that joins it to the next, so the
 # condition is required to reject on any one of its tests rather than only on
 # all of them together: an and in place of an or is a different guard.
@@ -60,7 +64,8 @@ SMALL_BOUNDS_PASCAL = (
     # The last predicate carries "then", which fixes where the condition ends:
     # a further test appended before it, such as "and False", is a different
     # condition and fails the match.
-    "mod SmallBlockTypeRecSize <> 0) then",
+    "((NativeUInt(LPSmallBlockType) - NativeUInt(@SmallBlockTypes[0]))"
+    " mod SmallBlockTypeRecSize <> 0) then",
     EXIT)
 
 
@@ -261,6 +266,22 @@ def mask_comments(text: str) -> str:
     return "".join(out)
 
 
+def find_component(active: str, guard: str, cursor: int, end: int) -> int:
+    """Locate a component, requiring it to end at a token boundary.
+
+    A component that ended mid-identifier would match a renamed instruction:
+    "jb @InvalidSmallBlock" is a prefix of "jb @InvalidSmallBlock2", which
+    branches somewhere else entirely.
+    """
+    at = active.find(guard, cursor, end)
+    while at >= 0:
+        after = at + len(guard)
+        if after >= len(active) or not (active[after].isalnum() or active[after] == "_"):
+            return at
+        at = active.find(guard, at + 1, end)
+    return -1
+
+
 def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = None) -> str | None:
     start = text.find(rule.start)
     end = text.find(rule.end, start + len(rule.start)) if start >= 0 else -1
@@ -273,7 +294,7 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
     found: list[int] = []
     cursor = start
     for guard in rule.guards:
-        at = active.find(guard, cursor, end) if scoped and cursor >= 0 else -1
+        at = find_component(active, guard, cursor, end) if scoped and cursor >= 0 else -1
         found.append(at)
         cursor = at + len(guard) if at >= 0 else -1
 
@@ -286,20 +307,23 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
             continue
         between = active[previous + len(rule.guards[index - 1]):at]
         gap = DIRECTIVE.sub("", between)
-        # A conditional the rule has not named could compile the component out
-        # while its text stays where the search finds it. The span before a
-        # terminator is exempt: it holds the rejection body, which selects its
-        # own error routine per compiler.
-        if guard not in TERMINATORS and DIRECTIVE.findall(between):
-            detached.append(guard)
-        # A rejecting branch must sit directly after the compare or test whose
-        # flags it reads; anything else between the two writes flags of its own.
-        if guard.startswith(BRANCHES) and gap.strip():
-            detached.append(guard)
-        # A Pascal terminator belongs to the condition it follows, so no other
-        # condition may open in between: an unrelated later "if ... then Exit"
-        # would otherwise satisfy a guard whose own body falls through.
-        if guard in TERMINATORS and CONDITION.search(gap):
+        if guard in TERMINATORS:
+            # The span before a terminator holds the rejection body, so it
+            # carries statements and the directives that pick an error routine
+            # per compiler. It may not open another condition, whose own
+            # terminator would otherwise stand in for this one, and it may not
+            # carry a directive outside that set, which could compile the
+            # terminator out and let the guard fall through.
+            if CONDITION.search(gap):
+                detached.append(guard)
+            elif any(directive.strip() not in REJECTION_DIRECTIVES
+                     for directive in DIRECTIVE.findall(between)):
+                detached.append(guard)
+        elif between.strip():
+            # Everywhere else the sequence is contiguous: a rule names each
+            # directive that splits it, so anything else here is an inserted
+            # instruction or operand, which can rewrite the flags a branch
+            # reads or the value a predicate tests.
             detached.append(guard)
 
     # A rejecting branch protects nothing if its own target label sits between
