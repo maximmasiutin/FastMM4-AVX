@@ -537,3 +537,10 @@ Fast Memory Manager
 ### C++ Builder:
   Refer to the instructions inside `FastMM4BCB.cpp`.
 
+## Guard-order regression check
+
+Run the fast source validation and its positive/negative fixture tests with:
+
+```shell
+python Tests/verify_guard_ordering.py
+```
