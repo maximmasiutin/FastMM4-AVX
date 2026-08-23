@@ -1,0 +1,141 @@
+name: Extended Stress
+
+# The ordinary Build workflow runs ConcurrentForeignPointerStressTest for two
+# seconds unchecked and one second under -Co -Cr, because every push and every
+# pull request pays for those. LongStressTest selects the ten-second duration
+# the test was written for, which is too long to charge to each push, so it runs
+# here on a schedule and on demand instead.
+#
+# A longer run does not test anything the short one leaves out. What it buys is
+# more interleavings of the same sixteen threads, so a race that needs an
+# unlikely ordering has more chances to appear.
+
+on:
+  schedule:
+    # 04:17 UTC on Sundays. The odd minute keeps this off the hour, when the
+    # scheduler is busiest and a queued job waits longest.
+    - cron: '17 4 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux x86_64, ten seconds
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Update apt sources
+        run: sudo apt-get update
+
+      - name: Install Free Pascal and NASM
+        run: sudo apt-get install -y fpc nasm
+
+      - name: Compile AVX-512 Assembly for Linux
+        run: |
+          cd $GITHUB_WORKSPACE
+          nasm -Ox -Ov -f elf64 FastMM4_AVX512_Linux.asm -o FastMM4_AVX512_Linux.o
+
+      - name: Run the ten-second stress, ASM path
+        timeout-minutes: 5
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dLongStressTest -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -dDisableMemoryLeakReporting -O4 ConcurrentForeignPointerStressTest.dpr
+          ./ConcurrentForeignPointerStressTest
+
+      - name: Run the ten-second stress, Pure Pascal path
+        timeout-minutes: 5
+        run: |
+          cd $GITHUB_WORKSPACE/Tests/Simple
+          fpc -B -Mdelphi -Tlinux -Px86_64 -dLongStressTest -dDontUseASMVersion -dSoftInvalidFreeMem -dIgnoreMemoryAllocatedBefore -dDisableMemoryLeakReporting -O4 ConcurrentForeignPointerStressTest.dpr
+          ./ConcurrentForeignPointerStressTest
+
+  windows:
+    name: Windows, ten seconds
+    runs-on: windows-latest
+    env:
+      nasm: 'C:\Program Files\NASM\nasm.exe'
+      fpc: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
+
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Disable Windows Error Reporting dialogs
+        run: |
+          reg add "HKCU\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f
+
+      - name: Download FreePascal installer
+        run: |
+          & 'curl.exe' @('-L', '-o', 'fpc_installer.exe', 'https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download')
+
+      - name: Install FreePascal silently
+        run: |
+          & '.\fpc_installer.exe' @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/LOG')
+          Wait-Process -Name fpc_installer -Timeout 600
+
+      - name: Install NASM via Chocolatey
+        run: |
+          & 'choco.exe' @('install', 'nasm', '-y')
+
+      - name: Verify the toolchain
+        run: |
+          if (-not (Test-Path -LiteralPath $Env:fpc)) {
+            Write-Error "fpc.exe not found at '$Env:fpc'. The installer layout changed."
+            exit 1
+          }
+          if (-not (Test-Path -LiteralPath $Env:nasm)) {
+            Write-Error "nasm.exe not found at '$Env:nasm'. The Chocolatey package layout changed."
+            exit 1
+          }
+          Write-Host "fpc $((& $Env:fpc '-iV' | Out-String).Trim()) at $Env:fpc"
+
+      - name: Compile AVX-512 Assembly for Windows
+        run: |
+          cd $Env:GITHUB_WORKSPACE
+          & '${{ env.nasm }}' @('-Ox', '-Ov', '-f', 'win64', 'FastMM4_AVX512.asm')
+
+      - name: Run the ten-second stress (64/32-bit, ASM path)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dLongStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dLongStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run the ten-second checked stress (64/32-bit, overflow+range checks)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dLongStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dLongStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run the ten-second stress (64/32-bit, Pure Pascal path)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dLongStressTest', '-dDontUseASMVersion', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dLongStressTest', '-dDontUseASMVersion', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
