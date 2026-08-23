@@ -30,9 +30,12 @@ BRANCHES = ("jb ", "jae ", "ja ", "jnz ")
 # requires its rejecting branch.
 EXIT = "Exit;"
 
+# Each component carries the connector that joins it to the next, so the
+# condition is required to reject on any one of its tests rather than only on
+# all of them together: an and in place of an or is a different guard.
 SMALL_BOUNDS_PASCAL = (
-    "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
-    "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
+    "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0])) or",
+    "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1])) or",
     "mod SmallBlockTypeRecSize <> 0",
     EXIT)
 
@@ -71,7 +74,7 @@ RULES = (
          "{Guard: validate medium block size BEFORE", "Result := FreeMediumBlock(APointer);",
          # This one rejects with an else branch rather than an Exit, so the
          # else is the component that keeps the clear off the invalid path.
-         ("if (LBlockSize < MinimumMediumBlockSize)",
+         ("if (LBlockSize < MinimumMediumBlockSize) or",
           "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", "else"),
          "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
     Rule("FastFreeMem", "32-bit ASM", "pool pointer before BlockType read",
@@ -86,8 +89,12 @@ RULES = (
          "movzx edx, TSmallBlockType(ebx).BlockSize"),
     Rule("FastFreeMem", "32-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by eax",
-         ("cmp edx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
-          "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
+         # Each comparison has two rejecting branches, one per SoftInvalidFreeMem
+         # alternative, and both have to stay on the flags it wrote.
+         ("cmp edx, MinimumMediumBlockSize",
+          "jb @InvalidMediumBlock", "jb @CorruptMediumBlockSize",
+          "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
+          "ja @InvalidMediumBlock", "ja @CorruptMediumBlockSize"),
          "call System.@FillChar"),
     Rule("FastFreeMem", "64-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
@@ -99,8 +106,10 @@ RULES = (
          "movzx edx, TSmallBlockType(rbx).BlockSize"),
     Rule("FastFreeMem", "64-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by rcx",
-         ("cmp rdx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
-          "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
+         ("cmp rdx, MinimumMediumBlockSize",
+          "jb @InvalidMediumBlock", "jb @CorruptMediumBlockSize",
+          "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
+          "ja @InvalidMediumBlock", "ja @CorruptMediumBlockSize"),
          "call System.@FillChar"),
     Rule("FastReallocMem", "Pascal", "pool pointer before BlockType read",
          "{-----------------------------------Small block", "{Is it an upsize or a downsize?}",
@@ -113,7 +122,7 @@ RULES = (
          "LOldAvailableSize := LPSmallBlockType^.BlockSize"),
     Rule("FastReallocMem", "Pascal", "medium size before arithmetic",
          "{-------------------------------Medium block", "{Is the next block free?}",
-         ("if (LOldAvailableSize < MinimumMediumBlockSize)",
+         ("if (LOldAvailableSize < MinimumMediumBlockSize) or",
           "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", EXIT),
          "LOldBlockSize := LOldAvailableSize"),
     Rule("FastReallocMem", "32-bit ASM", "pool pointer before BlockType read",
