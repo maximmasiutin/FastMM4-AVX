@@ -16,35 +16,75 @@ class Rule:
     name: str
     start: str
     end: str
-    guard: str
+    guards: tuple[str, ...]
     guarded_use: str
 
 
 RULES = (
-    Rule("FastFreeMem", "Pascal", "small BlockType before clear", "{Get the block type}", "{Lock the block type}",
-         "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))", "FillChar(APointer^, LPSmallBlockType^.BlockSize"),
-    Rule("FastFreeMem", "Pascal", "medium size before clear", "{Guard: validate medium block size BEFORE", "Result := FreeMediumBlock(APointer);",
-         "if (LBlockSize < MinimumMediumBlockSize)", "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
-    Rule("FastFreeMem", "32-bit ASM", "small BlockType before clear", "cmp edx, $10000", "{Do we need to lock the block type?}",
-         "test eax, (SmallBlockTypeRecSize - 1)", "call System.@FillChar"),
-    Rule("FastFreeMem", "32-bit ASM", "medium size before clear", "@FreeMediumBlock:", "{Free the medium block pointed to by eax", 
-         "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "call System.@FillChar"),
-    Rule("FastFreeMem", "64-bit ASM", "small BlockType before clear", "cmp rdx, $10000", "{Do we need to lock the block type?}",
-         "test rax, (SmallBlockTypeRecSize - 1)", "call System.@FillChar"),
-    Rule("FastFreeMem", "64-bit ASM", "medium size before clear", "@FreeMediumBlock:", "{Free the medium block pointed to by rcx", 
-         "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "call System.@FillChar"),
-    Rule("FastReallocMem", "Pascal", "small BlockType before size read", "{Get the block type}", "{Is it an upsize or a downsize?}",
-         "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))", "LOldAvailableSize := LPSmallBlockType^.BlockSize"),
-    Rule("FastReallocMem", "Pascal", "medium size before arithmetic", "{-------------------------------Medium block", "{Is the next block free?}",
-         "if (LOldAvailableSize < MinimumMediumBlockSize)", "LOldBlockSize := LOldAvailableSize"),
-    Rule("FastReallocMem", "32-bit ASM", "small BlockType before size read", "cmp ecx, $10000", "{Is it an upsize or a downsize?}",
-         "test eax, (SmallBlockTypeRecSize - 1)", "movzx ecx, TSmallBlockType[ebx].BlockSize"),
-    Rule("FastReallocMem", "32-bit ASM", "medium size before address arithmetic", "{-------------------------------Medium block", "{Subtract the block header size",
-         "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "lea edi, [eax + ecx]"),
-    Rule("FastReallocMem", "64-bit ASM", "small BlockType before size read", "cmp rcx, $10000", "{Is it an upsize or a downsize?}",
-         "test rax, (SmallBlockTypeRecSize - 1)", "movzx ecx, TSmallBlockType[rbx].BlockSize"),
-    Rule("FastReallocMem", "64-bit ASM", "medium size before address arithmetic", "{-------------------------------Medium block", "{Subtract the block header size",
-         "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "lea rdi, [rsi + rcx]"),
+    Rule("FastFreeMem", "Pascal", "small BlockType before clear",
+         "{Get the block type}", "{Lock the block type}",
+         ("if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
+          "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
+          "mod SmallBlockTypeRecSize <> 0"),
+         "FillChar(APointer^, LPSmallBlockType^.BlockSize"),
+    Rule("FastFreeMem", "Pascal", "medium size before clear",
+         "{Guard: validate medium block size BEFORE", "Result := FreeMediumBlock(APointer);",
+         ("if (LBlockSize < MinimumMediumBlockSize)",
+          "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
+         "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
+    Rule("FastFreeMem", "32-bit ASM", "small BlockType before clear",
+         "cmp edx, $10000", "{Do we need to lock the block type?}",
+         ("cmp ebx, eax", "jb @InvalidSmallBlock", "jae @InvalidSmallBlock",
+          "test eax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallBlock"),
+         "call System.@FillChar"),
+    Rule("FastFreeMem", "32-bit ASM", "medium size before clear",
+         "@FreeMediumBlock:", "{Free the medium block pointed to by eax",
+         ("cmp edx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
+          "cmp edx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
+         "call System.@FillChar"),
+    Rule("FastFreeMem", "64-bit ASM", "small BlockType before clear",
+         "cmp rdx, $10000", "{Do we need to lock the block type?}",
+         ("cmp rbx, rax", "jb @InvalidSmallBlock", "jae @InvalidSmallBlock",
+          "test rax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallBlock"),
+         "call System.@FillChar"),
+    Rule("FastFreeMem", "64-bit ASM", "medium size before clear",
+         "@FreeMediumBlock:", "{Free the medium block pointed to by rcx",
+         ("cmp rdx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
+          "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize", "ja @InvalidMediumBlock"),
+         "call System.@FillChar"),
+    Rule("FastReallocMem", "Pascal", "small BlockType before size read",
+         "{Get the block type}", "{Is it an upsize or a downsize?}",
+         ("if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
+          "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
+          "mod SmallBlockTypeRecSize <> 0"),
+         "LOldAvailableSize := LPSmallBlockType^.BlockSize"),
+    Rule("FastReallocMem", "Pascal", "medium size before arithmetic",
+         "{-------------------------------Medium block", "{Is the next block free?}",
+         ("if (LOldAvailableSize < MinimumMediumBlockSize)",
+          "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
+         "LOldBlockSize := LOldAvailableSize"),
+    Rule("FastReallocMem", "32-bit ASM", "small BlockType before size read",
+         "cmp ecx, $10000", "{Is it an upsize or a downsize?}",
+         ("cmp ebx, eax", "jb @InvalidSmallReallocPtr", "jae @InvalidSmallReallocPtr",
+          "test eax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallReallocPtr"),
+         "movzx ecx, TSmallBlockType[ebx].BlockSize"),
+    Rule("FastReallocMem", "32-bit ASM", "medium size before address arithmetic",
+         "{-------------------------------Medium block", "{Subtract the block header size",
+         ("cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
+          "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
+          "ja @InvalidMediumReallocPtr"),
+         "lea edi, [eax + ecx]"),
+    Rule("FastReallocMem", "64-bit ASM", "small BlockType before size read",
+         "cmp rcx, $10000", "{Is it an upsize or a downsize?}",
+         ("cmp rbx, rax", "jb @InvalidSmallReallocPtr", "jae @InvalidSmallReallocPtr",
+          "test rax, (SmallBlockTypeRecSize - 1)", "jnz @InvalidSmallReallocPtr"),
+         "movzx ecx, TSmallBlockType[rbx].BlockSize"),
+    Rule("FastReallocMem", "64-bit ASM", "medium size before address arithmetic",
+         "{-------------------------------Medium block", "{Subtract the block header size",
+         ("cmp ecx, MinimumMediumBlockSize", "jb @InvalidMediumReallocPtr",
+          "cmp ecx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
+          "ja @InvalidMediumReallocPtr"),
+         "lea rdi, [rsi + rcx]"),
 )
 
 
@@ -55,9 +95,19 @@ def line_number(text: str, position: int) -> int:
 def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = None) -> str | None:
     start = text.find(rule.start)
     end = text.find(rule.end, start + len(rule.start)) if start >= 0 else -1
-    guard = text.find(rule.guard, start, end) if start >= 0 and end >= 0 else -1
-    use = text.find(rule.guarded_use, start, end) if start >= 0 and end >= 0 else -1
-    if start >= 0 and end >= 0 and guard >= 0 and use >= 0 and guard < use:
+    scoped = start >= 0 and end >= 0
+    use = text.find(rule.guarded_use, start, end) if scoped else -1
+
+    # Each guard must appear after the one before it, so a component moved out
+    # of sequence is reported rather than accepted because a later one matched.
+    found: list[int] = []
+    cursor = start
+    for guard in rule.guards:
+        at = text.find(guard, cursor, end) if scoped and cursor >= 0 else -1
+        found.append(at)
+        cursor = at + len(guard) if at >= 0 else -1
+
+    if scoped and use >= 0 and all(at >= 0 and at < use for at in found):
         return None
 
     source_text = whole_text or text
@@ -66,16 +116,18 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         absolute = base + offset
         return "missing" if offset < 0 else f"line {line_number(source_text, absolute)}, byte {absolute}"
 
-    return (f"FAIL {rule.procedure} [{rule.architecture}] {rule.name}\n"
-            f"  scope-start {rule.start!r}: {position(start)}\n"
-            f"  scope-end   {rule.end!r}: {position(end)}\n"
-            f"  guard       {rule.guard!r}: {position(guard)}\n"
-            f"  guarded-use {rule.guarded_use!r}: {position(use)}")
+    lines = [f"FAIL {rule.procedure} [{rule.architecture}] {rule.name}",
+             f"  scope-start {rule.start!r}: {position(start)}",
+             f"  scope-end   {rule.end!r}: {position(end)}"]
+    for guard, at in zip(rule.guards, found):
+        lines.append(f"  guard       {guard!r}: {position(at)}")
+    lines.append(f"  guarded-use {rule.guarded_use!r}: {position(use)}")
+    return "\n".join(lines)
 
 
 def fixture_rule() -> Rule:
     return Rule("FixtureProcedure", "fixture", "guard before guarded use",
-                "{fixture-start}", "{fixture-end}", "ValidateGuard;", "GuardedUse;")
+                "{fixture-start}", "{fixture-end}", ("ValidateGuard;",), "GuardedUse;")
 
 
 def run_fixture_tests(fixtures: Path) -> list[str]:
@@ -132,7 +184,9 @@ def main() -> int:
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print(f"Guard ordering OK: {len(RULES)} source rules; valid and invalid fixtures verified")
+    guards = sum(len(rule.guards) for rule in RULES)
+    print(f"Guard ordering OK: {len(RULES)} source rules, {guards} guard components; "
+          "valid and invalid fixtures verified")
     return 0
 
 
