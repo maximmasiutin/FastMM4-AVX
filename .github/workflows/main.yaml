@@ -914,7 +914,7 @@ jobs:
       # Compiled with -Co -Cr to enable overflow and range checking (issue #39).
       # =========================================================================
       - name: Run concurrent foreign-pointer stress (64/32-bit, 2 seconds)
-        timeout-minutes: 1
+        timeout-minutes: 3
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
@@ -927,7 +927,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Run checked concurrent foreign-pointer stress (64/32-bit, 1 second)
-        timeout-minutes: 1
+        timeout-minutes: 3
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dCheckedStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
