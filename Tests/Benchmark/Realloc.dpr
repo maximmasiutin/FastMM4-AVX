@@ -24,13 +24,29 @@ begin
   Str(AValue, AText);
 end;
 
+{A colon ends the name only where it can be a drive letter, which is the
+ second character of a Windows path and nowhere else. Treating every colon as
+ a delimiter would cut a legal Unix name: /tmp/Realloc:debug would report
+ "debug" as the program name.}
+function IsPathDelimiter(const APath: string; AIndex: Integer): Boolean;
+var
+  Delimiter: Boolean;
+begin
+  Delimiter := (APath[AIndex] = '\') or (APath[AIndex] = '/');
+  {$IFDEF MSWINDOWS}
+  if not Delimiter then
+    Delimiter := (APath[AIndex] = ':') and (AIndex = 2);
+  {$ENDIF}
+  IsPathDelimiter := Delimiter;
+end;
+
 function FileNameOf(const APath: string): string;
 var
   i: Integer;
 begin
   Result := APath;
   for i := Length(APath) downto 1 do
-    if (APath[i] = '\') or (APath[i] = '/') or (APath[i] = ':') then
+    if IsPathDelimiter(APath, i) then
     begin
       Result := Copy(APath, i + 1, Length(APath) - i);
       Exit;
