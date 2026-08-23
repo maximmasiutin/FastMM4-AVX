@@ -165,9 +165,18 @@ def mask_comments(text: str) -> str:
     length = len(text)
     while index < length:
         char = text[index]
-        if char == "'":  # a quoted brace must not open a comment
+        if char == "'":
+            # A string literal is data, not code: a quoted brace must not open
+            # a comment, and quoted instruction text must not count as a guard.
             index += 1
-            while index < length and text[index] != "'" and text[index] != "\n":
+            while index < length and text[index] != "\n":
+                if text[index] == "'":
+                    if text.startswith("''", index):  # a doubled quote is one character
+                        out[index] = out[index + 1] = " "
+                        index += 2
+                        continue
+                    break
+                out[index] = " "
                 index += 1
             index += 1
             continue
