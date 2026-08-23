@@ -32,6 +32,12 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
+  { SysUtils is kept for one reason: it declares Exception and
+    EAccessViolation and installs the RTL hook that turns a hardware fault
+    into a catchable Pascal exception. Without it an access violation is
+    runtime error 216 and the process dies, so the outcome classification
+    this test is built on disappears. Nothing here uses it for string
+    formatting any more; integers are formatted with Str into ShortStrings. }
   SysUtils;
 
 {$IFDEF MSWINDOWS}
