@@ -47,10 +47,10 @@ ENDIF = "{$ENDIF}"
 EXIT = "Exit;"
 
 # The terminators, and what may not appear between one and the condition it
-# terminates: any construct that can carry control away, including a goto that
-# would jump over the terminator entirely.
+# terminates: a construct that opens a scope of its own, whose terminator
+# would then stand in for this guard's.
 TERMINATORS = (EXIT, "else")
-CONDITION = re.compile(r"\b(if|while|for|repeat|case|with|try|goto)\b", re.IGNORECASE)
+CONDITION = re.compile(r"\b(if|while|for|repeat|case|with|try)\b", re.IGNORECASE)
 
 # The directives a rejection body may carry: the soft-failure choice and the
 # compiler that decides between Error and RunError.
