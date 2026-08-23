@@ -20,10 +20,21 @@ class Rule:
     guarded_use: str
 
 
+# A conditional branch is protective only if it reads the flags its own
+# compare or test just wrote, so nothing may sit between the two but comments,
+# compiler directives and whitespace, all of which mask_comments blanks.
+BRANCHES = ("jb ", "jae ", "ja ", "jnz ")
+
+# A Pascal guard is protective only because its body leaves the routine, so
+# the terminator is required as the last component, the way each assembly rule
+# requires its rejecting branch.
+EXIT = "Exit;"
+
 SMALL_BOUNDS_PASCAL = (
     "if (NativeUInt(LPSmallBlockType) < NativeUInt(@SmallBlockTypes[0]))",
     "(NativeUInt(LPSmallBlockType) > NativeUInt(@SmallBlockTypes[NumSmallBlockTypes - 1]))",
-    "mod SmallBlockTypeRecSize <> 0")
+    "mod SmallBlockTypeRecSize <> 0",
+    EXIT)
 
 
 def small_bounds_asm(accumulator: str, block_type: str, reject: str) -> tuple[str, ...]:
@@ -50,7 +61,7 @@ def small_bounds_asm(accumulator: str, block_type: str, reject: str) -> tuple[st
 RULES = (
     Rule("FastFreeMem", "Pascal", "pool pointer before BlockType read",
          "{Get a pointer to the block pool}", "{Validate that BlockType points within",
-         ("if NativeUInt(LPSmallBlockPool) < $10000 then",),
+         ("if NativeUInt(LPSmallBlockPool) < $10000 then", EXIT),
          "LPSmallBlockType := LPSmallBlockPool^.BlockType;"),
     Rule("FastFreeMem", "Pascal", "small BlockType before clear",
          "LPSmallBlockType := LPSmallBlockPool^.BlockType;", "{Lock the block type}",
@@ -58,8 +69,10 @@ RULES = (
          "FillChar(APointer^, LPSmallBlockType^.BlockSize"),
     Rule("FastFreeMem", "Pascal", "medium size before clear",
          "{Guard: validate medium block size BEFORE", "Result := FreeMediumBlock(APointer);",
+         # This one rejects with an else branch rather than an Exit, so the
+         # else is the component that keeps the clear off the invalid path.
          ("if (LBlockSize < MinimumMediumBlockSize)",
-          "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
+          "(LBlockSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", "else"),
          "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
     Rule("FastFreeMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
@@ -68,7 +81,9 @@ RULES = (
     Rule("FastFreeMem", "32-bit ASM", "small BlockType before clear",
          "mov ebx, TSmallBlockPoolHeader[edx].BlockType", "{Do we need to lock the block type?}",
          small_bounds_asm("eax", "ebx", "@InvalidSmallBlock"),
-         "call System.@FillChar"),
+         # The dereference of the validated BlockType is this load, not the
+         # call that follows it, so the load is what the guards have to precede.
+         "movzx edx, TSmallBlockType(ebx).BlockSize"),
     Rule("FastFreeMem", "32-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by eax",
          ("cmp edx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
@@ -81,7 +96,7 @@ RULES = (
     Rule("FastFreeMem", "64-bit ASM", "small BlockType before clear",
          "mov rbx, TSmallBlockPoolHeader[rdx].BlockType", "{Do we need to lock the block type?}",
          small_bounds_asm("rax", "rbx", "@InvalidSmallBlock"),
-         "call System.@FillChar"),
+         "movzx edx, TSmallBlockType(rbx).BlockSize"),
     Rule("FastFreeMem", "64-bit ASM", "medium size before clear",
          "@FreeMediumBlock:", "{Free the medium block pointed to by rcx",
          ("cmp rdx, MinimumMediumBlockSize", "jb @InvalidMediumBlock",
@@ -89,7 +104,7 @@ RULES = (
          "call System.@FillChar"),
     Rule("FastReallocMem", "Pascal", "pool pointer before BlockType read",
          "{-----------------------------------Small block", "{Is it an upsize or a downsize?}",
-         ("if NativeUInt(LBlockHeader) < $10000 then",),
+         ("if NativeUInt(LBlockHeader) < $10000 then", EXIT),
          "LPSmallBlockType := PSmallBlockPoolHeader(LBlockHeader)^.BlockType;"),
     Rule("FastReallocMem", "Pascal", "small BlockType before size read",
          "LPSmallBlockType := PSmallBlockPoolHeader(LBlockHeader)^.BlockType;",
@@ -99,7 +114,7 @@ RULES = (
     Rule("FastReallocMem", "Pascal", "medium size before arithmetic",
          "{-------------------------------Medium block", "{Is the next block free?}",
          ("if (LOldAvailableSize < MinimumMediumBlockSize)",
-          "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))"),
+          "(LOldAvailableSize > (MediumBlockPoolSize - MediumBlockPoolHeaderSize))", EXIT),
          "LOldBlockSize := LOldAvailableSize"),
     Rule("FastReallocMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
@@ -191,7 +206,17 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         found.append(at)
         cursor = at + len(guard) if at >= 0 else -1
 
-    if scoped and use >= 0 and all(at >= 0 and at < use for at in found):
+    # A rejecting branch must sit directly after the compare or test whose
+    # flags it reads; anything else between the two writes flags of its own.
+    detached = []
+    for index, (guard, at) in enumerate(zip(rule.guards, found)):
+        if index == 0 or not guard.startswith(BRANCHES) or at < 0:
+            continue
+        previous = found[index - 1]
+        if previous >= 0 and active[previous + len(rule.guards[index - 1]):at].strip():
+            detached.append(guard)
+
+    if scoped and use >= 0 and not detached and all(at >= 0 and at < use for at in found):
         return None
 
     source_text = whole_text or text
@@ -204,7 +229,8 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
              f"  scope-start {rule.start!r}: {position(start)}",
              f"  scope-end   {rule.end!r}: {position(end)}"]
     for guard, at in zip(rule.guards, found):
-        lines.append(f"  guard       {guard!r}: {position(at)}")
+        note = " (detached from the check it branches on)" if guard in detached else ""
+        lines.append(f"  guard       {guard!r}: {position(at)}{note}")
     lines.append(f"  guarded-use {rule.guarded_use!r}: {position(use)}")
     return "\n".join(lines)
 
