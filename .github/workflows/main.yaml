@@ -15,6 +15,7 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
 
   pull_request:
@@ -31,6 +32,7 @@ on:
       - Tests/Simple/SimpleTest.dpr
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
+      - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/FpuStackTest.dpr
 
   workflow_dispatch:
@@ -906,6 +908,36 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'CriticalSectionTest.dpr')
           & '.\CriticalSectionTest.exe'
+
+      # =========================================================================
+      # Concurrent foreign-pointer stress - Windows
+      # The first step runs without checking switches; the second adds -Co -Cr.
+      # =========================================================================
+      - name: Run concurrent foreign-pointer stress (64/32-bit, 2 seconds)
+        timeout-minutes: 3
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run checked concurrent foreign-pointer stress (64/32-bit, 1 second)
+        timeout-minutes: 3
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dCheckedStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Co', '-Cr', '-dCheckedStressTest', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'ConcurrentForeignPointerStressTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ConcurrentForeignPointerStressTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # =========================================================================
       # SoftInvalidFreeMem Tests - Windows
