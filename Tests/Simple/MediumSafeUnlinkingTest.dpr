@@ -4,7 +4,16 @@ program MediumSafeUnlinkingTest;
 {$APPTYPE CONSOLE}
 {$ENDIF}
 
-{$DEFINE MediumSafeUnlinkingTest}
+{The test-only entry point this program calls is compiled into FastMM4.pas
+ only when MediumSafeUnlinkingTest is defined, and a define written here does
+ not reach that unit: a conditional symbol is local to the module that
+ declares it. The symbol has to come from the command line, as
+ -dMediumSafeUnlinkingTest for FreePascal or -DMediumSafeUnlinkingTest for
+ Delphi, which is what the CI steps pass. Without it the build fails at the
+ call below rather than silently testing nothing.}
+{$IFNDEF MediumSafeUnlinkingTest}
+{$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
+{$ENDIF}
 
 uses
   {$IFDEF UNIX}

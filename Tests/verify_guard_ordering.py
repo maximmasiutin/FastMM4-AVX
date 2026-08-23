@@ -463,12 +463,17 @@ def main() -> int:
     manual_win64_frame = re.compile(
         r"\b(?:sub|add)\s+rsp\s*,\s*(?:40|\$28)\b", re.IGNORECASE
     )
-    for match in manual_win64_frame.finditer(text):
+    # Scan masked source, so a comment or string literal that merely mentions
+    # the sequence is not read as an instruction. mask_comments blanks those
+    # spans while preserving offsets, so the line number and the quoted text
+    # still come from the original.
+    frame_scan = mask_comments(text)
+    for match in manual_win64_frame.finditer(frame_scan):
         line = text.count("\n", 0, match.start()) + 1
         errors.append(
             f"FastMM4.pas:{line}: manual Win64 call-frame adjustment "
-            f"{match.group(0)!r} is forbidden; use the existing internal-call "
-            "convention or a Pascal wrapper"
+            f"{text[match.start():match.end()]!r} is forbidden; use the "
+            "existing internal-call convention or a Pascal wrapper"
         )
     sections = source_sections(text)
     for rule in RULES:
