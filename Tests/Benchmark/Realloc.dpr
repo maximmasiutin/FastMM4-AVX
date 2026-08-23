@@ -12,8 +12,30 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  Classes,
-  SysUtils;
+  Classes;
+
+{The two SysUtils routines this program used, IntToStr and ExtractFileName, are
+ written out here instead, so nothing in it depends on that unit directly. Str
+ formats into a ShortString the caller owns, which needs no allocator at all.
+ Classes still brings SysUtils in behind it, so this removes the dependency
+ from the source rather than from the binary.}
+procedure IntToShortStr(AValue: Integer; var AText: ShortString);
+begin
+  Str(AValue, AText);
+end;
+
+function FileNameOf(const APath: string): string;
+var
+  i: Integer;
+begin
+  Result := APath;
+  for i := Length(APath) downto 1 do
+    if (APath[i] = '\') or (APath[i] = '/') or (APath[i] = ':') then
+    begin
+      Result := Copy(APath, i + 1, Length(APath) - i);
+      Exit;
+    end;
+end;
 
 procedure RunBenchmark;
 const
@@ -110,9 +132,10 @@ var
   w: Word;
   LThreads: array of TBenchmarkThread;
   LFastMMCpuSmallestMonitorLineSize, LFastMMCpuLargestMonitorLineSize: Word;
+  LThreadCountText: ShortString;
 
 begin
-  WriteLn('Usage: '+ExtractFileName(ParamStr(0))+ ' <numthreads>'{$IFDEF EnableWaitPKG}+' [disable_waitpkg]'{$ENDIF});
+  WriteLn('Usage: '+FileNameOf(ParamStr(0))+ ' <numthreads>'{$IFDEF EnableWaitPKG}+' [disable_waitpkg]'{$ENDIF});
   VNumThreads := CDefaultNumThreads;
   if (ParamCount >= 1) then
   begin
@@ -132,7 +155,8 @@ begin
   end;
   {$ENDIF}
 
-  WriteLn('Running with '+IntToStr(VNumThreads)+' threads...');
+  IntToShortStr(VNumThreads, LThreadCountText);
+  WriteLn('Running with ', LThreadCountText, ' threads...');
   w := GetFastMMCpuFeatures;
   for i := Low(A) to High(A) do
     GetMem(A[i], i+1);
