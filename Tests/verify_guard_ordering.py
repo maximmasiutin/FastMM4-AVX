@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import sys
 
 
@@ -23,7 +24,15 @@ class Rule:
 # A conditional branch is protective only if it reads the flags its own
 # compare or test just wrote, so nothing may sit between the two but comments,
 # compiler directives and whitespace, all of which mask_comments blanks.
-BRANCHES = ("jb ", "jae ", "ja ", "jnz ")
+BRANCHES = ("jb ", "jae ", "ja ", "jz ", "jnz ")
+
+# A compiler directive is code: it decides whether the guard beside it is
+# compiled at all, so it is matched rather than blanked, and a rule that lives
+# inside one names it. It carries no flags, so it may stand between a compare
+# and its branch.
+DIRECTIVE = re.compile(r"\{\$[^}]*\}")
+
+SOFT = "{$IFDEF SoftInvalidFreeMem}"
 
 # A Pascal guard is protective only because its body leaves the routine, so
 # the terminator is required as the last component, the way each assembly rule
@@ -47,6 +56,7 @@ def small_bounds_asm(accumulator: str, block_type: str, reject: str) -> tuple[st
     moving one bound out of sequence cannot be covered by the other matching.
     """
     return (
+        SOFT,
         f"lea {accumulator}, SmallBlockTypes",
         f"cmp {block_type}, {accumulator}",
         f"jb {reject}",
@@ -79,7 +89,7 @@ RULES = (
          "FillChar(APointer^, LBlockSize - BlockHeaderSize"),
     Rule("FastFreeMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
-         ("cmp edx, $10000", "jb @InvalidSmallBlock"),
+         (SOFT, "cmp edx, $10000", "jb @InvalidSmallBlock"),
          "mov ebx, TSmallBlockPoolHeader[edx].BlockType"),
     Rule("FastFreeMem", "32-bit ASM", "small BlockType before clear",
          "mov ebx, TSmallBlockPoolHeader[edx].BlockType", "{Do we need to lock the block type?}",
@@ -98,7 +108,7 @@ RULES = (
          "call System.@FillChar"),
     Rule("FastFreeMem", "64-bit ASM", "pool pointer before BlockType read",
          "jnz @NotSmallBlockInUse", "{Do we need to lock the block type?}",
-         ("cmp rdx, $10000", "jb @InvalidSmallBlock"),
+         (SOFT, "cmp rdx, $10000", "jb @InvalidSmallBlock"),
          "mov rbx, TSmallBlockPoolHeader[rdx].BlockType"),
     Rule("FastFreeMem", "64-bit ASM", "small BlockType before clear",
          "mov rbx, TSmallBlockPoolHeader[rdx].BlockType", "{Do we need to lock the block type?}",
@@ -111,6 +121,28 @@ RULES = (
           "cmp rdx, MediumBlockPoolSize - MediumBlockPoolHeaderSize",
           "ja @InvalidMediumBlock", "ja @CorruptMediumBlockSize"),
          "call System.@FillChar"),
+    Rule("FastFreeMem", "Pascal", "large block validated before FreeLargeBlock",
+         "{Guard: validate large block before calling FreeLargeBlock.",
+         "{Invalid pointer or double-free detected",
+         ("if ((LBlockHeader and DropMediumAndLargeFlagsMask) = 0) or",
+          "(LargeBlockGranularity - 1) <> 0) or",
+          "((NativeUInt(APointer) - LargeBlockHeaderSize) and MinimumPageSizeMask <> 0)",
+          "else"),
+         "Result := FreeLargeBlock(APointer);"),
+    Rule("FastFreeMem", "32-bit ASM", "large block validated before FreeLargeBlock",
+         "@NotASmallOrMediumBlock:", "@DontFreeLargeBlock:",
+         ("and ecx, DropMediumAndLargeFlagsMask", "jz @DontFreeLargeBlock",
+          "test ecx, LargeBlockGranularity - 1", "jnz @DontFreeLargeBlock",
+          "sub ecx, LargeBlockHeaderSize",
+          "test ecx, MinimumPageSizeMask", "jnz @DontFreeLargeBlock"),
+         "call FreeLargeBlock"),
+    Rule("FastFreeMem", "64-bit ASM", "large block validated before FreeLargeBlock",
+         "@NotASmallOrMediumBlock:", "@DoubleFreeDetected:",
+         ("and rax, DropMediumAndLargeFlagsMask", "jz @DoubleFreeDetected",
+          "test rax, LargeBlockGranularity - 1", "jnz @DoubleFreeDetected",
+          "sub rax, LargeBlockHeaderSize",
+          "test rax, MinimumPageSizeMask", "jnz @DoubleFreeDetected"),
+         "call FreeLargeBlock"),
     Rule("FastReallocMem", "Pascal", "pool pointer before BlockType read",
          "{-----------------------------------Small block", "{Is it an upsize or a downsize?}",
          ("if NativeUInt(LBlockHeader) < $10000 then", EXIT),
@@ -127,7 +159,7 @@ RULES = (
          "LOldBlockSize := LOldAvailableSize"),
     Rule("FastReallocMem", "32-bit ASM", "pool pointer before BlockType read",
          "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
-         ("cmp ecx, $10000", "jb @InvalidSmallReallocPtr"),
+         (SOFT, "cmp ecx, $10000", "jb @InvalidSmallReallocPtr"),
          "mov ebx, TSmallBlockPoolHeader[ecx].BlockType"),
     Rule("FastReallocMem", "32-bit ASM", "small BlockType before size read",
          "mov ebx, TSmallBlockPoolHeader[ecx].BlockType", "{Is it an upsize or a downsize?}",
@@ -141,7 +173,7 @@ RULES = (
          "lea edi, [eax + ecx]"),
     Rule("FastReallocMem", "64-bit ASM", "pool pointer before BlockType read",
          "jnz @NotASmallBlock", "{Is it an upsize or a downsize?}",
-         ("cmp rcx, $10000", "jb @InvalidSmallReallocPtr"),
+         (SOFT, "cmp rcx, $10000", "jb @InvalidSmallReallocPtr"),
          "mov rbx, TSmallBlockPoolHeader[rcx].BlockType"),
     Rule("FastReallocMem", "64-bit ASM", "small BlockType before size read",
          "mov rbx, TSmallBlockPoolHeader[rcx].BlockType", "{Is it an upsize or a downsize?}",
@@ -189,6 +221,10 @@ def mask_comments(text: str) -> str:
                 index += 1
             index += 1
             continue
+        if text.startswith("{$", index):  # a directive is kept, being code
+            stop = text.find("}", index)
+            index = length if stop < 0 else stop + 1
+            continue
         closing = None
         if char == "{":
             closing = "}"
@@ -231,7 +267,8 @@ def check_rule(text: str, rule: Rule, base: int = 0, whole_text: str | None = No
         if index == 0 or not guard.startswith(BRANCHES) or at < 0:
             continue
         previous = found[index - 1]
-        if previous >= 0 and active[previous + len(rule.guards[index - 1]):at].strip():
+        gap = DIRECTIVE.sub("", active[previous + len(rule.guards[index - 1]):at])
+        if previous >= 0 and gap.strip():
             detached.append(guard)
 
     if scoped and use >= 0 and not detached and all(at >= 0 and at < use for at in found):
