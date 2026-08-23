@@ -24,18 +24,21 @@ begin
   Str(AValue, AText);
 end;
 
-{A colon ends the name only where it can be a drive letter, which is the
- second character of a Windows path and nowhere else. Treating every colon as
- a delimiter would cut a legal Unix name: /tmp/Realloc:debug would report
- "debug" as the program name.}
+{Only the forward slash separates components everywhere. A backslash and a
+ colon are Windows syntax, and both are legal characters in a Unix name, so
+ accepting them on every platform would cut /tmp/Realloc:debug down to "debug"
+ and /tmp/Realloc\debug down to "debug" as well. The colon is narrower still:
+ it separates only as a drive letter, at the second character and nowhere
+ else.}
 function IsPathDelimiter(const APath: string; AIndex: Integer): Boolean;
 var
   Delimiter: Boolean;
 begin
-  Delimiter := (APath[AIndex] = '\') or (APath[AIndex] = '/');
+  Delimiter := APath[AIndex] = '/';
   {$IFDEF MSWINDOWS}
   if not Delimiter then
-    Delimiter := (APath[AIndex] = ':') and (AIndex = 2);
+    Delimiter := (APath[AIndex] = '\')
+      or ((APath[AIndex] = ':') and (AIndex = 2));
   {$ENDIF}
   IsPathDelimiter := Delimiter;
 end;
