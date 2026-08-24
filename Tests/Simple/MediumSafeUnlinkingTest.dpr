@@ -24,10 +24,6 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {SysUtils is load-bearing here rather than a convenience: it declares
-   Exception and installs the RTL hook that turns a hardware fault into a
-   catchable Pascal exception, which is what lets a rejected vector be reported
-   instead of ending the process.}
   SysUtils;
 
 type
