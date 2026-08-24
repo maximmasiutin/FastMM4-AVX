@@ -8,17 +8,42 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
+  {$IFNDEF FPC}
+  Windows,
+  {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {The unit name is unscoped so it reads the same as every other program under
-   Tests, though this one is buildable only by FreePascal in any case: QWord is
-   a FreePascal type and GetTickCount64 is absent from the Windows unit that
-   ships with the old Delphi versions the allocator still supports.}
+  {SysUtils is here for GetTickCount64 under FreePascal. The Delphi branch
+   takes the reading from Windows instead, which is why that unit is used
+   above.}
   SysUtils;
 
 const
   BlockSize = 8192;
   Iterations = 20000000;
+
+{Elapsed milliseconds. FreePascal has GetTickCount64 in SysUtils on every
+ target this benchmark builds for; the Delphi versions the allocator still
+ supports do not declare it, so the same number is computed from the system
+ clock, which every one of them does have.}
+function TickCountMs: Int64;
+{$IFDEF FPC}
+begin
+  Result := Int64(GetTickCount64);
+end;
+{$ELSE}
+var
+  FileTimeNow: TFileTime;
+begin
+  {GetSystemTimeAsFileTime counts 100-nanosecond intervals, so ten thousand of
+   them are one millisecond. TFileTime is two 32-bit halves and the cast reads
+   them as the one 64-bit quantity they represent. The reading is wall clock
+   rather than monotonic, which is enough here: the benchmark reports a single
+   span, and only a clock adjustment during the run would disturb it.}
+  GetSystemTimeAsFileTime(FileTimeNow);
+  Result := Int64(FileTimeNow) div 10000;
+end;
+{$ENDIF}
 
 var
   FirstFree,
@@ -27,7 +52,7 @@ var
   SecondGuard,
   Reused: Pointer;
   StartTicks,
-  Elapsed: QWord;
+  Elapsed: Int64;
   I: Integer;
 
 begin
@@ -42,13 +67,13 @@ begin
   GetMem(SecondGuard, BlockSize);
   FreeMem(FirstFree);
   FreeMem(SecondFree);
-  StartTicks := GetTickCount64;
+  StartTicks := TickCountMs;
   for I := 1 to Iterations do
   begin
     GetMem(Reused, BlockSize);
     FreeMem(Reused);
   end;
-  Elapsed := GetTickCount64 - StartTicks;
+  Elapsed := TickCountMs - StartTicks;
   GetMem(SecondFree, BlockSize);
   GetMem(FirstFree, BlockSize);
   FreeMem(FirstFree);
