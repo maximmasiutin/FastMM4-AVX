@@ -8548,9 +8548,31 @@ begin
 end;
 {$ENDIF}
 
-{Validate ownership before following either attacker-influenced link, then
- validate the reciprocal links before RemoveMediumFreeBlock writes through
- them. This shared predicate keeps Pascal and both assembly widths identical.}
+{Reject a corrupt medium free-list neighbourhood before RemoveMediumFreeBlock
+ writes through either link. The shared predicate keeps Pascal and both
+ assembly widths identical.
+
+ The order of the tests is deliberate. All three reviewers of pull request 176
+ found that the pool walk below makes the cost grow with the number of medium
+ block pools, and asked for the reciprocal test to run first so the walk could
+ be skipped for corrupt input. That order was tried and reverted: the
+ reciprocal test loads through both links, so it cannot run until ownership is
+ established. With it first, the test vectors that point a link at an aligned
+ but unmapped address fault inside the medium-block lock and the process
+ hangs rather than reporting a rejection.
+
+ So ownership is settled first, by two tests that dereference nothing and then
+ by the walk, and the reciprocal test runs last on links already known to
+ address memory this allocator owns. The two cheap tests are whether a link
+ points into MediumBlockBins at a bin-sized offset, which is what a list of
+ one entry looks like, and whether a link that is not a bin address is at
+ least aligned.
+
+ Deriving a pool base from an address would be constant time and would remove
+ the walk, but it is not available here: MediumBlockPoolSize is not a power of
+ two and the pools come from VirtualAlloc with no alignment guarantee, so no
+ mask recovers the base. Removing the cost needs ownership bookkeeping the
+ allocator does not yet keep.}
 function MediumFreeBlockLinksValid(APMediumFreeBlock: PMediumFreeBlock): Boolean;
 var
   LPreviousFreeBlock,
