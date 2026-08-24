@@ -12,6 +12,9 @@ program MediumSafeUnlinkingTest;
  Delphi, which is what the CI steps pass. Without it the build fails at the
  call below rather than silently testing nothing.}
 {$IFNDEF MediumSafeUnlinkingTest}
+{Delphi 4 and 5 have no $MESSAGE directive and ignore this line, so on those
+ compilers a build without the symbol still fails, at the unresolved call
+ rather than here.}
 {$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
 {$ENDIF}
 
@@ -21,11 +24,34 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {$IFDEF FPC}
+  {SysUtils is not here for string formatting. It installs the runtime hook
+   that turns a hardware fault into a catchable Pascal exception, and the
+   vectors below are wild pointers, so without it a rejected vector kills the
+   process instead of failing a named check. A nil dereference inside a bare
+   try and except, built twice from one source on Delphi 7:
+
+     without SysUtils in the uses clause:
+       start
+       Runtime error 216 at 00403D3E
+       exit code 216
+
+     with SysUtils in the uses clause:
+       start
+       caught by except
+       reached the end
+       exit code 0
+
+   try and except do work without it; what stops working is catching a fault
+   the hardware raised rather than one Pascal code raised.}
   SysUtils;
-  {$ELSE}
-  System.SysUtils;
-  {$ENDIF}
+
+type
+  {A byte pointer this program declares for itself. PByte cannot be used:
+   Windows declares it as PAnsiChar, following the Win32 headers, and that
+   declaration shadows the one in System for any unit that uses Windows, so on
+   Delphi 7 assigning a Byte through PByte fails with "Incompatible types:
+   'Char' and 'Byte'".}
+  PTestByte = ^Byte;
 
 var
   Failures: Integer;
@@ -84,7 +110,7 @@ begin
       for I := 0 to Count - 1 do
       begin
         GetMem(Blocks[I], 4096 + (I mod 16) * 256);
-        PByte(Blocks[I])^ := Byte(I);
+        PTestByte(Blocks[I])^ := Byte(I);
       end;
       for I := 0 to Count - 1 do
       begin
