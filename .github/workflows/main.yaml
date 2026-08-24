@@ -16,6 +16,7 @@ on:
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
+      - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
@@ -35,6 +36,7 @@ on:
       - Tests/Simple/CriticalSectionTest.dpr
       - Tests/Simple/SoftInvalidFreeMemTest.dpr
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
+      - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
@@ -1098,6 +1100,38 @@ jobs:
           cd $Env:GITHUB_WORKSPACE/Tests/Advanced
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-Co', '-Cr', '-dSoftInvalidFreeMem', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', '-O4', 'AdvancedTest.dpr')
           & '.\AdvancedTest.exe'
+
+      - name: Test medium safe-unlinking 64-bit ASM
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\MediumSafeUnlinkingTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', '-dMediumSafeUnlinkingTest', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'MediumSafeUnlinkingTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\MediumSafeUnlinkingTest.exe'
+
+      - name: Test medium safe-unlinking 64-bit Pascal
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\MediumSafeUnlinkingTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-O4', '-dMediumSafeUnlinkingTest', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'MediumSafeUnlinkingTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\MediumSafeUnlinkingTest.exe'
+
+      - name: Test medium safe-unlinking 32-bit ASM
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\MediumSafeUnlinkingTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', '-dMediumSafeUnlinkingTest', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'MediumSafeUnlinkingTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\MediumSafeUnlinkingTest.exe'
+
+      - name: Test medium safe-unlinking 32-bit Pascal
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\MediumSafeUnlinkingTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-O4', '-dMediumSafeUnlinkingTest', '-dDontUseASMVersion', '-dIgnoreMemoryAllocatedBefore', '-dDisableMemoryLeakReporting', 'MediumSafeUnlinkingTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\MediumSafeUnlinkingTest.exe'
 
       # =========================================================================
       # FPU stack regression - Windows
