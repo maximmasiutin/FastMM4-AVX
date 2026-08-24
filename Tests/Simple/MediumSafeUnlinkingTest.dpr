@@ -24,13 +24,7 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {SysUtils is named unscoped, as every other test in this directory names it.
-   The scoped spelling System.SysUtils exists only from XE2, so the branch that
-   used it refused to compile on Delphi 4, 7 and 2007 with "File not found:
-   System.SysUtils.dcu", while the unscoped name is accepted by every one of
-   those and by XE2 and FreePascal alike.
-
-   SysUtils is load-bearing here rather than a convenience: it declares
+  {SysUtils is load-bearing here rather than a convenience: it declares
    Exception and installs the RTL hook that turns a hardware fault into a
    catchable Pascal exception, which is what lets a rejected vector be reported
    instead of ending the process.}
