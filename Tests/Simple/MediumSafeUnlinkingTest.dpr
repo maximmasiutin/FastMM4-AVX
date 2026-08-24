@@ -12,6 +12,9 @@ program MediumSafeUnlinkingTest;
  Delphi, which is what the CI steps pass. Without it the build fails at the
  call below rather than silently testing nothing.}
 {$IFNDEF MediumSafeUnlinkingTest}
+{Delphi 4 and 5 have no $MESSAGE directive and ignore this line, so on those
+ compilers a build without the symbol still fails, at the unresolved call
+ rather than here.}
 {$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
 {$ENDIF}
 
@@ -21,11 +24,25 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {$IFDEF FPC}
+  {SysUtils is named unscoped, as every other test in this directory names it.
+   The scoped spelling System.SysUtils exists only from XE2, so the branch that
+   used it refused to compile on Delphi 4, 7 and 2007 with "File not found:
+   System.SysUtils.dcu", while the unscoped name is accepted by every one of
+   those and by XE2 and FreePascal alike.
+
+   SysUtils is load-bearing here rather than a convenience: it declares
+   Exception and installs the RTL hook that turns a hardware fault into a
+   catchable Pascal exception, which is what lets a rejected vector be reported
+   instead of ending the process.}
   SysUtils;
-  {$ELSE}
-  System.SysUtils;
-  {$ENDIF}
+
+type
+  {A byte pointer this program declares for itself. PByte cannot be used:
+   Windows declares it as PAnsiChar, following the Win32 headers, and that
+   declaration shadows the one in System for any unit that uses Windows, so on
+   Delphi 7 assigning a Byte through PByte fails with "Incompatible types:
+   'Char' and 'Byte'".}
+  PTestByte = ^Byte;
 
 var
   Failures: Integer;
@@ -84,7 +101,7 @@ begin
       for I := 0 to Count - 1 do
       begin
         GetMem(Blocks[I], 4096 + (I mod 16) * 256);
-        PByte(Blocks[I])^ := Byte(I);
+        PTestByte(Blocks[I])^ := Byte(I);
       end;
       for I := 0 to Count - 1 do
       begin
