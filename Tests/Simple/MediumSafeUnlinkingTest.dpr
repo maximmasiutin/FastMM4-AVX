@@ -12,9 +12,11 @@ program MediumSafeUnlinkingTest;
  Delphi, which is what the CI steps pass. Without it the build fails at the
  call below rather than silently testing nothing.}
 {$IFNDEF MediumSafeUnlinkingTest}
-{Delphi 4 and 5 have no $MESSAGE directive and ignore this line, so on those
- compilers a build without the symbol still fails, at the unresolved call
- rather than here.}
+{Delphi 4 has no $MESSAGE directive and rejects this line outright, with
+ "Invalid compiler directive: 'MESSAGE'" rather than the text below, so a
+ build without the symbol still stops here on that compiler, just with a
+ message about the directive instead of about the flag. Delphi 7 and later
+ print the text as written.}
 {$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
 {$ENDIF}
 
@@ -25,9 +27,11 @@ uses
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
   {SysUtils is not here for string formatting. It installs the runtime hook
-   that turns a hardware fault into a catchable Pascal exception, and the
-   vectors below are wild pointers, so without it a rejected vector kills the
-   process instead of failing a named check. A nil dereference inside a bare
+   that turns a hardware fault into a catchable Pascal exception. A vector the
+   guard rejects never faults, so the handlers below are for the case the test
+   exists to detect: a guard that lets a wild pointer through. Without SysUtils
+   that case ends the process rather than failing a named check, which is the
+   difference between a red test and no test. A nil dereference inside a bare
    try and except, built twice from one source on Delphi 7:
 
      without SysUtils in the uses clause:
