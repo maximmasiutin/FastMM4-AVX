@@ -10,11 +10,11 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
-  {$IFDEF FPC}
+  {The unit name is unscoped so it reads the same as every other program under
+   Tests, though this one is buildable only by FreePascal in any case: QWord is
+   a FreePascal type and GetTickCount64 is absent from the Windows unit that
+   ships with the old Delphi versions the allocator still supports.}
   SysUtils;
-  {$ELSE}
-  System.SysUtils;
-  {$ENDIF}
 
 const
   BlockSize = 8192;

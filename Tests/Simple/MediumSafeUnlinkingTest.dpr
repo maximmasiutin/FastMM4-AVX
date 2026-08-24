@@ -24,6 +24,25 @@ uses
   {$ENDIF}
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
+  {SysUtils is not here for string formatting. It installs the runtime hook
+   that turns a hardware fault into a catchable Pascal exception, and the
+   vectors below are wild pointers, so without it a rejected vector kills the
+   process instead of failing a named check. A nil dereference inside a bare
+   try and except, built twice from one source on Delphi 7:
+
+     without SysUtils in the uses clause:
+       start
+       Runtime error 216 at 00403D3E
+       exit code 216
+
+     with SysUtils in the uses clause:
+       start
+       caught by except
+       reached the end
+       exit code 0
+
+   try and except do work without it; what stops working is catching a fault
+   the hardware raised rather than one Pascal code raised.}
   SysUtils;
 
 type

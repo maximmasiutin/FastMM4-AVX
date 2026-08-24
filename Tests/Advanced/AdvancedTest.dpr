@@ -40,13 +40,8 @@ uses
    then undeclared, and even were those names supplied from elsewhere, an
    access violation would become runtime error 216 and kill the process rather
    than fail a named check.}
-  {$IFDEF FPC}
   SysUtils,
   Classes;
-  {$ELSE}
-  System.SysUtils,
-  System.Classes;
-  {$ENDIF}
 
 const
   TEST_PASSED = 0;
