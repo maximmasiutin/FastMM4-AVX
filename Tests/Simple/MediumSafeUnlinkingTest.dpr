@@ -4,18 +4,23 @@ program MediumSafeUnlinkingTest;
 {$APPTYPE CONSOLE}
 {$ENDIF}
 
+{For Delphi4or5, which selects the two compilers that have no $MESSAGE
+ directive.}
+{$I ..\..\FastMM4CompilerDefines.inc}
+
 {The test-only entry point this program calls is compiled into FastMM4.pas
  only when MediumSafeUnlinkingTest is defined, and a define written here does
  not reach that unit: a conditional symbol is local to the module that
  declares it. The symbol has to come from the command line, as
  -dMediumSafeUnlinkingTest for FreePascal or -DMediumSafeUnlinkingTest for
- Delphi, which is what the CI steps pass. Without it the build fails at the
- call below rather than silently testing nothing.}
+ Delphi, which is what the CI steps pass.}
 {$IFNDEF MediumSafeUnlinkingTest}
-{Delphi 4 and 5 have no $MESSAGE directive and ignore this line, so on those
- compilers a build without the symbol still fails, at the unresolved call
- rather than here.}
+{Delphi 4 and 5 have no $MESSAGE directive and reject the line itself, with
+ "Invalid compiler directive: 'MESSAGE'", so they are excluded here and stop
+ at the unresolved call instead. Every other compiler prints the text.}
+{$IFNDEF Delphi4or5}
 {$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
+{$ENDIF}
 {$ENDIF}
 
 uses
@@ -25,9 +30,11 @@ uses
   FastMM4 in '..\..\FastMM4.pas',
   FastMM4Messages in '..\..\FastMM4Messages.pas',
   {SysUtils is not here for string formatting. It installs the runtime hook
-   that turns a hardware fault into a catchable Pascal exception, and the
-   vectors below are wild pointers, so without it a rejected vector kills the
-   process instead of failing a named check. A nil dereference inside a bare
+   that turns a hardware fault into a catchable Pascal exception. A vector the
+   guard rejects never faults, so the handlers below are for the case the test
+   exists to detect: a guard that lets a wild pointer through. Without SysUtils
+   that case ends the process rather than failing a named check, which is the
+   difference between a red test and no test. A nil dereference inside a bare
    try and except, built twice from one source on Delphi 7:
 
      without SysUtils in the uses clause:
