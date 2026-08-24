@@ -4,20 +4,23 @@ program MediumSafeUnlinkingTest;
 {$APPTYPE CONSOLE}
 {$ENDIF}
 
+{For Delphi4or5, which selects the two compilers that have no $MESSAGE
+ directive.}
+{$I ..\..\FastMM4CompilerDefines.inc}
+
 {The test-only entry point this program calls is compiled into FastMM4.pas
  only when MediumSafeUnlinkingTest is defined, and a define written here does
  not reach that unit: a conditional symbol is local to the module that
  declares it. The symbol has to come from the command line, as
  -dMediumSafeUnlinkingTest for FreePascal or -DMediumSafeUnlinkingTest for
- Delphi, which is what the CI steps pass. Without it the build fails at the
- call below rather than silently testing nothing.}
+ Delphi, which is what the CI steps pass.}
 {$IFNDEF MediumSafeUnlinkingTest}
-{Delphi 4 has no $MESSAGE directive and rejects this line outright, with
- "Invalid compiler directive: 'MESSAGE'" rather than the text below, so a
- build without the symbol still stops here on that compiler, just with a
- message about the directive instead of about the flag. Delphi 7 and later
- print the text as written.}
+{Delphi 4 and 5 have no $MESSAGE directive and reject the line itself, with
+ "Invalid compiler directive: 'MESSAGE'", so they are excluded here and stop
+ at the unresolved call instead. Every other compiler prints the text.}
+{$IFNDEF Delphi4or5}
 {$MESSAGE ERROR 'Build this program with -dMediumSafeUnlinkingTest'}
+{$ENDIF}
 {$ENDIF}
 
 uses
