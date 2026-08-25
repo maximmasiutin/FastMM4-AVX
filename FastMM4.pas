@@ -8910,7 +8910,11 @@ asm
   .pushnv rbx
 {$ENDIF}
 {$IFNDEF AllowAsmParams}
+  {The count of pushes is even so that RSP keeps the 16-byte alignment the ABI
+   requires at the call below; the compiler-generated prologue of an assembler
+   routine leaves RSP aligned. Neither pop disturbs the flags the test sets.}
   push rcx
+  push rax // alignment pad only
 {$ENDIF}
   {On entry: rcx = APMediumFreeBlock}
 {$IFDEF AllowAsmParams}
@@ -8921,6 +8925,7 @@ asm
 {$IFDEF AllowAsmParams}
   mov rcx, rbx
 {$ELSE}
+  pop rax
   pop rcx
 {$ENDIF}
   jz @CorruptFreeList
