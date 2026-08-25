@@ -395,6 +395,9 @@ jobs:
       nasm: 'C:\Program Files\NASM\nasm.exe'
       fpc_release: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
       fpc_release_version: '3.2.2'
+      fpc_installer_asset: 'https://github.com/maximmasiutin/TinyWeb/releases/download/build-tools-fpc-3.2.2/fpc-3.2.2.win32.and.win64.exe'
+      fpc_installer_sourceforge: 'https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download'
+      fpc_installer_sha256: '8C255390544B051388B577EB61C6191A04883264AFE0E3369B3600A56DAF7BDE'
       fpc_snapshot_branch: trunk
       fpc_snapshot_root: 'C:\FPC-snapshot'
 
@@ -407,16 +410,42 @@ jobs:
         run: |
           reg add "HKCU\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f
 
+      # The installed release compiler is cached so warm runs skip the
+      # download and the silent install; the snapshot leg also reads the
+      # release bin directory it restores. A cold run downloads from the
+      # TinyWeb build-tools release (GitHub's CDN), falls back to SourceForge,
+      # and refuses to execute an installer whose SHA-256 is not the pinned one.
+      - name: Cache FreePascal
+        id: fpc-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\FPC\3.2.2
+          key: fpc-3.2.2-win32-and-win64-${{ env.fpc_installer_sha256 }}-v1
+
       # -f makes curl exit non-zero on an HTTP error instead of writing the
       # error page into fpc_installer.exe, where it would surface later as a
-      # confusing failure of the install step. The retries cover a mirror that
-      # is briefly unavailable, which is the ordinary SourceForge failure.
+      # confusing failure of the install step. The primary origin is the
+      # TinyWeb build-tools release asset; the retries and the SourceForge
+      # fallback cover an origin that is briefly unavailable, and the pinned
+      # SHA-256 decides whether whatever arrived may be executed.
       - name: Download FreePascal installer
+        if: steps.fpc-cache.outputs.cache-hit != 'true'
         run: |
-          & 'curl.exe' @('-fL', '--retry', '3', '--retry-all-errors', '--retry-delay', '5', '-o', 'fpc_installer.exe', 'https://sourceforge.net/projects/freepascal/files/Win32/3.2.2/fpc-3.2.2.win32.and.win64.exe/download')
+          $curlArgs = @('-fL', '--retry', '3', '--retry-all-errors', '--retry-delay', '5', '--connect-timeout', '20', '--max-time', '600', '-o', 'fpc_installer.exe')
+          & 'curl.exe' ($curlArgs + "$Env:fpc_installer_asset")
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host 'The GitHub release asset download failed; falling back to SourceForge.'
+            & 'curl.exe' ($curlArgs + "$Env:fpc_installer_sourceforge")
+          }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $hash = (Get-FileHash -Path 'fpc_installer.exe' -Algorithm SHA256).Hash
+          if ($hash -ne $Env:fpc_installer_sha256) {
+            Write-Error "FPC installer SHA-256 mismatch: got $hash, expected $Env:fpc_installer_sha256"
+            exit 1
+          }
 
       - name: Install FreePascal silently
+        if: steps.fpc-cache.outputs.cache-hit != 'true'
         run: |
           & '.\fpc_installer.exe' @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/LOG')
           Wait-Process -Name fpc_installer -Timeout 600
