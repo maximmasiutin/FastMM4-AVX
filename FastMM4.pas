@@ -4139,7 +4139,9 @@ asm
    {$IFDEF FPC}
    jmp  @Finish64BIT
    {$ELSE}
-   {No call was made on this path, so no volatile register needs restoring.}
+   {No call was made on this path, so only r8, which carries the lock byte
+    address here, has to be put back before returning.}
+   mov  r8, rdi
    jmp  @FinishUncontended64BIT
    {$ENDIF}
 @DidntLockAtFirstAttempt:
