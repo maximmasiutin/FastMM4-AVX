@@ -4086,16 +4086,38 @@ asm
 {$IFDEF 64BIT}
 
 // 64-bit code for AcquireSpinLockMediumBlocks
-  {$IFDEF AllowAsmNoframe}
-  .noframe
+  {$IFDEF AllowAsmParams}
+  .params 1
+  .pushnv rbx
+  .pushnv rsi
+  .pushnv rdi
+  .pushnv r12
+  .pushnv r13
+  .pushnv r14
+  .pushnv r15
   {$ENDIF}
-   push r8
+  {$IFNDEF AllowAsmParams}
+   push rbx
+   push rsi
+   push rdi
+   push r12
+   push r13
+   push r14
+   push r15
+  {$ENDIF}
+   mov  rbx, rcx
+   mov  rsi, rdx
+   mov  rdi, r8
+   mov  r12, r9
+   mov  r13, r10
+   mov  r14, r11
    {$IFDEF FPC}
    call GetMediumBlocksLockedPointer
    mov  r8, rax
    {$ELSE}
    lea  r8, MediumBlocksLocked
    {$ENDIF}
+   mov  r15, r8
 
    mov  eax, cLockByteLocked
    cmp  [r8], al
@@ -4107,9 +4129,8 @@ asm
 @DidntLockAtFirstAttempt:
 
 {$IFDEF EnableWaitPKG}
-   push r8
    call GetFastMMCpuFeaturesB
-   pop  r8
+   mov  r8, r15
    test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
 
@@ -4118,17 +4139,10 @@ asm
    // the monitor and waiting on it, follows the worked umonitor/umwait spin-wait
    // loop at https://stackoverflow.com/a/78095037/6910868
    mov  eax, cLockByteLocked
-   push rcx
-   push rdx
-   push r9
-   push r10
-   push r11
-
    jmp  @FirstLockMonitor
 @DidntLockUmonitor:
-   push r8
    call SwitchToThreadIfSupported
-   pop  r8
+   mov  r8, r15
    mov  eax, cLockByteLocked
    cmp  [r8], al
    jne  @TryXchgAfterUmonitor
@@ -4153,18 +4167,11 @@ asm
    cmp  al, cLockByteLocked
    je   @DidntLockUmonitor
    // Locked after umonitor
-   pop  r11
-   pop  r10
-   pop  r9
-   pop  rdx
-   pop  rcx
-
    jmp  @Finish64BIT
 @NoWaitPKG:
 
    mov  eax, cLockByteLocked
 {$ENDIF EnableWaitPKG}
-   push r9
    mov  r9d, cPauseSpinWaitLoopCount
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 16{$ENDIF}
 @DidntLockPause64:
@@ -4178,25 +4185,29 @@ asm
    lock xchg [r8], al
    cmp  al, cLockByteLocked
    je   @DidntLockPause64
-   pop  r9
    jmp	@Finish64BIT
 @SwitchToThreadPause64:
-   push rcx
-   push rdx
-   push r8
-   push r10
-   push r11
    call SwitchToThreadIfSupported
-   pop  r11
-   pop  r10
-   pop  r8
-   pop  rdx
-   pop  rcx
+   mov  r8, r15
    mov  eax, cLockByteLocked
    mov  r9d, cPauseSpinWaitLoopCount
    jmp  @NormalLoadLoopPause64
 @Finish64BIT:
-   pop  r8
+   mov  rcx, rbx
+   mov  rdx, rsi
+   mov  r8, rdi
+   mov  r9, r12
+   mov  r10, r13
+   mov  r11, r14
+  {$IFNDEF AllowAsmParams}
+   pop  r15
+   pop  r14
+   pop  r13
+   pop  r12
+   pop  rdi
+   pop  rsi
+   pop  rbx
+  {$ENDIF}
 
 {$ELSE 64BIT}
 
@@ -4233,42 +4244,41 @@ end;
 procedure AcquireSpinLockByte(var Target: TSynchronizationVariable); assembler;
 asm
 {$IFDEF 64BIT}
-  {$IFDEF AllowAsmNoframe}
-  .noframe
+  {$IFDEF AllowAsmParams}
+  .params 1
+  .pushnv rbx
+  {$ENDIF}
+  {$IFNDEF AllowAsmParams}
+   push rbx
   {$ENDIF}
   {$IFDEF unix}
    mov  rcx, rdi
   {$ENDIF}
   {$IFDEF AsmCodeAlign}{$IFDEF AsmAlNoDot}align{$ELSE}.align{$ENDIF} 4{$ENDIF}
+   mov   rbx, rcx
    mov   eax, cLockByteLocked
-   cmp  [rcx], al
+   cmp  [rbx], al
    je   @DidntLockAtFirstAttempt
-   lock xchg [rcx], al
+   lock xchg [rbx], al
    cmp  al, cLockByteLocked
    je   @DidntLockAtFirstAttempt
    jmp  @Finish
 @DidntLockAtFirstAttempt:
 {$IFDEF EnableWaitPKG}
-   push rcx
    call GetFastMMCpuFeaturesB
-   pop  rcx
    test al, FastMMCpuFeatureB_WaitPKG
    jz   @NoWaitPKG
    mov  eax, cLockByteLocked
    jmp  @FirstLockMonitor
 @DidntLockUmonitor:
-   push r8
-   push rcx
    call SwitchToThreadIfSupported
-   pop  rcx
-   pop  r8
    mov  eax, cLockByteLocked
-   cmp  [rcx], al
+   cmp  [rbx], al
    jne  @TryXchgAfterUmonitor
 
 @FirstLockMonitor:
-   db   $F3, $0F, $AE, $F1 // umonitor rcx
-   cmp  [rcx], al
+   db   $F3, $0F, $AE, $F3 // umonitor rbx
+   cmp  [rbx], al
    jne  @TryXchgAfterUmonitor
 
    mov  eax, CUMWaitTime
@@ -4281,7 +4291,7 @@ asm
    db   $F2, $41, $0F, $AE, $F1 // umwait, r9d
 @TryXchgAfterUmonitor:
    mov  eax, cLockByteLocked
-   lock xchg [rcx], al
+   lock xchg [rbx], al
    cmp  al, cLockByteLocked
    je   @DidntLockUmonitor
    jmp  @Finish
@@ -4297,16 +4307,14 @@ asm
    jz   @SwitchToThread // for static branch prediction, jump forward means "unlikely"
    db   $F3, $90 // pause
 // use the "test, test-and-set" technique, details are in the comment section at the beginning of the file
-   cmp  [rcx], al
+   cmp  [rbx], al
    je   @NormalLoadLoop // for static branch prediction, jump backwards means "likely"
-   lock xchg [rcx], al
+   lock xchg [rbx], al
    cmp  al, cLockByteLocked
    je   @DidntLock
    jmp	@Finish
 @SwitchToThread:
-   push rcx
    call SwitchToThreadIfSupported
-   pop  rcx
    mov  r9d, cPauseSpinWaitLoopCount
    mov  eax, cLockByteLocked
    jmp  @NormalLoadLoop
@@ -4337,6 +4345,11 @@ asm
    jmp  @Init
 {$ENDIF}
 @Finish:
+{$IFDEF 64BIT}
+  {$IFNDEF AllowAsmParams}
+   pop  rbx
+  {$ENDIF}
+{$ENDIF}
 end;
 {$ENDIF AuxAsmRoutines}
 {$ENDIF DisablePauseAndSwitchToThread}
@@ -6561,7 +6574,7 @@ procedure MoveWithErmsNoAVX(const ASource; var ADest; ACount: NativeInt); forwar
  SizeOf(Pointer). Important note: Always moves at least 16 - SizeOf(Pointer)
  bytes (the minimum small block size with 16 byte alignment), irrespective of
  ACount.}
-procedure MoveX16LP(const ASource; var ADest; ACount: NativeInt); assembler; {$IFDEF fpc64BIT}  nostackframe; {$ENDIF}
+procedure MoveX16LP(const ASource; var ADest; ACount: NativeInt); assembler;
 asm
 {$IFDEF 32BIT}
   test FastMMCpuFeaturesA, FastMMCpuFeatureERMS
@@ -6653,16 +6666,31 @@ asm
 {$ENDIF ForceMMX}
 {$ELSE 32BIT}
   {$IFNDEF unix}
-  {$IFDEF AllowAsmNoframe}
-  .noframe
+  {$IFDEF AllowAsmParams}
+  .params 3
+  .pushnv rbx
+  .pushnv rsi
+  .pushnv rdi
   {$ENDIF}
+  {$IFDEF AllowAsmParams}
+  mov rbx, rcx
+  mov rsi, rdx
+  mov rdi, r8
+  {$ELSE}
   push rcx
   push rdx
   push r8
+  {$ENDIF}
   call GetFastMMCpuFeaturesA
+  {$IFDEF AllowAsmParams}
+  mov rcx, rbx
+  mov rdx, rsi
+  mov r8, rdi
+  {$ELSE}
   pop  r8
   pop  rdx
   pop  rcx
+  {$ENDIF}
   test al, FastMMCpuFeatureERMS
   jz @NoERMS
   call MoveWithErmsNoAVX
@@ -6790,8 +6818,9 @@ asm
   mov rcx, [rcx + r8]
   mov [rdx + r8], rcx
   {$ELSE unix}
-  {MoveX32LP is not implemented for Unix yet, call the 16-byte version}
-  call MoveX16LP
+  {MoveX32LP is not implemented for Unix yet. Tail-dispatch to the 16-byte
+   version so this nostackframe routine remains a leaf.}
+  jmp MoveX16LP
   {$ENDIF unix}
 @exit:
 end;
@@ -6850,8 +6879,9 @@ asm
   mov rcx, [rcx + r8]
   mov [rdx + r8], rcx
   {$ELSE unix}
-  {MoveX32LP is not implemented for Unix yet, call the 16-byte version}
-  call MoveX16LP
+  {MoveX32LP is not implemented for Unix yet. Tail-dispatch to the 16-byte
+   version so this nostackframe routine remains a leaf.}
+  jmp MoveX16LP
   {$ENDIF unix}
 @exit:
 end;
@@ -6945,8 +6975,9 @@ asm
   mov rcx, [rcx + r8]
   mov [rdx + r8], rcx
   {$ELSE unix}
-  {MoveX32LP is not implemented for Unix yet, call the 16-byte version}
-  call MoveX16LP
+  {MoveX32LP is not implemented for Unix yet. Tail-dispatch to the 16-byte
+   version so this nostackframe routine remains a leaf.}
+  jmp MoveX16LP
   {$ENDIF unix}
 @exit:
 end;
@@ -7028,8 +7059,9 @@ asm
   mov rcx, [rcx + r8]
   mov [rdx + r8], rcx
   {$ELSE unix}
-  {MoveX32LP is not implemented for Unix yet, call the 16-byte version}
-  call MoveX16LP
+  {MoveX32LP is not implemented for Unix yet. Tail-dispatch to the 16-byte
+   version so this nostackframe routine remains a leaf.}
+  jmp MoveX16LP
   {$ENDIF unix}
 @exit:
 end;
@@ -7201,8 +7233,10 @@ asm
 
 {$ELSE}
   {$IFNDEF unix}
-  {$IFDEF AllowAsmNoframe}
-  .noframe
+  {$IFDEF AllowAsmParams}
+  .params 1
+  .pushnv rsi
+  .pushnv rdi
   {$ENDIF}
 
 // under Win64, first - RCX, second - RDX, third R8; the caller must preserve RSI and RDI
@@ -7221,8 +7255,10 @@ asm
   jmp    @exit
 
 @beg:
+  {$IFNDEF AllowAsmParams}
   mov    r9, rsi  // save rsi
   mov    r10, rdi // save rdi
+  {$ENDIF}
   mov    rsi, rcx
   mov    rdi, rdx
   mov    rcx, r8
@@ -7300,11 +7336,7 @@ asm
   // lengths the setup dominates the copy. Later processor generations may
   // differ, and the figures are quoted here for the size of the effect rather
   // than as constants. See https://stackoverflow.com/a/45123049/6910868
-  push    rsi
-  push    rdi
   call    GetFastMMCpuFeaturesA
-  pop     rdi
-  pop     rsi
   test    al, FastMMCpuFeatureFSRM
   jnz     @movs
 {$ENDIF}
@@ -7338,8 +7370,10 @@ asm
   sub     rcx, 4
   jg      @again2
 @finish:
+  {$IFNDEF AllowAsmParams}
   mov    rsi, r9
   mov    rdi, r10
+  {$ENDIF}
   {$ELSE}
 // Under Unix 64 the first 3 arguments are passed in RDI, RSI, RDX
   mov    rcx, rsi
@@ -8826,14 +8860,24 @@ end;
 {$ELSE}
 assembler;
 asm
-{$IFDEF AllowAsmNoframe}
-  .noframe
+{$IFDEF AllowAsmParams}
+  .params 1
+  .pushnv rbx
+{$ENDIF}
+{$IFNDEF AllowAsmParams}
+  push rcx
 {$ENDIF}
   {On entry: rcx = APMediumFreeBlock}
-  push rcx
+{$IFDEF AllowAsmParams}
+  mov rbx, rcx
+{$ENDIF}
   call MediumFreeBlockLinksValid
   test al, al
+{$IFDEF AllowAsmParams}
+  mov rcx, rbx
+{$ELSE}
   pop rcx
+{$ENDIF}
   jz @CorruptFreeList
   mov rax, rcx
   {Get the current previous and next blocks}
