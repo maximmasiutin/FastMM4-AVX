@@ -4097,35 +4097,36 @@ asm
   .pushnv r15
   {$ENDIF}
   {$IFNDEF AllowAsmParams}
-   {The number of pushes is kept even. The compiler-generated prologue of an
-    assembler routine leaves RSP 16-byte aligned (FreePascal emits a single
-    8-byte allocation here), so an odd number of pushes would leave every call
-    below one slot away from the alignment the ABI requires at entry.}
-   push rbx
+   {Here every register this routine promises to preserve is kept on the stack
+    for the whole body rather than parked in another register. The stack keeps
+    them correctly under the System V convention too, where RSI and RDI are
+    call-clobbered and would not survive the calls below, and it needs no
+    register that is nonvolatile in only one of the two conventions.
+    The count of pushes is even
+    so that RSP keeps the 16-byte alignment the ABI requires at each call: the
+    compiler-generated prologue of an assembler routine leaves RSP aligned, and
+    FreePascal emits a single 8-byte allocation for it.}
+   push r15
+   push rcx
+   push rdx
    push rsi
    push rdi
-   push r12
-   push r13
-   push r14
-   push r15
+   push r8
+   push r9
+   push r10
+   push r11
    push rax // alignment pad only, popped first
   {$ENDIF}
-   {$IFDEF FPC}
-   {Reading the lock byte address is itself a call here, so the volatile
-    registers this routine promises to preserve are saved ahead of it.}
-   mov  rbx, rcx
-   mov  rsi, rdx
-   mov  rdi, r8
-   mov  r12, r9
-   mov  r13, r10
-   mov  r14, r11
-   call GetMediumBlocksLockedPointer
-   mov  r8, rax
-   {$ELSE}
+  {$IFDEF AllowAsmParams}
    {r8 is overwritten by the lock byte address, so the caller's value is saved
     here; the other volatile registers survive until the first call and are
     saved on the contended path below.}
    mov  rdi, r8
+  {$ENDIF}
+   {$IFDEF FPC}
+   call GetMediumBlocksLockedPointer
+   mov  r8, rax
+   {$ELSE}
    lea  r8, MediumBlocksLocked
    {$ENDIF}
    mov  r15, r8
@@ -4136,16 +4137,16 @@ asm
    lock xchg [r8], al
    cmp  al, cLockByteLocked
    je   @DidntLockAtFirstAttempt
-   {$IFDEF FPC}
-   jmp  @Finish64BIT
-   {$ELSE}
+   {$IFDEF AllowAsmParams}
    {No call was made on this path, so only r8, which carries the lock byte
     address here, has to be put back before returning.}
    mov  r8, rdi
    jmp  @FinishUncontended64BIT
+   {$ELSE}
+   jmp  @Finish64BIT
    {$ENDIF}
 @DidntLockAtFirstAttempt:
-   {$IFNDEF FPC}
+   {$IFDEF AllowAsmParams}
    {Every path from here calls, so the remaining volatile registers are saved
     here rather than on the uncontended path above.}
    mov  rbx, rcx
@@ -4220,22 +4221,26 @@ asm
    mov  r9d, cPauseSpinWaitLoopCount
    jmp  @NormalLoadLoopPause64
 @Finish64BIT:
+  {$IFDEF AllowAsmParams}
    mov  rcx, rbx
    mov  rdx, rsi
    mov  r8, rdi
    mov  r9, r12
    mov  r10, r13
    mov  r11, r14
+  {$ENDIF}
 @FinishUncontended64BIT:
   {$IFNDEF AllowAsmParams}
    pop  rax // the alignment pad
-   pop  r15
-   pop  r14
-   pop  r13
-   pop  r12
+   pop  r11
+   pop  r10
+   pop  r9
+   pop  r8
    pop  rdi
    pop  rsi
-   pop  rbx
+   pop  rdx
+   pop  rcx
+   pop  r15
   {$ENDIF}
 
 {$ELSE 64BIT}
@@ -4278,7 +4283,11 @@ asm
   .pushnv rbx
   {$ENDIF}
   {$IFNDEF AllowAsmParams}
+   {The count of pushes is even so that RSP keeps the 16-byte alignment the ABI
+    requires at the calls below; the compiler-generated prologue of an
+    assembler routine leaves RSP aligned.}
    push rbx
+   push rax // alignment pad only, popped first
   {$ENDIF}
   {$IFDEF unix}
    mov  rcx, rdi
@@ -4376,6 +4385,7 @@ asm
 @Finish:
 {$IFDEF 64BIT}
   {$IFNDEF AllowAsmParams}
+   pop  rax // the alignment pad
    pop  rbx
   {$ENDIF}
 {$ENDIF}
