@@ -420,19 +420,21 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: C:\FPC\3.2.2
-          key: fpc-3.2.2-win32-and-win64-v1
+          key: fpc-3.2.2-win32-and-win64-${{ env.fpc_installer_sha256 }}-v1
 
       # -f makes curl exit non-zero on an HTTP error instead of writing the
       # error page into fpc_installer.exe, where it would surface later as a
-      # confusing failure of the install step. The retries cover a mirror that
-      # is briefly unavailable, which is the ordinary SourceForge failure.
+      # confusing failure of the install step. The primary origin is the
+      # TinyWeb build-tools release asset; the retries and the SourceForge
+      # fallback cover an origin that is briefly unavailable, and the pinned
+      # SHA-256 decides whether whatever arrived may be executed.
       - name: Download FreePascal installer
         if: steps.fpc-cache.outputs.cache-hit != 'true'
         run: |
           $curlArgs = @('-fL', '--retry', '3', '--retry-all-errors', '--retry-delay', '5', '--connect-timeout', '20', '--max-time', '600', '-o', 'fpc_installer.exe')
           & 'curl.exe' ($curlArgs + "$Env:fpc_installer_asset")
           if ($LASTEXITCODE -ne 0) {
-            Write-Host 'The release asset mirror failed; falling back to SourceForge.'
+            Write-Host 'The GitHub release asset download failed; falling back to SourceForge.'
             & 'curl.exe' ($curlArgs + "$Env:fpc_installer_sourceforge")
           }
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
