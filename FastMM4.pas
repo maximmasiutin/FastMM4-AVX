@@ -4097,6 +4097,10 @@ asm
   .pushnv r15
   {$ENDIF}
   {$IFNDEF AllowAsmParams}
+   {The number of pushes is kept even. The compiler-generated prologue of an
+    assembler routine leaves RSP 16-byte aligned (FreePascal emits a single
+    8-byte allocation here), so an odd number of pushes would leave every call
+    below one slot away from the alignment the ABI requires at entry.}
    push rbx
    push rsi
    push rdi
@@ -4104,17 +4108,24 @@ asm
    push r13
    push r14
    push r15
+   push rax // alignment pad only, popped first
   {$ENDIF}
+   {$IFDEF FPC}
+   {Reading the lock byte address is itself a call here, so the volatile
+    registers this routine promises to preserve are saved ahead of it.}
    mov  rbx, rcx
    mov  rsi, rdx
    mov  rdi, r8
    mov  r12, r9
    mov  r13, r10
    mov  r14, r11
-   {$IFDEF FPC}
    call GetMediumBlocksLockedPointer
    mov  r8, rax
    {$ELSE}
+   {r8 is overwritten by the lock byte address, so the caller's value is saved
+    here; the other volatile registers survive until the first call and are
+    saved on the contended path below.}
+   mov  rdi, r8
    lea  r8, MediumBlocksLocked
    {$ENDIF}
    mov  r15, r8
@@ -4125,8 +4136,22 @@ asm
    lock xchg [r8], al
    cmp  al, cLockByteLocked
    je   @DidntLockAtFirstAttempt
+   {$IFDEF FPC}
    jmp  @Finish64BIT
+   {$ELSE}
+   {No call was made on this path, so no volatile register needs restoring.}
+   jmp  @FinishUncontended64BIT
+   {$ENDIF}
 @DidntLockAtFirstAttempt:
+   {$IFNDEF FPC}
+   {Every path from here calls, so the remaining volatile registers are saved
+    here rather than on the uncontended path above.}
+   mov  rbx, rcx
+   mov  rsi, rdx
+   mov  r12, r9
+   mov  r13, r10
+   mov  r14, r11
+   {$ENDIF}
 
 {$IFDEF EnableWaitPKG}
    call GetFastMMCpuFeaturesB
@@ -4199,7 +4224,9 @@ asm
    mov  r9, r12
    mov  r10, r13
    mov  r11, r14
+@FinishUncontended64BIT:
   {$IFNDEF AllowAsmParams}
+   pop  rax // the alignment pad
    pop  r15
    pop  r14
    pop  r13
@@ -6677,9 +6704,14 @@ asm
   mov rsi, rdx
   mov rdi, r8
   {$ELSE}
+  {The number of pushes is kept even. The compiler-generated prologue of an
+   assembler routine leaves RSP 16-byte aligned (FreePascal emits a single
+   8-byte allocation here), so an odd number of pushes would leave the call
+   below one slot away from the alignment the ABI requires at entry.}
   push rcx
   push rdx
   push r8
+  push r9 // alignment pad only, popped first
   {$ENDIF}
   call GetFastMMCpuFeaturesA
   {$IFDEF AllowAsmParams}
@@ -6687,6 +6719,7 @@ asm
   mov rdx, rsi
   mov r8, rdi
   {$ELSE}
+  pop  r9
   pop  r8
   pop  rdx
   pop  rcx
