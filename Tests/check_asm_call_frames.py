@@ -31,7 +31,7 @@ SYMBOL_GUARD_RE = re.compile(
 )
 ASM_START_RE = re.compile(r"^\s*asm(?!\w)(.*)$", re.I)
 ASM_WORD_RE = re.compile(r"(?<![\w.@])asm(?!\w)", re.I)
-NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe(?!\w)", re.I)
+NOSTACK_RE = re.compile(r"(?<![\w.])nostackframe(?!\w)", re.I)
 ASM_END_RE = re.compile(r"^\s*end\s*;\s*$", re.I)
 
 type Condition = dict[str, bool]
@@ -190,8 +190,19 @@ def negated_prior(branch: Branch) -> Condition:
     return result
 
 
+def settled_against(condition: Condition, known: dict[str, bool] | None) -> bool:
+    """Return whether an unconditional DEFINE or UNDEF rules a condition out."""
+    if not known:
+        return False
+    return any(known.get(key, state) is not state for key, state in condition.items())
+
+
 def switch_branch(
-    stack: list[Branch], kind: str, value: str, rename: Rename = str
+    stack: list[Branch],
+    kind: str,
+    value: str,
+    rename: Rename = str,
+    known: dict[str, bool] | None = None,
 ) -> None:
     """Switch the current conditional to ELSE or ELSEIF when one is open."""
     if not stack:
@@ -207,18 +218,25 @@ def switch_branch(
         return
     branch.current = negated
     branch.current.update(branch.guard)
+    if settled_against(branch.current, known):
+        branch.current = dict(UNREACHABLE)
 
 
 def apply_directive(
-    stack: list[Branch], kind: str, value: str, rename: Rename = str
+    stack: list[Branch],
+    kind: str,
+    value: str,
+    rename: Rename = str,
+    known: dict[str, bool] | None = None,
 ) -> None:
     """Apply one conditional-compilation directive to the symbolic stack."""
     kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF", "IFOPT", "IF"}:
         guard = guard_condition(kind, value, rename)
-        stack.append(Branch([], guard, dict(guard)))
+        current = dict(UNREACHABLE) if settled_against(guard, known) else dict(guard)
+        stack.append(Branch([], guard, current))
     elif kind in {"ELSEIF", "ELSE"}:
-        switch_branch(stack, kind, value, rename)
+        switch_branch(stack, kind, value, rename, known)
     elif kind in {"ENDIF", "IFEND"} and stack:
         stack.pop()
 
@@ -386,6 +404,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
             if mutated is not None:
                 total_mutations[mutated] = total_mutations.get(mutated, 0) + 1
     seen_mutations: dict[str, int] = {}
+    known_states: dict[str, bool] = {}
 
     def rename(symbol: str) -> str:
         return symbol_key(symbol, seen_mutations, total_mutations)
@@ -404,10 +423,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 declaration = declared.group(1).strip()
                 declaration_line = number
                 declaration_condition = dict(condition)
-            if active is None and (
-                NOSTACK_LINE_RE.match(segment)
-                or (declared and "nostackframe" in segment.lower())
-            ):
+            if active is None and NOSTACK_RE.search(segment):
                 declaration_nostacks.append(Marker(number, dict(condition), "nostackframe"))
             opener = segment
             if declared:
@@ -430,6 +446,8 @@ def parse_source(text: str) -> list[AsmRoutine]:
             symbol = mutated_symbol(directive)
             if symbol is not None:
                 seen_mutations[symbol] = seen_mutations.get(symbol, 0) + 1
+                if not stack:
+                    known_states[rename(symbol)] = directive.group(1).upper() == "DEFINE"
                 # A symbol changed inside a routine breaks the symbolic reading,
                 # which takes one guard to mean one configuration throughout;
                 # the routine is reported rather than silently misjudged.
@@ -440,7 +458,9 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 continue
             if directive.group(1).upper() in {"DEFINE", "UNDEF"}:
                 continue
-            apply_directive(stack, directive.group(1), directive.group(2), rename)
+            apply_directive(
+                stack, directive.group(1), directive.group(2), rename, known_states
+            )
 
     return routines
 
@@ -897,6 +917,45 @@ asm
 {$ENDIF}
 end;
 {$ENDIF}
+""",
+        "invalid_nostack_after_assembler_continuation": """
+procedure BadMods;
+{$IFDEF fpc64BIT} assembler; nostackframe; {$ENDIF}
+asm
+{$IFDEF fpc64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "valid_define_settles_guard": """
+{$DEFINE Foo}
+procedure GoodSettled; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFNDEF Foo}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_define_settles_else": """
+{$DEFINE Foo}
+procedure GoodSettledElse; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF Foo}
+  nop
+{$ELSE}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
 """,
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
