@@ -8,6 +8,7 @@ one routine.
 """
 
 import argparse
+import itertools
 import re
 import sys
 from collections.abc import Callable
@@ -266,7 +267,7 @@ def close_constraints(condition: Condition) -> Condition | None:
     changed = True
     while changed:
         changed = False
-        for premise, consequence in (*IMPLICATIONS, *EXTRA_IMPLICATIONS):
+        for premise, consequence in itertools.chain(IMPLICATIONS, EXTRA_IMPLICATIONS):
             valid, implication_changed = apply_implication(result, premise, consequence)
             if not valid:
                 return None
@@ -457,13 +458,15 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 defined = directive.group(1).upper() == "DEFINE"
                 if not stack:
                     known_states[current_key] = defined
+                    EXTRA_IMPLICATIONS.append(({}, {current_key: defined}))
                 elif "UNREACHABLE" not in condition:
                     # Under a guard the mutation ties the new generation to
                     # the guard; where the guard is one symbol, its other
                     # state leaves the old generation in force.
                     EXTRA_IMPLICATIONS.append((dict(condition), {current_key: defined}))
-                    if len(condition) == 1:
-                        ((guard_key, guard_state),) = condition.items()
+                    # Whichever guard fails, the mutation did not happen and
+                    # the old generation stays in force.
+                    for guard_key, guard_state in condition.items():
                         for state in (True, False):
                             premise = {guard_key: not guard_state}
                             if premise.get(previous_key, state) is not state:
@@ -473,7 +476,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 # A symbol changed inside a routine breaks the symbolic reading,
                 # which takes one guard to mean one configuration throughout;
                 # the routine is reported rather than silently misjudged.
-                if active is not None:
+                if active is not None and "UNREACHABLE" not in condition:
                     active.redefinitions.append(
                         Marker(number, dict(condition), directive.group(0))
                     )
@@ -484,7 +487,12 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 # file whose text this reader does not see, so inside a routine
                 # it is reported like a mid-routine DEFINE.
                 included = directive.group(2).strip()
-                if active is not None and included and included[0] not in "+-":
+                if (
+                    active is not None
+                    and included
+                    and included[0] not in "+-"
+                    and "UNREACHABLE" not in condition
+                ):
                     active.redefinitions.append(
                         Marker(number, dict(condition), directive.group(0))
                     )
@@ -562,8 +570,9 @@ def validate_routine(routine: AsmRoutine, source: Path, counts: Counts) -> list[
         if compatible(noframe.condition, {"32BIT": True})
     )
     errors.extend(
-        f"{source}:{redefinition.line}: {routine.name}: {redefinition.text} inside "
-        "an assembler routine cannot be followed by the symbolic frame check"
+        f"{source}:{redefinition.line}: {routine.name}: the frame check cannot "
+        f"follow {redefinition.text} inside an assembler routine, so the routine's "
+        "calls and frame directives are unverified"
         for redefinition in routine.redefinitions
     )
     return errors
@@ -1013,6 +1022,47 @@ end;
 procedure BadInclude; assembler;
 asm
 {$I body.inc}
+end;
+""",
+        "valid_compound_guard_preserves_state": """
+{$DEFINE Foo}
+{$IFDEF A}{$IFDEF B}{$UNDEF Foo}{$ENDIF}{$ENDIF}
+procedure GoodCompound; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFNDEF A}
+{$IFNDEF Foo}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_known_state_reaches_implication": """
+{$DEFINE A}
+{$IFDEF A}{$DEFINE Foo}{$ENDIF}
+procedure GoodKnown; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFNDEF Foo}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_unreachable_redefinition": """
+procedure GoodDeadDefine; assembler;
+asm
+{$IFDEF 64BIT}{$IFNDEF 64BIT}
+{$DEFINE Foo}
+{$I body.inc}
+{$ENDIF}{$ENDIF}
 end;
 """,
         "invalid_nostack_call": """
