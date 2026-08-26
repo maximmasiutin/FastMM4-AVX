@@ -25,6 +25,8 @@ DECL_RE = re.compile(
 CALL_RE = re.compile(r"^\s*call\s+([^\s;{]+)", re.I)
 NOFRAME_RE = re.compile(r"^\s*\.noframe\s*$", re.I)
 PARAMS_RE = re.compile(r"^\s*\.params\s+(\d+)\s*$", re.I)
+ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
+ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
 
 type Condition = dict[str, bool]
 type Counts = dict[str, int]
@@ -40,19 +42,15 @@ IMPLICATIONS: tuple[tuple[Condition, Condition], ...] = (
     ({"CPU32": True}, {"32BIT": True}),
     ({"CPU64": True}, {"64BIT": True}),
     ({"FPC64BIT": True}, {"FPC": True, "64BIT": True}),
+    ({"ENABLEAVX": True}, {"64BIT": True}),
+    ({"ENABLEAVX512": True}, {"64BIT": True}),
     ({"FPC": True, "64BIT": True}, {"FPC64BIT": True}),
-    (
-        {"64BIT": True, "FPC": False, "UNIX": False},
-        {"ALLOWASMNOFRAME": True, "ALLOWASMPARAMS": True},
-    ),
+    ({"64BIT": False}, {"FPC64BIT": False}),
+    ({"FPC": False}, {"FPC64BIT": False}),
+    ({"FPC64BIT": False, "UNIX": False}, {"ALLOWASMNOFRAME": True}),
     (
         {"ALLOWASMNOFRAME": True},
-        {
-            "64BIT": True,
-            "FPC64BIT": False,
-            "UNIX": False,
-            "ALLOWASMPARAMS": True,
-        },
+        {"FPC64BIT": False, "UNIX": False, "ALLOWASMPARAMS": True},
     ),
     ({"ALLOWASMPARAMS": True}, {"ALLOWASMNOFRAME": True}),
     ({"UNIX": True}, {"WINDOWS": False}),
@@ -103,7 +101,8 @@ def atom(kind: str, value: str) -> str:
     """Return the normalized symbolic key for a compiler directive."""
     value = " ".join(value.strip().split())
     if kind in {"IFDEF", "IFNDEF"}:
-        return value.split()[0].upper()
+        symbols = value.split()
+        return symbols[0].upper() if symbols else "EXPR:<EMPTY>"
     return "EXPR:" + value.upper()
 
 
@@ -230,7 +229,7 @@ def record_asm_line(
     params_match = PARAMS_RE.match(line)
     if params_match:
         routine.params.append(Marker(number, condition, params_match.group(1)))
-    if re.match(r"^\s*end;\s*$", line, re.I):
+    if ASM_END_RE.match(line):
         routine.end_line = number
         return True
     return False
@@ -252,7 +251,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
         if new_declaration is not None:
             declaration, declaration_line, declaration_nostack = new_declaration
 
-        if re.match(r"^\s*asm\s*$", line, re.I):
+        if ASM_START_RE.match(line):
             active = AsmRoutine(declaration, declaration_line, number)
             if declaration_nostack is not None:
                 active.noframes.append(declaration_nostack)
@@ -374,12 +373,14 @@ end;
         "valid_elseif_chain": """
 procedure Chain; assembler;
 asm
+{$IFDEF 64BIT}
 {$IFDEF AllowAsmNoframe}
 .noframe
-{$ELSEIF 32BIT}
+{$ELSEIF Foo}
   nop
 {$ELSE}
   call Callee
+{$ENDIF}
 {$ENDIF}
 end;
 """,
@@ -428,12 +429,16 @@ end;
     return failures, len(cases)
 
 
-def discover_sources(requested: list[Path]) -> list[Path]:
-    """Expand files and checkout directories to sources with assembly calls."""
+def discover_sources(requested: list[Path]) -> tuple[list[Path], list[str]]:
+    """Expand files and checkout directories to sources, naming missing paths."""
     sources: list[Path] = []
+    missing: list[str] = []
     for item in requested:
-        if not item.is_dir():
+        if item.is_file():
             sources.append(item)
+            continue
+        if not item.is_dir():
+            missing.append(str(item))
             continue
         for candidate in sorted(item.rglob("*")):
             if candidate.suffix.lower() not in SOURCE_SUFFIXES:
@@ -441,7 +446,7 @@ def discover_sources(requested: list[Path]) -> list[Path]:
             candidate_text = read_source(candidate)
             if any(CALL_RE.match(line) for line in candidate_text.splitlines()):
                 sources.append(candidate)
-    return sources
+    return sources, missing
 
 
 def validate_sources(sources: list[Path]) -> tuple[list[str], Counts]:
@@ -470,7 +475,9 @@ def main() -> int:
     args = parser.parse_args()
     errors, self_test_count = self_test()
     requested = args.sources or [default_repo]
-    sources = discover_sources(requested)
+    sources, missing = discover_sources(requested)
+    if missing:
+        parser.error("not a file or directory: " + ", ".join(missing))
     if not sources:
         parser.error("no FastMM4 Pascal sources found")
 
