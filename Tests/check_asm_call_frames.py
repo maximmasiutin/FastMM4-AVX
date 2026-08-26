@@ -113,7 +113,10 @@ def merged_condition(stack: list[Branch]) -> Condition:
     """Combine the active conditions from all nested branches."""
     result: Condition = {}
     for branch in stack:
-        result.update(branch.current)
+        for key, state in branch.current.items():
+            if result.get(key, state) is not state:
+                return dict(UNREACHABLE)
+            result[key] = state
     return result
 
 
@@ -400,6 +403,16 @@ asm
 {$ENDIF}
 {$ELSEIF 64BIT}
   call Callee
+{$ENDIF}
+end;
+""",
+        "valid_nested_contradiction": """
+procedure Nested; assembler;
+asm
+{$IFNDEF 64BIT}
+{$IFDEF 64BIT}
+  call Callee
+{$ENDIF}
 {$ENDIF}
 end;
 """,
