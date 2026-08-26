@@ -32,7 +32,10 @@ type Condition = dict[str, bool]
 type Counts = dict[str, int]
 SOURCE_SUFFIXES = {".asm", ".dpr", ".inc", ".lpr", ".pas", ".pp"}
 
+UNREACHABLE: Condition = {"UNREACHABLE": True}
+
 IMPLICATIONS: tuple[tuple[Condition, Condition], ...] = (
+    (UNREACHABLE, {"32BIT": True, "64BIT": True}),
     ({"32BIT": True}, {"64BIT": False}),
     ({"64BIT": True}, {"32BIT": False}),
     ({"32BIT": False}, {"64BIT": True}),
@@ -130,7 +133,11 @@ def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
     branch = stack[-1]
     branch.prior.append(branch.guard)
     branch.guard = {atom(kind, value): True} if kind == "ELSEIF" else {}
-    branch.current = negated_prior(branch)
+    negated = negated_prior(branch)
+    if any(negated.get(key) is False for key in branch.guard):
+        branch.current = dict(UNREACHABLE)
+        return
+    branch.current = negated
     branch.current.update(branch.guard)
 
 
@@ -381,6 +388,18 @@ asm
 {$ELSE}
   call Callee
 {$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_repeated_guard": """
+procedure Repeated; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+{$ELSEIF 64BIT}
+  call Callee
 {$ENDIF}
 end;
 """,

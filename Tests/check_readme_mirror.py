@@ -29,10 +29,12 @@ def region(
     except StopIteration as error:
         raise ValueError(f"anchor not found: {start_pattern} in {label}") from error
 
-    end = next(
-        (index for index in range(start, len(lines)) if end_regex.search(lines[index])),
-        len(lines),
-    )
+    try:
+        end = next(
+            index for index in range(start, len(lines)) if end_regex.search(lines[index])
+        )
+    except StopIteration as error:
+        raise ValueError(f"anchor not found: {end_pattern} in {label}") from error
     return [
         Line(index + 1, normalized)
         for index in range(start, end)
