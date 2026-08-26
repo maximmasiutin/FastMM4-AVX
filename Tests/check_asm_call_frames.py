@@ -22,7 +22,7 @@ DECL_RE = re.compile(
     r"^\s*(?:(?:class|constructor|destructor)\s+)?(?:procedure|function)\s+([^;(]+)",
     re.I,
 )
-CALL_RE = re.compile(r"^\s*call\s+([^\s;{]+)", re.I)
+CALL_RE = re.compile(r"^\s*(?:@\w+:\s*)?call\s+([^\s;{]+)", re.I)
 NOFRAME_RE = re.compile(r"^\s*\.noframe\s*$", re.I)
 PARAMS_RE = re.compile(r"^\s*\.params\s+(\d+)\s*$", re.I)
 ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
@@ -484,6 +484,17 @@ asm
 .noframe
 {$ENDIF}
   call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_labeled_call": """
+procedure BadLabel; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+@Retry: call Callee
 {$ENDIF}
 end;
 """,
