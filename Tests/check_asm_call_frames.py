@@ -25,6 +25,9 @@ DECL_RE = re.compile(
 CALL_RE = re.compile(r"^\s*(?:@*\w+:\s*)?call\s+([^\s;{]+)", re.I)
 NOFRAME_RE = re.compile(r"^\s*\.noframe\s*$", re.I)
 PARAMS_RE = re.compile(r"^\s*\.params\s+(\d+)\s*$", re.I)
+SYMBOL_GUARD_RE = re.compile(
+    r"^(not\s+)?(?:defined\s*\(\s*(\w+)\s*\)|(\w+))$", re.I
+)
 ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
 ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
 
@@ -100,13 +103,26 @@ class Branch:
     current: Condition
 
 
-def atom(kind: str, value: str) -> str:
-    """Return the normalized symbolic key for a compiler directive."""
+def guard_condition(kind: str, value: str) -> Condition:
+    """Return the symbolic condition one directive guard asserts.
+
+    IFDEF X, IF Defined(X), IF X and the ELSEIF forms of the same symbol map
+    to one key, so a repeated guard is recognised as such; IFNDEF X and
+    IF not Defined(X) assert the symbol false. Any other expression stays
+    opaque under an EXPR: key.
+    """
     value = " ".join(value.strip().split())
+    kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF"}:
         symbols = value.split()
-        return symbols[0].upper() if symbols else "EXPR:<EMPTY>"
-    return "EXPR:" + value.upper()
+        key = symbols[0].upper() if symbols else "EXPR:<EMPTY>"
+        return {key: kind == "IFDEF"}
+    if kind != "IFOPT":
+        match = SYMBOL_GUARD_RE.match(value)
+        if match:
+            symbol = (match.group(2) or match.group(3)).upper()
+            return {symbol: match.group(1) is None}
+    return {"EXPR:" + value.upper(): True}
 
 
 def merged_condition(stack: list[Branch]) -> Condition:
@@ -135,9 +151,9 @@ def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
         return
     branch = stack[-1]
     branch.prior.append(branch.guard)
-    branch.guard = {atom(kind, value): True} if kind == "ELSEIF" else {}
+    branch.guard = guard_condition(kind, value) if kind == "ELSEIF" else {}
     negated = negated_prior(branch)
-    if any(negated.get(key) is False for key in branch.guard):
+    if any(negated.get(key) is (not state) for key, state in branch.guard.items()):
         branch.current = dict(UNREACHABLE)
         return
     branch.current = negated
@@ -148,7 +164,7 @@ def apply_directive(stack: list[Branch], kind: str, value: str) -> None:
     """Apply one conditional-compilation directive to the symbolic stack."""
     kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF", "IFOPT", "IF"}:
-        guard = {atom(kind, value): kind != "IFNDEF"}
+        guard = guard_condition(kind, value)
         stack.append(Branch([], guard, dict(guard)))
     elif kind in {"ELSEIF", "ELSE"}:
         switch_branch(stack, kind, value)
@@ -277,13 +293,14 @@ def parse_source(text: str) -> list[AsmRoutine]:
         if new_declaration is not None:
             declaration, declaration_line, declaration_nostack = new_declaration
 
-        if ASM_START_RE.match(line):
+        segments = split_directives(line)
+        if ASM_START_RE.match(segments[0][0]):
             active = AsmRoutine(declaration, declaration_line, number)
             if declaration_nostack is not None:
                 active.noframes.append(declaration_nostack)
             routines.append(active)
 
-        for segment, directive in split_directives(line):
+        for segment, directive in segments:
             if active is not None and record_asm_line(
                 active, segment, number, dict(merged_condition(stack))
             ):
@@ -538,6 +555,29 @@ end;
 procedure GoodInline; assembler;
 asm
 {$IFDEF 64BIT}{$IFDEF AllowAsmParams} .params 2 {$ENDIF} call Callee {$ENDIF}
+end;
+""",
+        "valid_repeated_defined_guard": """
+procedure GoodDefined; assembler;
+asm
+{$IFDEF 64BIT}
+  nop
+{$ELSEIF Defined(64BIT)}
+.noframe
+{$ENDIF}
+{$IFNDEF 64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_asm_start_inline_directive": """
+procedure BadStart; assembler;
+asm {$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
 end;
 """,
         "invalid_nostack_call": """

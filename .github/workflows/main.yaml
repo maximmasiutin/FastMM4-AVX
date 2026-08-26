@@ -6,6 +6,12 @@ on:
       - master
     paths:
       - .github/workflows/main.yaml
+      - '**/*.pas'
+      - '**/*.inc'
+      - '**/*.asm'
+      - '**/*.dpr'
+      - '**/*.pp'
+      - '**/*.lpr'
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
@@ -31,6 +37,12 @@ on:
       - master
     paths:
       - .github/workflows/main.yaml
+      - '**/*.pas'
+      - '**/*.inc'
+      - '**/*.asm'
+      - '**/*.dpr'
+      - '**/*.pp'
+      - '**/*.lpr'
       - FastMM4.pas
       - FastMM4Messages.pas
       - FastMM4Options.inc
