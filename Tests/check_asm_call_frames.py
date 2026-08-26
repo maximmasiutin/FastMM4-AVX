@@ -139,12 +139,19 @@ def merged_condition(stack: list[Branch]) -> Condition:
 
 
 def negated_prior(branch: Branch) -> Condition:
-    """Negate the guard of every earlier sibling branch."""
-    return {
-        key: not state
-        for previous in branch.prior
-        for key, state in previous.items()
-    }
+    """Negate the guard of every earlier sibling branch.
+
+    Guards that assert opposite states of one symbol, as in {$IFDEF Foo}
+    followed by {$ELSEIF not Defined(Foo)}, leave nothing for a later
+    branch, so their negations contradict and the result is unreachable.
+    """
+    result: Condition = {}
+    for previous in branch.prior:
+        for key, state in previous.items():
+            if result.get(key, not state) is state:
+                return dict(UNREACHABLE)
+            result[key] = not state
+    return result
 
 
 def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
@@ -155,7 +162,9 @@ def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
     branch.prior.append(branch.guard)
     branch.guard = guard_condition(kind, value) if kind == "ELSEIF" else {}
     negated = negated_prior(branch)
-    if any(negated.get(key) is (not state) for key, state in branch.guard.items()):
+    if "UNREACHABLE" in negated or any(
+        negated.get(key) is (not state) for key, state in branch.guard.items()
+    ):
         branch.current = dict(UNREACHABLE)
         return
     branch.current = negated
@@ -748,6 +757,20 @@ asm call Callee
 {$ENDIF}{$ENDIF}
 end;
 """,
+        "valid_contradictory_elseif_chain": """
+procedure GoodChain; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF Foo}
+  nop
+{$ELSEIF not Defined(Foo)}
+  nop
+{$ELSE}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
+""",
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
@@ -783,12 +806,7 @@ def discover_sources(requested: list[Path]) -> tuple[list[Path], list[str]]:
             if candidate.suffix.lower() not in SOURCE_SUFFIXES:
                 continue
             candidate_text = read_source(candidate)
-            comment_state = CommentState()
-            if any(
-                CALL_RE.match(segment)
-                for line in candidate_text.splitlines()
-                for segment, _ in split_directives(strip_comments(line, comment_state))
-            ):
+            if any(routine.calls for routine in parse_source(candidate_text)):
                 sources.append(candidate)
     return sources, missing
 
