@@ -212,55 +212,6 @@ def compatible(*conditions: Condition) -> bool:
     return close_constraints(combined) is not None
 
 
-def inline_nostackframe_condition(line: str, outer: Condition) -> Condition | None:
-    """Extract an inline conditional FreePascal nostackframe modifier."""
-    if "nostackframe" not in line.lower():
-        return None
-    match = re.search(
-        r"\{\$(IFDEF|IFNDEF)\s+(\w+)\}\s*nostackframe\s*;?\s*\{\$ENDIF\}",
-        line,
-        re.I,
-    )
-    condition = dict(outer)
-    if match:
-        condition[match.group(2).upper()] = match.group(1).upper() == "IFDEF"
-    return condition
-
-
-def continuation_nostackframe(
-    line: str, number: int, condition: Condition
-) -> Marker | None:
-    """Record a nostackframe modifier written on its own line after the header.
-
-    FastMM4.pas writes `{$IFDEF fpc64BIT} nostackframe; {$ENDIF}` on the line
-    below `assembler;`, so the modifier is looked for on every line between a
-    declaration and its asm opener, but only where the line holds nothing else.
-    """
-    if not any(NOSTACK_LINE_RE.match(segment) for segment, _ in split_directives(line)):
-        return None
-    nostack_condition = inline_nostackframe_condition(line, condition)
-    if nostack_condition is None:
-        return None
-    return Marker(number, nostack_condition, "nostackframe")
-
-
-def declaration_from_line(
-    line: str, number: int, condition: Condition
-) -> tuple[str, int, Marker | None] | None:
-    """Return declaration state when a line starts a Pascal routine."""
-    match = DECL_RE.match(line)
-    if not match:
-        return None
-    name = match.group(1).strip()
-    nostack_condition = inline_nostackframe_condition(line, condition)
-    nostack = (
-        Marker(number, nostack_condition, "nostackframe")
-        if nostack_condition is not None
-        else None
-    )
-    return name, number, nostack
-
-
 def record_asm_line(
     routine: AsmRoutine, line: str, number: int, condition: Condition
 ) -> bool:
@@ -293,6 +244,9 @@ def strip_comments(line: str, state: CommentState) -> str:
     must not move the symbolic stack, and it treats `{ note } call X` as a
     call, so a leading comment must not hide the instruction. Brace and
     (* *) comments may span lines; the state carries that between calls.
+    A string literal is replaced by an empty one, so directive-shaped text
+    inside it is never read, and a (*$...*) directive is rewritten to the
+    {$...} form the directive expression reads.
     """
     kept: list[str] = []
     position = 0
@@ -307,17 +261,34 @@ def strip_comments(line: str, state: CommentState) -> str:
             continue
         if line.startswith("//", position):
             break
+        if line.startswith("(*$", position):
+            end = line.find("*)", position + 3)
+            if end >= 0:
+                kept.append("{$" + line[position + 3 : end] + "}")
+                position = end + 2
+                continue
         if line.startswith("(*", position):
             state.paren = True
             position += 2
             continue
-        if line.startswith("{$", position) or line[position] == "'":
-            closer = "}" if line[position] == "{" else "'"
-            end = line.find(closer, position + 1)
+        if line.startswith("{$", position):
+            end = line.find("}", position + 1)
             if end < 0:
                 kept.append(line[position:])
                 break
             kept.append(line[position : end + 1])
+            position = end + 1
+            continue
+        if line[position] == "'":
+            end = position + 1
+            while end < len(line):
+                if line[end] == "'":
+                    if line.startswith("''", end):
+                        end += 2
+                        continue
+                    break
+                end += 1
+            kept.append("''")
             position = end + 1
             continue
         if line[position] == "{":
@@ -358,15 +329,18 @@ def parse_source(text: str) -> list[AsmRoutine]:
     comment_state = CommentState()
     for number, raw_line in enumerate(lines, 1):
         line = strip_comments(raw_line, comment_state)
-        before = merged_condition(stack)
-        new_declaration = declaration_from_line(line, number, before)
-        if new_declaration is not None:
-            declaration, declaration_line, declaration_nostack = new_declaration
-
-        if active is None and new_declaration is None and declaration_nostack is None:
-            declaration_nostack = continuation_nostackframe(line, number, before)
-
         for segment, directive in split_directives(line):
+            condition = merged_condition(stack)
+            declared = DECL_RE.match(segment) if active is None else None
+            if declared:
+                declaration = declared.group(1).strip()
+                declaration_line = number
+                declaration_nostack = None
+            if active is None and declaration_nostack is None and (
+                NOSTACK_LINE_RE.match(segment)
+                or (declared and "nostackframe" in segment.lower())
+            ):
+                declaration_nostack = Marker(number, dict(condition), "nostackframe")
             if active is None and ASM_START_RE.match(segment):
                 active = AsmRoutine(declaration, declaration_line, number)
                 if declaration_nostack is not None:
@@ -692,6 +666,40 @@ asm
 (* {$ELSE} *)
   call Callee
 // {$ENDIF}
+{$ENDIF}
+end;
+""",
+        "invalid_directive_in_string": """
+procedure BadString; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  db 'it''s {$IFNDEF 64BIT}'
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_paren_directive": """
+procedure BadParen; assembler;
+asm
+{$IFDEF 64BIT}
+(*$IFDEF Foo*)
+{$IFDEF AllowAsmParams}
+.params 2
+{$ENDIF}
+(*$ELSE*)
+  call Callee
+(*$ENDIF*)
+{$ENDIF}
+end;
+""",
+        "invalid_declaration_after_directive": """
+{$IFDEF FPC64BIT} procedure BadDecl; assembler; nostackframe; {$ENDIF}
+asm
+{$IFDEF FPC64BIT}
+  call Callee
 {$ENDIF}
 end;
 """,
