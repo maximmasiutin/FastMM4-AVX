@@ -102,3 +102,7 @@ link*.res
 # Language server trace, written into whatever directory the editor was started
 # from rather than into a state directory of its own.
 /lsp-debug.log
+
+# Python bytecode cache, written beside Tests/check_asm_call_frames.py and the
+# other checkers whenever one of them is run or imported.
+__pycache__/

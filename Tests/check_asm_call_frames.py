@@ -19,7 +19,7 @@ DIRECTIVE_RE = re.compile(
     re.I,
 )
 DECL_RE = re.compile(
-    r"^\s*(?:(?:class|constructor|destructor)\s+)?(?:procedure|function)\s+([^;(]+)",
+    r"^\s*(?:class\s+)?(?:procedure|function|constructor|destructor)\s+([^;(]+)",
     re.I,
 )
 CALL_RE = re.compile(r"^\s*(?:@*\w+:\s*)?call\s+([^\s;{]+)", re.I)
@@ -49,6 +49,12 @@ IMPLICATIONS: tuple[tuple[Condition, Condition], ...] = (
     ({"WIN64": True}, {"64BIT": True}),
     ({"CPU32": True}, {"32BIT": True}),
     ({"CPU64": True}, {"64BIT": True}),
+    ({"CPUX86": True}, {"32BIT": True}),
+    ({"CPUX64": True}, {"64BIT": True}),
+    ({"EXPR:SIZEOF(POINTER) = 4": True}, {"32BIT": True}),
+    ({"EXPR:SIZEOF(POINTER) = 4": False}, {"64BIT": True}),
+    ({"EXPR:SIZEOF(POINTER) = 8": True}, {"64BIT": True}),
+    ({"EXPR:SIZEOF(POINTER) = 8": False}, {"32BIT": True}),
     ({"FPC64BIT": True}, {"FPC": True, "64BIT": True}),
     ({"ENABLEAVX": True}, {"64BIT": True}),
     ({"ENABLEAVX512": True}, {"64BIT": True}),
@@ -783,6 +789,14 @@ asm
 {$ENDIF}
 end;
 """,
+        "invalid_constructor_nostack": """
+constructor TThing.Create; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
+asm
+{$IFDEF fpc64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
@@ -818,7 +832,7 @@ def discover_sources(requested: list[Path]) -> tuple[list[Path], list[str]]:
             if candidate.suffix.lower() not in SOURCE_SUFFIXES:
                 continue
             candidate_text = read_source(candidate)
-            if any(routine.calls for routine in parse_source(candidate_text)):
+            if parse_source(candidate_text):
                 sources.append(candidate)
     return sources, missing
 
