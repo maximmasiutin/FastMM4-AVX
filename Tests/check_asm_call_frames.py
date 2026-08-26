@@ -22,7 +22,7 @@ DECL_RE = re.compile(
     r"^\s*(?:(?:class|constructor|destructor)\s+)?(?:procedure|function)\s+([^;(]+)",
     re.I,
 )
-CALL_RE = re.compile(r"^\s*(?:@\w+:\s*)?call\s+([^\s;{]+)", re.I)
+CALL_RE = re.compile(r"^\s*(?:@*\w+:\s*)?call\s+([^\s;{]+)", re.I)
 NOFRAME_RE = re.compile(r"^\s*\.noframe\s*$", re.I)
 PARAMS_RE = re.compile(r"^\s*\.params\s+(\d+)\s*$", re.I)
 ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
@@ -245,6 +245,22 @@ def record_asm_line(
     return False
 
 
+def split_directives(line: str) -> list[tuple[str, re.Match[str] | None]]:
+    """Split a line into text segments, each paired with the directive after it.
+
+    A directive and an instruction may share a line, as in
+    {$IFDEF 64BIT} call Callee {$ENDIF}, so each segment is read under the
+    condition in force at its own position rather than the line's start.
+    """
+    segments: list[tuple[str, re.Match[str] | None]] = []
+    position = 0
+    for directive in DIRECTIVE_RE.finditer(line):
+        segments.append((line[position : directive.start()], directive))
+        position = directive.end()
+    segments.append((line[position:], None))
+    return segments
+
+
 def parse_source(text: str) -> list[AsmRoutine]:
     """Parse assembler routines and the conditional paths of frame markers."""
     lines = text.splitlines()
@@ -266,12 +282,14 @@ def parse_source(text: str) -> list[AsmRoutine]:
             if declaration_nostack is not None:
                 active.noframes.append(declaration_nostack)
             routines.append(active)
-        elif active is not None:
-            if record_asm_line(active, line, number, dict(before)):
-                active = None
 
-        for directive in DIRECTIVE_RE.finditer(line):
-            apply_directive(stack, directive.group(1), directive.group(2))
+        for segment, directive in split_directives(line):
+            if active is not None and record_asm_line(
+                active, segment, number, dict(merged_condition(stack))
+            ):
+                active = None
+            if directive is not None:
+                apply_directive(stack, directive.group(1), directive.group(2))
 
     return routines
 
@@ -498,6 +516,30 @@ asm
 {$ENDIF}
 end;
 """,
+        "invalid_double_at_label_call": """
+procedure BadLocalLabel; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+@@Retry: call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_inline_directive_call": """
+procedure BadInline; assembler;
+asm
+{$IFDEF 64BIT}{$IFDEF AllowAsmNoframe} .noframe {$ENDIF}{$ENDIF}
+{$IFDEF 64BIT} call Callee {$ENDIF}
+end;
+""",
+        "valid_inline_directive_params": """
+procedure GoodInline; assembler;
+asm
+{$IFDEF 64BIT}{$IFDEF AllowAsmParams} .params 2 {$ENDIF} call Callee {$ENDIF}
+end;
+""",
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
@@ -533,7 +575,11 @@ def discover_sources(requested: list[Path]) -> tuple[list[Path], list[str]]:
             if candidate.suffix.lower() not in SOURCE_SUFFIXES:
                 continue
             candidate_text = read_source(candidate)
-            if any(CALL_RE.match(line) for line in candidate_text.splitlines()):
+            if any(
+                CALL_RE.match(segment)
+                for line in candidate_text.splitlines()
+                for segment, _ in split_directives(line)
+            ):
                 sources.append(candidate)
     return sources, missing
 
