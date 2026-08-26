@@ -450,6 +450,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 active = None
             if directive is None:
                 continue
+            reachable = close_constraints(condition) is not None
             symbol = mutated_symbol(directive)
             if symbol is not None:
                 previous_key = rename(symbol)
@@ -459,10 +460,10 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 if not stack:
                     known_states[current_key] = defined
                     EXTRA_IMPLICATIONS.append(({}, {current_key: defined}))
-                elif "UNREACHABLE" not in condition:
+                elif reachable:
                     # Under a guard the mutation ties the new generation to
-                    # the guard; where the guard is one symbol, its other
-                    # state leaves the old generation in force.
+                    # the guard; whichever guard fails leaves the old
+                    # generation in force.
                     EXTRA_IMPLICATIONS.append((dict(condition), {current_key: defined}))
                     # Whichever guard fails, the mutation did not happen and
                     # the old generation stays in force.
@@ -473,10 +474,17 @@ def parse_source(text: str) -> list[AsmRoutine]:
                                 continue
                             premise[previous_key] = state
                             EXTRA_IMPLICATIONS.append((premise, {current_key: state}))
+                else:
+                    # A mutation the compiler never reaches leaves the symbol
+                    # as it was, so the new generation equals the old one.
+                    for state in (True, False):
+                        EXTRA_IMPLICATIONS.append(
+                            ({previous_key: state}, {current_key: state})
+                        )
                 # A symbol changed inside a routine breaks the symbolic reading,
                 # which takes one guard to mean one configuration throughout;
                 # the routine is reported rather than silently misjudged.
-                if active is not None and "UNREACHABLE" not in condition:
+                if active is not None and reachable:
                     active.redefinitions.append(
                         Marker(number, dict(condition), directive.group(0))
                     )
@@ -491,7 +499,7 @@ def parse_source(text: str) -> list[AsmRoutine]:
                     active is not None
                     and included
                     and included[0] not in "+-"
-                    and "UNREACHABLE" not in condition
+                    and reachable
                 ):
                     active.redefinitions.append(
                         Marker(number, dict(condition), directive.group(0))
@@ -1061,6 +1069,30 @@ procedure GoodDeadDefine; assembler;
 asm
 {$IFDEF 64BIT}{$IFNDEF 64BIT}
 {$DEFINE Foo}
+{$I body.inc}
+{$ENDIF}{$ENDIF}
+end;
+""",
+        "valid_dead_mutation_keeps_state": """
+{$DEFINE Foo}
+{$DEFINE A}
+{$IFNDEF A}{$UNDEF Foo}{$ENDIF}
+procedure GoodDeadMutation; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFNDEF Foo}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_include_in_closed_dead_branch": """
+procedure GoodClosedDead; assembler;
+asm
+{$IFDEF 32BIT}{$IFDEF 64BIT}
 {$I body.inc}
 {$ENDIF}{$ENDIF}
 end;
