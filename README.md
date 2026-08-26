@@ -4,8 +4,8 @@ A fork of [FastMM4](https://github.com/pleriche/FastMM4) by Pierre le Riche,
 with efficient synchronization and AVX1/AVX2/AVX512/ERMS/FSRM/UMWAIT support,
 and FreePascal compiler support.
 
- - Copyright (C) 2017-2020 Ritlabs, SRL. All rights reserved.
- - Copyright (C) 2020-2026 Maxim Masiutin. All rights reserved.
+- Copyright (C) 2017-2020 Ritlabs, SRL. All rights reserved.
+- Copyright (C) 2020-2026 Maxim Masiutin. All rights reserved.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
@@ -16,13 +16,13 @@ Version: 1.0.14 (16 August 2026)
 - Embarcadero Delphi (Win32, Win64, Linux 64-bit)
 - FreePascal / Lazarus (Win32, Win64, Linux 64-bit)
 
-## Changes in FastMM4-AVX compared to the original FastMM4
+## Changes in FastMM4-AVX Compared to the Original FastMM4
 
- - Efficient synchronization
-   - improved synchronization between the threads; proper synchronization
+- Efficient synchronization
+  - improved synchronization between the threads; proper synchronization
      techniques are used depending on context and availability, including spin-wait
      loops, umonitor / umwait, SwitchToThread, critical sections, etc.
-   - used the "test, test-and-set" technique for the spin-wait loops; this
+  - used the "test, test-and-set" technique for the spin-wait loops; this
      technique is recommended by Intel (see Section 11.4.3 "Optimization with
      Spin-Locks" of the Intel 64 and IA-32 Architectures Optimization Reference
      Manual) to determine the availability of the synchronization variable;
@@ -40,11 +40,11 @@ Version: 1.0.14 (16 August 2026)
      the memory-operand form of "xchg" locks whether or not a LOCK prefix is
      written, so the prefix written on it here is redundant, see
      https://stackoverflow.com/a/79993726
-   - the number of iterations of "pause"-based spin-wait loops is 5000,
+  - the number of iterations of "pause"-based spin-wait loops is 5000,
      before relinquishing to SwitchToThread();
-   - see https://stackoverflow.com/a/44916975/6910868 for more details on the
+  - see https://stackoverflow.com/a/44916975/6910868 for more details on the
      implementation of the "pause"-based spin-wait loops;
-   - using normal memory store to release a lock:
+  - using normal memory store to release a lock:
      FastMM4-AVX uses normal memory store, i.e., the "mov" instruction, rather
      than the bus-locking "xchg" instruction to write into the synchronization
      variable (LockByte) to "release a lock" on a data structure,
@@ -53,7 +53,7 @@ Version: 1.0.14 (16 August 2026)
      for why the plain store is safe here;
      you may define "InterlockedRelease" to get the old behavior of the original
      FastMM4.
-   - implemented dedicated lock and unlock procedures that operate with
+  - implemented dedicated lock and unlock procedures that operate with
      synchronization variables (LockByte);
      before that, locking operations were scattered throughout the code;
      now the locking functions have meaningful names:
@@ -61,7 +61,7 @@ Version: 1.0.14 (16 August 2026)
      the values of the lock byte are now checked for validity when
      FullDebugMode or DEBUG is defined, to detect cases when the same lock is
      released twice, and other improper use of the lock bytes;
-   - added compile-time options "SmallBlocksLockedCriticalSection",
+  - added compile-time options "SmallBlocksLockedCriticalSection",
      "MediumBlocksLockedCriticalSection" and "LargeBlocksLockedCriticalSection"
      which are set by default (inside the FastMM4Options.inc file) as
      conditional defines. If you undefine these options, you will get the
@@ -73,18 +73,18 @@ Version: 1.0.14 (16 August 2026)
      waiting threads acquire a critical section, and Sleep(0) and Sleep(1) are
      scheduling workarounds rather than ordering guarantees.
 
- - AVX, AVX2 or AVX512 instructions for faster memory copy
-   - if the CPU supports AVX or AVX2, use the 32-byte YMM registers
+- AVX, AVX2 or AVX512 instructions for faster memory copy
+  - if the CPU supports AVX or AVX2, use the 32-byte YMM registers
      for faster memory copy, and if the CPU supports AVX-512,
      use the 64-byte ZMM registers for even faster memory copy;
-   - please note that the effect of using AVX instruction in speed improvement is
+  - please note that the effect of using AVX instruction in speed improvement is
      negligible, compared to the effect brought by efficient synchronization;
      sometimes AVX instructions can even slow down the program because of AVX-SSE
      transition penalties and reduced CPU frequency caused by AVX-512
      instructions in some processors; use DisableAVX to turn AVX off completely
      or use DisableAVX1/DisableAVX2/DisableAVX512 to disable separately certain
      AVX-related instruction set from being compiled);
-   - if EnableAVX is defined, all memory blocks are aligned by 32 bytes, but
+  - if EnableAVX is defined, all memory blocks are aligned by 32 bytes, but
      you can also use Align32Bytes define without AVX; please note that the memory
      overhead is higher when the blocks are aligned by 32 bytes, because some
      memory is lost by padding; however, if your CPU supports
@@ -94,16 +94,16 @@ Version: 1.0.14 (16 August 2026)
      and DEBUG/FullDebugMode builds; although some AVX-512 instructions may require
      64-byte alignment, FastMM4-AVX does not support 64-byte alignment, but uses
      unaligned move instructions (vmovdqu64) for 512-bit operations instead;
-   - with AVX, memory copy is secure - all XMM/YMM/ZMM registers used to copy
+  - with AVX, memory copy is secure - all XMM/YMM/ZMM registers used to copy
      memory are cleared by vxorps/vpxor, so the leftovers of the copied memory
      are not exposed in the XMM/YMM/ZMM registers;
-   - the code attempts to properly handle AVX-SSE transitions to not incur the
+  - the code attempts to properly handle AVX-SSE transitions to not incur the
      transition penalties, only call vzeroupper under AVX1, but not under AVX2
      since it slows down subsequent SSE code under Skylake / Kaby Lake;
-   - on AVX-512, writing to xmm16-xmm31 registers will not affect the turbo
+  - on AVX-512, writing to xmm16-xmm31 registers will not affect the turbo
      clocks, and will not impose AVX-SSE transition penalties; therefore, when we
      have AVX-512, we now only use x(y/z)mm16-31 registers;
-   - the wide moves are used only for bulk copy of memory the calling
+  - the wide moves are used only for bulk copy of memory the calling
      thread owns exclusively, such as a block's contents during
      reallocation, and never for cross-thread synchronization, which goes
      through the lock bytes instead; no per-element or whole-register
@@ -112,13 +112,13 @@ Version: 1.0.14 (16 August 2026)
      and masked moves carry no documented guarantee, see
      https://stackoverflow.com/a/79995416/6910868
 
- - Speed improvements due to code optimization and proper techniques
-   - if the CPU supports Enhanced REP MOVSB/STOSB (ERMS), use this feature
+- Speed improvements due to code optimization and proper techniques
+  - if the CPU supports Enhanced REP MOVSB/STOSB (ERMS), use this feature
      for faster memory copy (under 32 bit or 64-bit) (see the EnableERMS define,
      on by default, use DisableERMS to turn it off);
-   - if the CPU supports Fast Short REP MOVSB (FSRM), uses this feature instead
+  - if the CPU supports Fast Short REP MOVSB (FSRM), uses this feature instead
      of AVX;
-   - branch target alignment in assembly routines is only used when
+  - branch target alignment in assembly routines is only used when
      EnableAsmCodeAlign is defined; Delphi incorrectly encodes conditional
      jumps, i.e., use long, 6-byte instructions instead of just short, 2-byte,
      and this may affect branch prediction, so the benefits of branch target
@@ -130,27 +130,27 @@ Version: 1.0.14 (16 August 2026)
      override, because that inline assembler has no align directive to emit.
      The spelling differs by compiler: FreePascal takes a bare "align" and
      Delphi takes the dotted ".align";
-   - compare instructions + conditional jump instructions are put together
+  - compare instructions + conditional jump instructions are put together
      to allow macro-op fusion (which happens since Core2 processors, when
      the first instruction is a CMP or TEST instruction and the second
      instruction is a conditional jump instruction);
-   - multiplication and division by a constant, which is a power of 2
+  - multiplication and division by a constant, which is a power of 2
      replaced to shl/shr, because Delphi64 compiler doesn't replace such
      multiplications and divisions to shl/shr processor instructions,
      and, according to the Intel Optimization Reference Manual, shl/shr is
      faster than imul/idiv, at least for some processors.
 
- - Safer, cleaner code with stricter type adherence and better compatibility
-   - names assigned to some constants that used to be "magic constants",
+- Safer, cleaner code with stricter type adherence and better compatibility
+  - names assigned to some constants that used to be "magic constants",
      i.e., unnamed numerical constants - plenty of them were present
      throughout the whole code;
-   - removed some typecasts; the code is stricter to let the compiler
+  - removed some typecasts; the code is stricter to let the compiler
      do the job, check everything and mitigate probable error. You can
      even compile the code with "integer overflow checking" and
      "range checking", as well as with "typed @ operator" - for safer
      code. Also added round bracket in the places where the typed @ operator
      was used, to better emphasize on whose address is taken;
-   - the compiler environment is more flexible now: you can compile FastMM4
+  - the compiler environment is more flexible now: you can compile FastMM4
      with, for example, a typed "@" operator or any other option. Almost all
      externally-set compiler directives are honored by FastMM4, except for a few
      (currently just one). Refer to the "Compiler options for FastMM4" section
@@ -158,16 +158,16 @@ Version: 1.0.14 (16 August 2026)
      redefined by FastMM4 for itself. Even if you set up these compiler options
      differently outside FastMM4, they will be silently redefined, and the new
      values will be used for FastMM4 only;
-   - the type of one-byte synchronization variables (accessed via "lock cmpxchg",
+  - the type of one-byte synchronization variables (accessed via "lock cmpxchg",
      or via "xchg" whose memory-operand form locks implicitly) changed from
      Boolean to Byte for stricter type checking; the assembly spells the pair as
      "lock cmpxchg" and "lock xchg", and the second prefix is redundant, see
      https://stackoverflow.com/a/79993726
-   - those fixed-block-size memory move procedures that are not needed
+  - those fixed-block-size memory move procedures that are not needed
      (under the current bitness and alignment combinations) are
      explicitly excluded from compiling, to not rely on the compiler
      that is supposed to remove these function after compilation;
-   - added length parameter to what were the dangerous null-terminated string
+  - added length parameter to what were the dangerous null-terminated string
      operations via PAnsiChar, to prevent potential stack buffer overruns
      (or maybe even stack-based exploitation?), and there are some Pascal functions
      also left, the argument is not yet checked. See the "todo" comments
@@ -175,7 +175,7 @@ Version: 1.0.14 (16 August 2026)
      memory functions are only used in Debug mode, i.e., in development
      environment, not in Release (production), the impact of this
      "vulnerability" is minimal (albeit this is a questionable statement)
-   - an allocation size is refused before the arithmetic on it can wrap, rather
+  - an allocation size is refused before the arithmetic on it can wrap, rather
      than after: under FullDebugMode, a size that cannot have the debug block
      overhead added to it is rejected in the parameter's own type, which is
      unsigned on FreePascal and signed on Delphi, where the old code handed back
@@ -184,10 +184,10 @@ Version: 1.0.14 (16 August 2026)
      NativeUInt, so a 64-bit size at or above 2^63 can no longer overflow a
      signed intermediate; and the POSIX VirtualAlloc shim takes a pointer-sized
      size, so a large request reaches valloc untruncated;
-   - removed all non-US-ASCII characters, to avoid using UTF-8 BOM, for
+  - removed all non-US-ASCII characters, to avoid using UTF-8 BOM, for
      better compatibility with very early versions of Delphi (e.g., Delphi 5),
      thanks to Valts Silaputnins;
-   - support for Lazarus 1.6.4 with FreePascal (the original FastMM4 4.992
+  - support for Lazarus 1.6.4 with FreePascal (the original FastMM4 4.992
      requires modifications, it doesn't work under Lazarus 1.6.4 with FreePascal
      out-of-the-box, also tested under Lazarus 1.8.2 / FPC 3.0.4 with Win32
      target; later versions should be also supported.
@@ -257,12 +257,12 @@ The above tests (on Xeon E5-2667v4 and i9) have been done on 03-May-2018.
 
 Here is the single-threading performance comparison in some selected
 scenarios between FastMM v5.03 dated May 12, 2021 and FastMM4-AVX v1.05
-dated May 20, 2021. FastMM4-AVX is compiled with default options. This 
+dated May 20, 2021. FastMM4-AVX is compiled with default options. This
 test is run on May 20, 2021, under Intel Core i7-1065G7 CPU, Ice Lake
-microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz, 
-4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target. 
-Please note that these are the selected scenarios where FastMM4-AVX is 
-faster than FastMM5. In other scenarios, especially in multi-threaded 
+microarchitecture, base frequency: 1.3 GHz, max turbo frequency: 3.90 GHz,
+4 cores, 8 threads. Compiled under Delphi 10.3 Update 3, 64-bit target.
+Please note that these are the selected scenarios where FastMM4-AVX is
+faster than FastMM5. In other scenarios, especially in multi-threaded
 with heavy contention, FastMM5 is faster.
 
                                              FastMM5  AVX-br.   Ratio
@@ -302,7 +302,6 @@ You should have received a copy of the GNU Lesser General Public License
 along with FastMM4-AVX (see license_lgpl.txt and license_gpl.txt)
 If not, see <http://www.gnu.org/licenses/>.
 
-
 FastMM4-AVX Version History:
 
 - 1.0.14 (16 August 2026) Security: refuse a FullDebugMode allocation size
@@ -331,15 +330,15 @@ FastMM4-AVX Version History:
     values on FPU stack. See https://stackoverflow.com/q/79833922/6910868 for details.
 
 - 1.0.9 (26 November 2025) Security: Added integer overflow protection for large block
-    allocations (CVE-2017-17426 class). 
+    allocations (CVE-2017-17426 class).
 
-- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including 
-    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD 
-    across Linux and Windows,  covering diverse test configurations; 
-    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation 
-    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr` 
-    tool for verifying detected CPU features; Updated documentation and code comments 
-    for improved clarity and accuracy across multiple files; Added support for AVX-512 
+- 1.0.8 (24 November 2025) - Enabled AVX-512 support for Linux builds, including
+    optimized assembly routines; Integrated GitHub Actions for comprehensive CI/CD
+    across Linux and Windows,  covering diverse test configurations;
+    Introduced a new advanced test suite (`AdvancedTest.dpr`) with extended validation
+    for allocation, reallocations, alignment, and security; Added `PrintCpuFeatures.dpr`
+    tool for verifying detected CPU features; Updated documentation and code comments
+    for improved clarity and accuracy across multiple files; Added support for AVX-512
     for Linux; Corrected `Move56AVX512` addressing in `FastMM4_AVX512.asm`.
 
 - 1.0.7 (22 March 2023) - implemented the optional use of user mode wait
@@ -361,8 +360,8 @@ FastMM4-AVX Version History:
     block sizes of 1024 and 2048 bytes, while in previous versions
     instead of 1024-byte blocks there were 1056-byte blocks,
     and instead of 2048-byte blocks were 2176-byte blocks;
-    fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64 
-    versions compiled under Delphi and FreePascal passed all the FastCode 
+    fixed Delphi compiler hints for 64-bit Release mode; Win32 and Win64
+    versions compiled under Delphi and FreePascal passed all the FastCode
     validation suites.
 
 - 1.05 (20 May 2021) - improved speed of releasing memory blocks on higher thread
@@ -392,19 +391,17 @@ FastMM4-AVX Version History:
     thanks to Valts Silaputnins.
 - 1.00 (27 July 2017) - initial revision.
 
+Security hardening and known limitations:
 
-
-Remaining Security issues and known limitations:
-
- - Safe-Unlinking Protection (pleriche/FastMM4 Issue #80) is not implemented.
-   Safe-unlinking validates pointer consistency before unlink operations on
-   medium block free lists. This prevents the classic "unlink attack" where
-   corrupted free list pointers can achieve arbitrary memory writes.
+- Safe-Unlinking Protection (pleriche/FastMM4 Issue #80) validates pointer
+   consistency before unlink operations on medium block free lists. The
+   validation prevents the classic "unlink attack" where corrupted free list
+   pointers can achieve arbitrary memory writes.
    The validation checks: P->bk->fd == P && P->fd->bk == P
    This follows the glibc pattern implemented in version 2.3.6 (2005).
    See: https://github.com/pleriche/FastMM4/issues/80
 
- - Double-Free Detection is only available in FullDebugMode.
+- Double-Free Detection is only available in FullDebugMode.
    Production builds have no mechanism to detect if a block is freed twice.
    This can lead to use-after-free vulnerabilities where a block appears in
    the free list multiple times. Modern allocators (glibc 2.29+, hardened_malloc,
@@ -414,7 +411,7 @@ Remaining Security issues and known limitations:
 
 Known Limitations:
 
- - UseReleaseStack must NOT be used in DLLs (pleriche/FastMM4 Issue #65)
+- UseReleaseStack must NOT be used in DLLs (pleriche/FastMM4 Issue #65)
    The UseReleaseStack feature creates a background cleanup thread. During DLL
    unload (DllMain with DLL_PROCESS_DETACH), DestroyCleanupThread calls
    WaitForSingleObject with INFINITE timeout to wait for the thread to exit.
@@ -422,13 +419,11 @@ Known Limitations:
    is waiting for the loader lock (e.g., during thread exit or any API call
    that internally uses LoadLibrary/FreeLibrary), deadlock occurs. This affects
    Windows Server 2016+ and regsvr32/COM+ registration scenarios.
-   Workaround: Do not define UseReleaseStack when building DLLs.
-   See: https://github.com/pleriche/FastMM4/issues/65
+   Do not define UseReleaseStack when building DLLs; see
+   https://github.com/pleriche/FastMM4/issues/65
 
+## Original FastMM4 Description
 
-The original FastMM4 description follows:
-
-# FastMM4
 Fast Memory Manager
 
 Description:
@@ -441,27 +436,28 @@ Homepage:
  https://github.com/pleriche/FastMM4
 
 Advantages:
- - Fast
- - Low overhead. FastMM is designed for an average of 5% and maximum of 10%
+
+- Fast
+- Low overhead. FastMM is designed for an average of 5% and maximum of 10%
    overhead per block.
- - Supports up to 3GB of user mode address space under Windows 32-bit and 4GB
+- Supports up to 3GB of user mode address space under Windows 32-bit and 4GB
    under Windows 64-bit. Add the "$SetPEFlags $20" option (in curly braces)
    to your .dpr to enable this.
- - Highly aligned memory blocks. Can be configured for 8-byte, 16-byte, or 32-byte
+- Highly aligned memory blocks. Can be configured for 8-byte, 16-byte, or 32-byte
    alignment. All alignment options work in both Release and DEBUG/FullDebugMode builds.
    Note: 64-byte alignment is not supported, but AVX-512 code uses unaligned moves for
    512-bit operations, so 64-byte alignment is not required.
- - Good scaling under multi-threaded applications
- - Intelligent reallocations. Avoids slow memory move operations through
+- Good scaling under multi-threaded applications
+- Intelligent reallocations. Avoids slow memory move operations through
    not performing unnecessary downsizes and by having a minimum percentage
    block size growth factor when an in-place block upsize is not possible.
- - Resistant to address space fragmentation
- - No external DLL required when sharing memory between the application and
+- Resistant to address space fragmentation
+- No external DLL required when sharing memory between the application and
    external libraries (provided both use this memory manager)
- - Optionally reports memory leaks on program shutdown. (This check can be set
+- Optionally reports memory leaks on program shutdown. (This check can be set
    to be performed only if Delphi is currently running on the machine, so end
    users won't be bothered by the error message.)
- - Supports Delphi 4 (or later), C++ Builder 4 (or later), Kylix 3.
+- Supports Delphi 4 (or later), C++ Builder 4 (or later), Kylix 3.
 
 Usage:
  Delphi:
@@ -472,52 +468,57 @@ Usage:
   the required conditional defines set). There are some conditional defines
   (inside FastMM4Options.inc) that may be used to tweak the memory manager. To
   enable support for a user mode address space greater than 2GB you will have to
-  use the EditBin* tool to set the LARGE_ADDRESS_AWARE flag in the EXE header.
+  use the EditBin tool to set the LARGE_ADDRESS_AWARE flag in the EXE header.
   This informs Windows x64 or Windows 32-bit (with the /3GB option set) that the
   application supports an address space larger than 2GB (up to 4GB). In Delphi 6
   and later you can also specify this flag through the compiler directive
   {$SetPEFlags $20}
-  *The EditBin tool ships with the MS Visual C compiler.
+  The EditBin tool ships with the MS Visual C compiler.
  C++ Builder:
   Refer to the instructions inside FastMM4BCB.cpp.
 
+## Original FastMM4 README
 
-# FastMM4
 Fast Memory Manager
 ![FastMM-Title.jpg with title only](images/FastMM-Title.jpg "FastMM-Title.jpg with title only")
 
-## Description:
+### Description
+
  A fast replacement memory manager for Embarcadero Delphi applications
  that scales well under multi-threaded usage, is not prone to memory
  fragmentation, and supports shared memory without the use of external .DLL
  files.
 
-## Homepage:
+### Homepage
+
  https://github.com/pleriche/FastMM4
 
-## Advantages:
-* Fast
-* Low overhead. FastMM is designed for an average of 5% and maximum of 10%
+### Advantages
+
+- Fast
+- Low overhead. FastMM is designed for an average of 5% and maximum of 10%
    overhead per block.
-* Supports up to 3GB of user mode address space under Windows 32-bit and 4GB
+- Supports up to 3GB of user mode address space under Windows 32-bit and 4GB
    under Windows 64-bit. Add the "$SetPEFlags $20" option (in curly braces)
    to your .dpr to enable this.
-* Highly aligned memory blocks. Can be configured for either 8-byte or 16-byte
+- Highly aligned memory blocks. Can be configured for either 8-byte or 16-byte
    alignment.
-* Good scaling under multi-threaded applications
-* Intelligent reallocations. Avoids slow memory move operations through
+- Good scaling under multi-threaded applications
+- Intelligent reallocations. Avoids slow memory move operations through
    not performing unnecessary downsizes and by having a minimum percentage
    block size growth factor when an in-place block upsize is not possible.
-* Resistant to address space fragmentation
-* No external DLL required when sharing memory between the application and
+- Resistant to address space fragmentation
+- No external DLL required when sharing memory between the application and
    external libraries (provided both use this memory manager)
-* Optionally reports memory leaks on program shutdown. (This check can be set
+- Optionally reports memory leaks on program shutdown. (This check can be set
    to be performed only if Delphi is currently running on the machine, so end
    users won't be bothered by the error message.)
-* Supports Delphi 4 (or later), C++ Builder 4 (or later), Kylix 3.
+- Supports Delphi 4 (or later), C++ Builder 4 (or later), Kylix 3.
 
-## Usage:
-### Delphi:
+## Usage
+
+### Delphi
+
   Place this unit as the very first unit under the "uses" section in your
   project's .dpr file. When sharing memory between an application and a DLL
   (e.g. when passing a long string or dynamic array to a DLL function), both the
@@ -534,10 +535,12 @@ Fast Memory Manager
   `{$SetPEFlags $20}`
 
  *The EditBin tool ships with the MS Visual C compiler.
-### C++ Builder:
+
+### C++ Builder
+
   Refer to the instructions inside `FastMM4BCB.cpp`.
 
-## Guard-order regression check
+## Guard-Order Regression Check
 
 Run the fast source validation and its positive/negative fixture tests with Python 3.8 or later:
 
@@ -546,3 +549,24 @@ Run the fast source validation and its positive/negative fixture tests with Pyth
 On Windows, where a stock Python installation provides `python.exe` and no `python3.exe`, run it as:
 
     python Tests\verify_guard_ordering.py
+
+## Assembly Call-Frame Regression Check
+
+Run the fast assembly call-frame validation with Python 3.12 or later:
+
+    python3 Tests/check_asm_call_frames.py
+
+On Windows, run it as:
+
+    python Tests\check_asm_call_frames.py
+
+## README Mirror Check
+
+Verify that the changes and version-history prose still match the header in
+`FastMM4.pas`:
+
+    python3 Tests/check_readme_mirror.py
+
+On Windows, run it as:
+
+    python Tests\check_readme_mirror.py
