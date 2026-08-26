@@ -29,6 +29,7 @@ SYMBOL_GUARD_RE = re.compile(
     r"^(not\s+)?(?:defined\s*\(\s*(\w+)\s*\)|(\w+))$", re.I
 )
 ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
+ASM_WORD_RE = re.compile(r"(?<![\w.@])asm(?!\w)", re.I)
 NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe\s*;?\s*$", re.I)
 ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
 
@@ -341,7 +342,11 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 or (declared and "nostackframe" in segment.lower())
             ):
                 declaration_nostack = Marker(number, dict(condition), "nostackframe")
-            if active is None and ASM_START_RE.match(segment):
+            opener = segment
+            if declared:
+                asm_word = ASM_WORD_RE.search(segment)
+                opener = segment[asm_word.start() :] if asm_word else ""
+            if active is None and ASM_START_RE.match(opener):
                 active = AsmRoutine(declaration, declaration_line, number)
                 if declaration_nostack is not None:
                     active.noframes.append(declaration_nostack)
@@ -699,6 +704,16 @@ end;
 {$IFDEF FPC64BIT} procedure BadDecl; assembler; nostackframe; {$ENDIF}
 asm
 {$IFDEF FPC64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_declaration_with_opener": """
+procedure BadSameLine; assembler; asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
   call Callee
 {$ENDIF}
 end;
