@@ -18,6 +18,7 @@ on:
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
+      - Tests/check_asm_call_frames.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
 
@@ -38,6 +39,7 @@ on:
       - Tests/Simple/ConcurrentForeignPointerStressTest.dpr
       - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
+      - Tests/check_asm_call_frames.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
 
@@ -61,8 +63,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Set up Python 3.12
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.12'
+
       - name: Verify security guard ordering
-        run: python3 Tests/verify_guard_ordering.py
+        run: python Tests/verify_guard_ordering.py
+
+      - name: Verify assembly call frames
+        run: python Tests/check_asm_call_frames.py
 
       - name: Update apt sources
         run: sudo apt-get update
