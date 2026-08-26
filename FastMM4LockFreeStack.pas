@@ -300,7 +300,7 @@ begin
         pushAverage := 10000;
       obsTaskPushLoops := NativeInt(pushAverage);
 
-      //This gives better performance (determined experimentally)
+      //Doubling both loop counts gives better performance in experiments.
       obsTaskPopLoops := obsTaskPopLoops * 2;
       obsTaskPushLoops := obsTaskPushLoops * 2;
 

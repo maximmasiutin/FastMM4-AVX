@@ -12,7 +12,7 @@ Supported compilers: Embarcadero Delphi, FreePascal (FPC/Lazarus).
 
 A fork of the Fast Memory Manager (FastMM) v4.993 by Pierre le Riche.
 
-Changes in FastMM4-AVX compared to the original FastMM4:
+Changes in FastMM4-AVX Compared to the Original FastMM4:
 
  - Efficient synchronization
    - improved synchronization between the threads; proper synchronization

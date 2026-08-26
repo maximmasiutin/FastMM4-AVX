@@ -881,8 +881,8 @@ begin
     alignedAddress := ALIGN_DOWN( sectionData.address, module.pageSize );
     sectionSize := GetRealSectionSize( module, section );
     // Combine access flags of all sections that share a page
-    // TODO( FancyCode ): We currently share flags of a trailing large section
-    //   with the page of a first small section. This should be optimized.
+    // TODO( FancyCode ): The flags of a trailing large section are currently
+    //   shared with the page of a first small section. Optimize this behavior.
     if ( sectionData.alignedAddress = alignedAddress ) or
         {$IF Defined( FPC ) OR ( CompilerVersion >= 20 )}
        ( PByte( sectionData.address ) + sectionData.size > PByte( alignedAddress ) ) then

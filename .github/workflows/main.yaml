@@ -19,6 +19,7 @@ on:
       - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
       - Tests/check_asm_call_frames.py
+      - Tests/check_readme_mirror.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
 
@@ -40,6 +41,7 @@ on:
       - Tests/Simple/MediumSafeUnlinkingTest.dpr
       - Tests/Simple/FpuStackTest.dpr
       - Tests/check_asm_call_frames.py
+      - Tests/check_readme_mirror.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
 
@@ -73,6 +75,9 @@ jobs:
 
       - name: Verify assembly call frames
         run: python Tests/check_asm_call_frames.py
+
+      - name: Verify README mirror
+        run: python Tests/check_readme_mirror.py
 
       - name: Update apt sources
         run: sudo apt-get update
