@@ -29,6 +29,7 @@ SYMBOL_GUARD_RE = re.compile(
     r"^(not\s+)?(?:defined\s*\(\s*(\w+)\s*\)|(\w+))$", re.I
 )
 ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
+NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe\s*;?\s*$", re.I)
 ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
 
 type Condition = dict[str, bool]
@@ -226,6 +227,23 @@ def inline_nostackframe_condition(line: str, outer: Condition) -> Condition | No
     return condition
 
 
+def continuation_nostackframe(
+    line: str, number: int, condition: Condition
+) -> Marker | None:
+    """Record a nostackframe modifier written on its own line after the header.
+
+    FastMM4.pas writes `{$IFDEF fpc64BIT} nostackframe; {$ENDIF}` on the line
+    below `assembler;`, so the modifier is looked for on every line between a
+    declaration and its asm opener, but only where the line holds nothing else.
+    """
+    if not any(NOSTACK_LINE_RE.match(segment) for segment, _ in split_directives(line)):
+        return None
+    nostack_condition = inline_nostackframe_condition(line, condition)
+    if nostack_condition is None:
+        return None
+    return Marker(number, nostack_condition, "nostackframe")
+
+
 def declaration_from_line(
     line: str, number: int, condition: Condition
 ) -> tuple[str, int, Marker | None] | None:
@@ -293,15 +311,16 @@ def parse_source(text: str) -> list[AsmRoutine]:
         if new_declaration is not None:
             declaration, declaration_line, declaration_nostack = new_declaration
 
-        segments = split_directives(line)
-        if ASM_START_RE.match(segments[0][0]):
-            active = AsmRoutine(declaration, declaration_line, number)
-            if declaration_nostack is not None:
-                active.noframes.append(declaration_nostack)
-            routines.append(active)
+        if active is None and new_declaration is None and declaration_nostack is None:
+            declaration_nostack = continuation_nostackframe(line, number, before)
 
-        for segment, directive in segments:
-            if active is not None and record_asm_line(
+        for segment, directive in split_directives(line):
+            if active is None and ASM_START_RE.match(segment):
+                active = AsmRoutine(declaration, declaration_line, number)
+                if declaration_nostack is not None:
+                    active.noframes.append(declaration_nostack)
+                routines.append(active)
+            elif active is not None and record_asm_line(
                 active, segment, number, dict(merged_condition(stack))
             ):
                 active = None
@@ -576,6 +595,25 @@ asm {$IFDEF 64BIT}
 {$IFDEF AllowAsmNoframe}
 .noframe
 {$ENDIF}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_asm_after_directive": """
+procedure BadLeading; assembler;
+{$IFDEF 64BIT} asm
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  call Callee
+end; {$ENDIF}
+""",
+        "invalid_nostack_continuation": """
+procedure BadFpcLater;
+assembler;
+{$IFDEF fpc64BIT} nostackframe; {$ENDIF}
+asm
+{$IFDEF 64BIT}
   call Callee
 {$ENDIF}
 end;
