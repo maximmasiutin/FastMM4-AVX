@@ -28,7 +28,7 @@ PARAMS_RE = re.compile(r"^\s*\.params\s+(\d+)\s*$", re.I)
 SYMBOL_GUARD_RE = re.compile(
     r"^(not\s+)?(?:defined\s*\(\s*(\w+)\s*\)|(\w+))$", re.I
 )
-ASM_START_RE = re.compile(r"^\s*asm\s*(//.*|\{[^$].*)?$", re.I)
+ASM_START_RE = re.compile(r"^\s*asm(?!\w)(.*)$", re.I)
 ASM_WORD_RE = re.compile(r"(?<![\w.@])asm(?!\w)", re.I)
 NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe\s*;?\s*$", re.I)
 ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
@@ -324,7 +324,8 @@ def parse_source(text: str) -> list[AsmRoutine]:
     routines: list[AsmRoutine] = []
     declaration = "<global>"
     declaration_line = 0
-    declaration_nostack: Marker | None = None
+    declaration_condition: Condition = {}
+    declaration_nostacks: list[Marker] = []
     active: AsmRoutine | None = None
 
     comment_state = CommentState()
@@ -334,25 +335,34 @@ def parse_source(text: str) -> list[AsmRoutine]:
             condition = merged_condition(stack)
             declared = DECL_RE.match(segment) if active is None else None
             if declared:
+                # A declaration in a branch exclusive with the previous one
+                # (an FPC header with nostackframe under IFDEF, a Delphi header
+                # under ELSE) shares the body that follows, so its markers are
+                # kept; only a declaration that can coexist starts afresh.
+                if compatible(declaration_condition, condition):
+                    declaration_nostacks = []
                 declaration = declared.group(1).strip()
                 declaration_line = number
-                declaration_nostack = None
-            if active is None and declaration_nostack is None and (
+                declaration_condition = dict(condition)
+            if active is None and (
                 NOSTACK_LINE_RE.match(segment)
                 or (declared and "nostackframe" in segment.lower())
             ):
-                declaration_nostack = Marker(number, dict(condition), "nostackframe")
+                declaration_nostacks.append(Marker(number, dict(condition), "nostackframe"))
             opener = segment
             if declared:
                 asm_word = ASM_WORD_RE.search(segment)
                 opener = segment[asm_word.start() :] if asm_word else ""
-            if active is None and ASM_START_RE.match(opener):
+            opened = ASM_START_RE.match(opener) if active is None else None
+            if opened:
                 active = AsmRoutine(declaration, declaration_line, number)
-                if declaration_nostack is not None:
-                    active.noframes.append(declaration_nostack)
+                active.noframes.extend(declaration_nostacks)
+                declaration_nostacks = []
                 routines.append(active)
+                if record_asm_line(active, opened.group(1), number, dict(condition)):
+                    active = None
             elif active is not None and record_asm_line(
-                active, segment, number, dict(merged_condition(stack))
+                active, segment, number, dict(condition)
             ):
                 active = None
             if directive is not None:
@@ -716,6 +726,26 @@ procedure BadSameLine; assembler; asm
 {$ENDIF}
   call Callee
 {$ENDIF}
+end;
+""",
+        "invalid_conditional_declarations": """
+{$IFDEF FPC64BIT}
+procedure BadPair; assembler; nostackframe;
+{$ELSE}
+procedure BadPair; assembler;
+{$ENDIF}
+asm
+{$IFDEF FPC64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_instruction_on_opener": """
+procedure BadOpener; assembler;
+asm call Callee
+{$IFDEF 64BIT}{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}{$ENDIF}
 end;
 """,
         "invalid_nostack_call": """
