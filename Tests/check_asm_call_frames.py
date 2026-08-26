@@ -93,8 +93,9 @@ class AsmRoutine:
 
 @dataclass
 class Branch:
-    """One active conditional-compilation branch."""
+    """One active conditional-compilation branch and the guards before it."""
     prior: list[Condition]
+    guard: Condition
     current: Condition
 
 
@@ -115,7 +116,7 @@ def merged_condition(stack: list[Branch]) -> Condition:
 
 
 def negated_prior(branch: Branch) -> Condition:
-    """Negate every symbolic state used by an earlier sibling branch."""
+    """Negate the guard of every earlier sibling branch."""
     return {
         key: not state
         for previous in branch.prior
@@ -128,18 +129,18 @@ def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
     if not stack:
         return
     branch = stack[-1]
-    branch.prior.append(branch.current)
+    branch.prior.append(branch.guard)
+    branch.guard = {atom(kind, value): True} if kind == "ELSEIF" else {}
     branch.current = negated_prior(branch)
-    if kind == "ELSEIF":
-        branch.current[atom(kind, value)] = True
+    branch.current.update(branch.guard)
 
 
 def apply_directive(stack: list[Branch], kind: str, value: str) -> None:
     """Apply one conditional-compilation directive to the symbolic stack."""
     kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF", "IFOPT", "IF"}:
-        key = atom(kind, value)
-        stack.append(Branch([], {key: kind != "IFNDEF"}))
+        guard = {atom(kind, value): kind != "IFNDEF"}
+        stack.append(Branch([], guard, dict(guard)))
     elif kind in {"ELSEIF", "ELSE"}:
         switch_branch(stack, kind, value)
     elif kind in {"ENDIF", "IFEND"} and stack:
@@ -287,7 +288,10 @@ def validate_call(call: Marker, routine: AsmRoutine, source: Path) -> list[str]:
         if compatible(call.condition, noframe.condition)
     ]
     x64_delphi = {"64BIT": True, "FPC": False, "UNIX": False}
-    framed = any(compatible(marker.condition, x64_delphi) for marker in routine.params)
+    framed = any(
+        compatible(marker.condition, call.condition, x64_delphi)
+        for marker in routine.params
+    )
     if compatible(call.condition, x64_delphi) and not framed:
         errors.append(
             f"{source}:{call.line}: {routine.name}: Win64 Delphi call "
@@ -320,8 +324,8 @@ def validate(text: str, source: Path) -> tuple[list[str], Counts]:
     return errors, counts
 
 
-def self_test() -> list[str]:
-    """Run embedded positive and negative regression fixtures."""
+def self_test() -> tuple[list[str], int]:
+    """Run embedded regression fixtures, returning failures and the case count."""
     cases = {
         "valid_leaf": """
 procedure Leaf; assembler;
@@ -367,6 +371,32 @@ asm
 {$ENDIF}
 end;
 """,
+        "valid_elseif_chain": """
+procedure Chain; assembler;
+asm
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ELSEIF 32BIT}
+  nop
+{$ELSE}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_params_other_branch": """
+procedure Split; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmParams}
+{$IFDEF Foo}
+.params 1
+{$ELSE}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+{$ENDIF}
+end;
+""",
         "invalid_noframe_call": """
 procedure Bad; assembler;
 asm
@@ -395,7 +425,7 @@ end;
             failures.append(
                 f"self-test {name}: expected_error={expected_error}, errors={errors}"
             )
-    return failures
+    return failures, len(cases)
 
 
 def discover_sources(requested: list[Path]) -> list[Path]:
@@ -438,7 +468,7 @@ def main() -> int:
         help="Pascal source files, or a checkout containing FastMM4.pas",
     )
     args = parser.parse_args()
-    errors = self_test()
+    errors, self_test_count = self_test()
     requested = args.sources or [default_repo]
     sources = discover_sources(requested)
     if not sources:
@@ -457,7 +487,7 @@ def main() -> int:
         f"x86 calls={totals['x86_calls']}, "
         f"Win64 Delphi calls={totals['x64_delphi_calls']}, "
         f"Win64 FreePascal calls={totals['x64_fpc_calls']}; "
-        "six self-tests passed"
+        f"{self_test_count} self-tests passed"
     )
     return 0
 
