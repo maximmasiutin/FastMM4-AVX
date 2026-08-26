@@ -10,6 +10,7 @@ one routine.
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -112,7 +113,10 @@ class Branch:
     current: Condition
 
 
-def guard_condition(kind: str, value: str) -> Condition:
+type Rename = Callable[[str], str]
+
+
+def guard_condition(kind: str, value: str, rename: Rename = str) -> Condition:
     """Return the symbolic condition one directive guard asserts.
 
     IFDEF X, IF Defined(X), IF X and the ELSEIF forms of the same symbol map
@@ -124,14 +128,39 @@ def guard_condition(kind: str, value: str) -> Condition:
     kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF"}:
         symbols = value.split()
-        key = symbols[0].upper() if symbols else "EXPR:<EMPTY>"
-        return {key: kind == "IFDEF"}
+        if not symbols:
+            return {"EXPR:<EMPTY>": kind == "IFDEF"}
+        return {rename(symbols[0].upper()): kind == "IFDEF"}
     if kind != "IFOPT":
         match = SYMBOL_GUARD_RE.match(value)
         if match:
             symbol = (match.group(2) or match.group(3)).upper()
-            return {symbol: match.group(1) is None}
+            return {rename(symbol): match.group(1) is None}
     return {"EXPR:" + value.upper(): True}
+
+
+def symbol_key(symbol: str, seen: dict[str, int], total: dict[str, int]) -> str:
+    """Name a symbol by the generation a guard reads it in.
+
+    A DEFINE or UNDEF changes what a symbol means for everything after it,
+    so a guard read before the change and one read after it are two
+    variables, not one; otherwise {$IFNDEF Foo} {$DEFINE Foo} ... {$IFDEF Foo}
+    would read as a contradiction and hide the guarded code. The last
+    generation keeps the bare name, which is the one the implication table
+    knows.
+    """
+    count = seen.get(symbol, 0)
+    if count == total.get(symbol, 0):
+        return symbol
+    return f"{symbol}#{count}"
+
+
+def mutated_symbol(directive: re.Match[str]) -> str | None:
+    """Return the symbol a DEFINE or UNDEF directive changes, else None."""
+    if directive.group(1).upper() not in {"DEFINE", "UNDEF"}:
+        return None
+    symbols = directive.group(2).split()
+    return symbols[0].upper() if symbols else None
 
 
 def merged_condition(stack: list[Branch]) -> Condition:
@@ -161,13 +190,15 @@ def negated_prior(branch: Branch) -> Condition:
     return result
 
 
-def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
+def switch_branch(
+    stack: list[Branch], kind: str, value: str, rename: Rename = str
+) -> None:
     """Switch the current conditional to ELSE or ELSEIF when one is open."""
     if not stack:
         return
     branch = stack[-1]
     branch.prior.append(branch.guard)
-    branch.guard = guard_condition(kind, value) if kind == "ELSEIF" else {}
+    branch.guard = guard_condition(kind, value, rename) if kind == "ELSEIF" else {}
     negated = negated_prior(branch)
     if "UNREACHABLE" in negated or any(
         negated.get(key) is (not state) for key, state in branch.guard.items()
@@ -178,14 +209,16 @@ def switch_branch(stack: list[Branch], kind: str, value: str) -> None:
     branch.current.update(branch.guard)
 
 
-def apply_directive(stack: list[Branch], kind: str, value: str) -> None:
+def apply_directive(
+    stack: list[Branch], kind: str, value: str, rename: Rename = str
+) -> None:
     """Apply one conditional-compilation directive to the symbolic stack."""
     kind = kind.upper()
     if kind in {"IFDEF", "IFNDEF", "IFOPT", "IF"}:
-        guard = guard_condition(kind, value)
+        guard = guard_condition(kind, value, rename)
         stack.append(Branch([], guard, dict(guard)))
     elif kind in {"ELSEIF", "ELSE"}:
-        switch_branch(stack, kind, value)
+        switch_branch(stack, kind, value, rename)
     elif kind in {"ENDIF", "IFEND"} and stack:
         stack.pop()
 
@@ -345,8 +378,19 @@ def parse_source(text: str) -> list[AsmRoutine]:
     active: AsmRoutine | None = None
 
     comment_state = CommentState()
-    for number, raw_line in enumerate(lines, 1):
-        line = strip_comments(raw_line, comment_state)
+    cleaned = [strip_comments(raw_line, comment_state) for raw_line in lines]
+    total_mutations: dict[str, int] = {}
+    for line in cleaned:
+        for mutation in DIRECTIVE_RE.finditer(line):
+            mutated = mutated_symbol(mutation)
+            if mutated is not None:
+                total_mutations[mutated] = total_mutations.get(mutated, 0) + 1
+    seen_mutations: dict[str, int] = {}
+
+    def rename(symbol: str) -> str:
+        return symbol_key(symbol, seen_mutations, total_mutations)
+
+    for number, line in enumerate(cleaned, 1):
         for segment, directive in split_directives(line):
             condition = merged_condition(stack)
             declared = DECL_RE.match(segment) if active is None else None
@@ -383,7 +427,9 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 active = None
             if directive is None:
                 continue
-            if directive.group(1).upper() in {"DEFINE", "UNDEF"}:
+            symbol = mutated_symbol(directive)
+            if symbol is not None:
+                seen_mutations[symbol] = seen_mutations.get(symbol, 0) + 1
                 # A symbol changed inside a routine breaks the symbolic reading,
                 # which takes one guard to mean one configuration throughout;
                 # the routine is reported rather than silently misjudged.
@@ -392,7 +438,9 @@ def parse_source(text: str) -> list[AsmRoutine]:
                         Marker(number, dict(condition), directive.group(0))
                     )
                 continue
-            apply_directive(stack, directive.group(1), directive.group(2))
+            if directive.group(1).upper() in {"DEFINE", "UNDEF"}:
+                continue
+            apply_directive(stack, directive.group(1), directive.group(2), rename)
 
     return routines
 
@@ -836,6 +884,19 @@ asm
 {$ENDIF}
 {$ENDIF}
 end;
+""",
+        "invalid_define_before_routine": """
+{$IFNDEF Foo}
+{$DEFINE Foo}
+procedure BadEarlyDefine; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF Foo}
+  call Callee
+{$ENDIF}
+{$ENDIF}
+end;
+{$ENDIF}
 """,
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
