@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 DIRECTIVE_RE = re.compile(
-    r"\{\$(IFDEF|IFNDEF|IFOPT|IF|ELSEIF|ELSE|ENDIF|IFEND)\b\s*([^}]*)\}",
+    r"\{\$(IFDEF|IFNDEF|IFOPT|IF|ELSEIF|ELSE|ENDIF|IFEND|DEFINE|UNDEF)\b\s*([^}]*)\}",
     re.I,
 )
 DECL_RE = re.compile(
@@ -30,7 +30,7 @@ SYMBOL_GUARD_RE = re.compile(
 )
 ASM_START_RE = re.compile(r"^\s*asm(?!\w)(.*)$", re.I)
 ASM_WORD_RE = re.compile(r"(?<![\w.@])asm(?!\w)", re.I)
-NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe\s*;?\s*$", re.I)
+NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe(?!\w)", re.I)
 ASM_END_RE = re.compile(r"^\s*end\s*;\s*$", re.I)
 
 type Condition = dict[str, bool]
@@ -101,6 +101,7 @@ class AsmRoutine:
     calls: list[Marker] = field(default_factory=list)
     noframes: list[Marker] = field(default_factory=list)
     params: list[Marker] = field(default_factory=list)
+    redefinitions: list[Marker] = field(default_factory=list)
 
 
 @dataclass
@@ -380,8 +381,18 @@ def parse_source(text: str) -> list[AsmRoutine]:
                 active, segment, number, dict(condition)
             ):
                 active = None
-            if directive is not None:
-                apply_directive(stack, directive.group(1), directive.group(2))
+            if directive is None:
+                continue
+            if directive.group(1).upper() in {"DEFINE", "UNDEF"}:
+                # A symbol changed inside a routine breaks the symbolic reading,
+                # which takes one guard to mean one configuration throughout;
+                # the routine is reported rather than silently misjudged.
+                if active is not None:
+                    active.redefinitions.append(
+                        Marker(number, dict(condition), directive.group(0))
+                    )
+                continue
+            apply_directive(stack, directive.group(1), directive.group(2))
 
     return routines
 
@@ -448,6 +459,11 @@ def validate_routine(routine: AsmRoutine, source: Path, counts: Counts) -> list[
         "x64-only frame directive reachable in a 32-bit branch"
         for noframe in routine.noframes
         if compatible(noframe.condition, {"32BIT": True})
+    )
+    errors.extend(
+        f"{source}:{redefinition.line}: {routine.name}: {redefinition.text} inside "
+        "an assembler routine changes a symbol the frame check reads symbolically"
+        for redefinition in routine.redefinitions
     )
     return errors
 
@@ -794,6 +810,30 @@ constructor TThing.Create; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
 {$IFDEF fpc64BIT}
   call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_nostack_inline_continuation": """
+procedure BadInlineMod;
+assembler;
+{$IFDEF fpc64BIT} nostackframe; inline; {$ENDIF}
+asm
+{$IFDEF fpc64BIT}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_define_inside_routine": """
+procedure BadDefine; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF Foo}{$IFDEF AllowAsmParams}
+.params 2
+{$ENDIF}{$ENDIF}
+{$DEFINE Foo}
+{$IFDEF Foo}
+  call Callee
+{$ENDIF}
 {$ENDIF}
 end;
 """,
