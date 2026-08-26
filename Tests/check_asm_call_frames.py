@@ -31,7 +31,7 @@ SYMBOL_GUARD_RE = re.compile(
 ASM_START_RE = re.compile(r"^\s*asm(?!\w)(.*)$", re.I)
 ASM_WORD_RE = re.compile(r"(?<![\w.@])asm(?!\w)", re.I)
 NOSTACK_LINE_RE = re.compile(r"^\s*nostackframe\s*;?\s*$", re.I)
-ASM_END_RE = re.compile(r"^\s*end;\s*(//.*|\{[^$].*)?$", re.I)
+ASM_END_RE = re.compile(r"^\s*end\s*;\s*$", re.I)
 
 type Condition = dict[str, bool]
 type Counts = dict[str, int]
@@ -768,6 +768,18 @@ asm
 {$ELSE}
   call Callee
 {$ENDIF}
+{$ENDIF}
+end;
+""",
+        "invalid_end_with_space": """
+procedure GoodFirst; assembler;
+asm
+  nop
+end ;
+procedure BadFpcAfter; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
+asm
+{$IFDEF fpc64BIT}
+  call Callee
 {$ENDIF}
 end;
 """,
