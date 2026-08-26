@@ -546,3 +546,13 @@ Run the fast source validation and its positive/negative fixture tests with Pyth
 On Windows, where a stock Python installation provides `python.exe` and no `python3.exe`, run it as:
 
     python Tests\verify_guard_ordering.py
+
+## Assembly call-frame regression check
+
+Run the fast assembly call-frame validation with Python 3.12 or later:
+
+    python3 Tests/check_asm_call_frames.py
+
+On Windows, run it as:
+
+    python Tests\check_asm_call_frames.py
