@@ -9,7 +9,7 @@ and FreePascal compiler support.
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version: 1.0.14 (16 August 2026)
+Version: 1.0.15 (26 August 2026)
 
 ## Compiler Support
 
@@ -303,6 +303,10 @@ along with FastMM4-AVX (see license_lgpl.txt and license_gpl.txt)
 If not, see <http://www.gnu.org/licenses/>.
 
 FastMM4-AVX Version History:
+
+- 1.0.15 (26 August 2026) Fixed: FreePascal Win64 assembly calls had a
+  misaligned stack; RSI and RDI are now saved across calls on Linux. Added:
+  Tests/check_asm_call_frames.py verifies every assembly call frame in CI.
 
 - 1.0.14 (16 August 2026) Security: refuse a FullDebugMode allocation size
   that cannot have the debug overhead added to it (issue #163), and let a

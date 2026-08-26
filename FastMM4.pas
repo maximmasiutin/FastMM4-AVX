@@ -6,7 +6,7 @@ FastMM4-AVX (FreePascal support, efficient synchronization, AVX1/AVX2/AVX512/ERM
 
 Written by Maxim Masiutin <maxim@masiutin.com>
 
-Version 1.0.14 (16 August 2026)
+Version 1.0.15 (26 August 2026)
 
 Supported compilers: Embarcadero Delphi, FreePascal (FPC/Lazarus).
 
@@ -300,6 +300,10 @@ If not, see <http://www.gnu.org/licenses/>.
 
 
 FastMM4-AVX Version History:
+
+- 1.0.15 (26 August 2026) Fixed: FreePascal Win64 assembly calls had a
+  misaligned stack; RSI and RDI are now saved across calls on Linux. Added:
+  Tests/check_asm_call_frames.py verifies every assembly call frame in CI.
 
 - 1.0.14 (16 August 2026) Security: refuse a FullDebugMode allocation size
   that cannot have the debug overhead added to it (issue #163), and let a
@@ -1867,7 +1871,7 @@ of just one option: "Boolean short-circuit evaluation".}
 {-------------------------Public constants-----------------------------}
 const
   {The current version of FastMM4-AVX}
-  FastMM4AvxVersion = '1.0.14';
+  FastMM4AvxVersion = '1.0.15';
   {The current version of FastMM}
   FastMMVersion = '4.993';
 
