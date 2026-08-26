@@ -279,6 +279,56 @@ def record_asm_line(
     return False
 
 
+@dataclass
+class CommentState:
+    """Whether a brace or parenthesis comment is open across lines."""
+    brace: bool = False
+    paren: bool = False
+
+
+def strip_comments(line: str, state: CommentState) -> str:
+    """Remove Pascal comments from a line, keeping {$...} directives.
+
+    The compiler ignores a directive inside a comment, so `// {$IFDEF Foo}`
+    must not move the symbolic stack, and it treats `{ note } call X` as a
+    call, so a leading comment must not hide the instruction. Brace and
+    (* *) comments may span lines; the state carries that between calls.
+    """
+    kept: list[str] = []
+    position = 0
+    while position < len(line):
+        if state.brace or state.paren:
+            closer = "}" if state.brace else "*)"
+            end = line.find(closer, position)
+            if end < 0:
+                break
+            state.brace = state.paren = False
+            position = end + len(closer)
+            continue
+        if line.startswith("//", position):
+            break
+        if line.startswith("(*", position):
+            state.paren = True
+            position += 2
+            continue
+        if line.startswith("{$", position) or line[position] == "'":
+            closer = "}" if line[position] == "{" else "'"
+            end = line.find(closer, position + 1)
+            if end < 0:
+                kept.append(line[position:])
+                break
+            kept.append(line[position : end + 1])
+            position = end + 1
+            continue
+        if line[position] == "{":
+            state.brace = True
+            position += 1
+            continue
+        kept.append(line[position])
+        position += 1
+    return "".join(kept)
+
+
 def split_directives(line: str) -> list[tuple[str, re.Match[str] | None]]:
     """Split a line into text segments, each paired with the directive after it.
 
@@ -305,7 +355,9 @@ def parse_source(text: str) -> list[AsmRoutine]:
     declaration_nostack: Marker | None = None
     active: AsmRoutine | None = None
 
-    for number, line in enumerate(lines, 1):
+    comment_state = CommentState()
+    for number, raw_line in enumerate(lines, 1):
+        line = strip_comments(raw_line, comment_state)
         before = merged_condition(stack)
         new_declaration = declaration_from_line(line, number, before)
         if new_declaration is not None:
@@ -618,6 +670,31 @@ asm
 {$ENDIF}
 end;
 """,
+        "invalid_comment_before_call": """
+procedure BadComment; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+  { invoke helper } call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_commented_directive": """
+procedure BadCommented; assembler;
+asm
+{$IFDEF 64BIT}
+// {$IFDEF Foo}
+{$IFDEF AllowAsmNoframe}
+.noframe
+{$ENDIF}
+(* {$ELSE} *)
+  call Callee
+// {$ENDIF}
+{$ENDIF}
+end;
+""",
         "invalid_nostack_call": """
 procedure BadFpc; assembler; {$IFDEF fpc64BIT} nostackframe; {$ENDIF}
 asm
@@ -653,10 +730,11 @@ def discover_sources(requested: list[Path]) -> tuple[list[Path], list[str]]:
             if candidate.suffix.lower() not in SOURCE_SUFFIXES:
                 continue
             candidate_text = read_source(candidate)
+            comment_state = CommentState()
             if any(
                 CALL_RE.match(segment)
                 for line in candidate_text.splitlines()
-                for segment, _ in split_directives(line)
+                for segment, _ in split_directives(strip_comments(line, comment_state))
             ):
                 sources.append(candidate)
     return sources, missing
