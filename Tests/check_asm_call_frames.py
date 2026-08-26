@@ -288,6 +288,26 @@ def count_call(call: Marker, counts: Counts) -> None:
             counts[name] += 1
 
 
+def covered(condition: Condition, markers: list[Marker], depth: int = 0) -> bool:
+    """Return whether every configuration of a condition carries a marker."""
+    closed = close_constraints(condition)
+    if closed is None:
+        return True
+    for marker in markers:
+        if all(closed.get(key) is state for key, state in marker.condition.items()):
+            return True
+    if depth >= 16:
+        return False
+    for marker in markers:
+        for key in marker.condition:
+            if key not in closed:
+                return all(
+                    covered({**condition, key: state}, markers, depth + 1)
+                    for state in (True, False)
+                )
+    return False
+
+
 def validate_call(call: Marker, routine: AsmRoutine, source: Path) -> list[str]:
     """Validate leaf and Win64 Delphi frame rules for one assembly call."""
     errors = [
@@ -297,11 +317,9 @@ def validate_call(call: Marker, routine: AsmRoutine, source: Path) -> list[str]:
         if compatible(call.condition, noframe.condition)
     ]
     x64_delphi = {"64BIT": True, "FPC": False, "UNIX": False}
-    framed = any(
-        compatible(marker.condition, call.condition, x64_delphi)
-        for marker in routine.params
-    )
-    if compatible(call.condition, x64_delphi) and not framed:
+    if compatible(call.condition, x64_delphi) and not covered(
+        {**x64_delphi, **call.condition}, routine.params
+    ):
         errors.append(
             f"{source}:{call.line}: {routine.name}: Win64 Delphi call "
             f"{call.text} has no compatible .params frame"
@@ -413,6 +431,34 @@ asm
 {$IFDEF 64BIT}
   call Callee
 {$ENDIF}
+{$ENDIF}
+end;
+""",
+        "valid_params_both_branches": """
+procedure Both; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmParams}
+{$IFDEF Foo}
+.params 1
+{$ELSE}
+.params 2
+{$ENDIF}
+{$ENDIF}
+  call Callee
+{$ENDIF}
+end;
+""",
+        "invalid_params_partial_guard": """
+procedure Partial; assembler;
+asm
+{$IFDEF 64BIT}
+{$IFDEF AllowAsmParams}
+{$IFDEF Foo}
+.params 1
+{$ENDIF}
+{$ENDIF}
+  call Callee
 {$ENDIF}
 end;
 """,

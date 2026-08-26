@@ -10,6 +10,9 @@ on:
       - FastMM4Messages.pas
       - FastMM4Options.inc
       - FastMM4CompilerDefines.inc
+      - README.md
+      - ZLibMinimal.pas
+      - FullDebugMode DLL/FastMM_FullDebugMode.dpr
       - Tests/Advanced/**
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
@@ -32,6 +35,9 @@ on:
       - FastMM4Messages.pas
       - FastMM4Options.inc
       - FastMM4CompilerDefines.inc
+      - README.md
+      - ZLibMinimal.pas
+      - FullDebugMode DLL/FastMM_FullDebugMode.dpr
       - Tests/Advanced/**
       - Tests/Simple/IntegerOverflowTest.dpr
       - Tests/Simple/SimpleTest.dpr
