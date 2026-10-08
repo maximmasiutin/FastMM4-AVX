@@ -607,6 +607,10 @@ jobs:
             exit 1
           }
           $nasmVersion = (& $Env:nasm '-v' | Out-String).Trim()
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "'$Env:nasm -v' exited with $LASTEXITCODE"
+            exit 1
+          }
           Write-Host "$nasmVersion at $Env:nasm"
           "NASM ``$nasmVersion`` at ``$Env:nasm``" |
             Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
