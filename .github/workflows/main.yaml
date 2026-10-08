@@ -425,7 +425,6 @@ jobs:
         # started and skipped.
         fpc: ${{ github.event_name == 'pull_request' && fromJSON('["release"]') || fromJSON('["release", "snapshot"]') }}
     env:
-      nasm: 'C:\Program Files\NASM\nasm.exe'
       fpc_release: 'C:\FPC\3.2.2\bin\i386-win32\fpc.exe'
       fpc_release_version: '3.2.2'
       fpc_installer_asset: 'https://github.com/maximmasiutin/TinyWeb/releases/download/build-tools-fpc-3.2.2/fpc-3.2.2.win32.and.win64.exe'
@@ -483,9 +482,49 @@ jobs:
           & '.\fpc_installer.exe' @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/LOG')
           Wait-Process -Name fpc_installer -Timeout 600
 
+      # Where the package's own installer puts nasm.exe is not this workflow's
+      # decision: on 2026-10-08 one windows-latest runner finished the install
+      # with exit code 0 and no nasm.exe under C:\Program Files\NASM, while a
+      # run of the same commit hours earlier found it there. So the executable
+      # is looked up after the install instead of assumed, the install is
+      # repeated once with --force when nothing is found, and the path found is
+      # exported as nasm for the steps that assemble.
       - name: Install NASM via Chocolatey
         run: |
-          & 'choco.exe' @('install', 'nasm', '-y')
+          function Find-Nasm {
+            $known = @(
+              @($Env:ProgramFiles, 'NASM\nasm.exe'),
+              @(${Env:ProgramFiles(x86)}, 'NASM\nasm.exe'),
+              @($Env:LOCALAPPDATA, 'bin\NASM\nasm.exe'),
+              @($Env:ChocolateyInstall, 'bin\nasm.exe')
+            )
+            foreach ($k in $known) {
+              if ($k[0]) {
+                $p = Join-Path $k[0] $k[1]
+                if (Test-Path -LiteralPath $p) { return $p }
+              }
+            }
+            $roots = @($Env:ProgramFiles, ${Env:ProgramFiles(x86)}, $Env:ChocolateyInstall) |
+              Where-Object { $_ -and (Test-Path -LiteralPath $_) }
+            Get-ChildItem -LiteralPath $roots -Filter 'nasm.exe' -Recurse -Depth 4 -File -ErrorAction SilentlyContinue |
+              Select-Object -First 1 -ExpandProperty FullName
+          }
+          & 'choco.exe' @('install', 'nasm', '-y', '--no-progress')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $nasm = Find-Nasm
+          if (-not $nasm) {
+            Write-Host 'nasm.exe not found after the install; what Chocolatey recorded, then a forced reinstall:'
+            & 'choco.exe' @('list', 'nasm')
+            & 'choco.exe' @('install', 'nasm', '-y', '--no-progress', '--force')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $nasm = Find-Nasm
+          }
+          if (-not $nasm) {
+            Write-Error 'nasm.exe not found after two Chocolatey installs; read the output above.'
+            exit 1
+          }
+          Write-Host "nasm.exe at $nasm"
+          "nasm=$nasm" | Out-File -FilePath $Env:GITHUB_ENV -Append -Encoding utf8
 
       # if: always() means this can run when the install itself failed and left
       # no log, and a wildcard that matches nothing is an error rather than an
@@ -563,10 +602,14 @@ jobs:
             Write-Error "fpc.exe not found at '$Env:fpc'. The installer or the snapshot layout changed; read the 'Output the installation log' step."
             exit 1
           }
-          if (-not (Test-Path -LiteralPath $Env:nasm)) {
-            Write-Error "nasm.exe not found at '$Env:nasm'. The Chocolatey package layout changed."
+          if (-not $Env:nasm -or -not (Test-Path -LiteralPath $Env:nasm)) {
+            Write-Error "nasm.exe not found at '$Env:nasm'; read the 'Install NASM via Chocolatey' step."
             exit 1
           }
+          $nasmVersion = (& $Env:nasm '-v' | Out-String).Trim()
+          Write-Host "$nasmVersion at $Env:nasm"
+          "NASM ``$nasmVersion`` at ``$Env:nasm``" |
+            Out-File -FilePath $Env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           $reported = (& $Env:fpc '-iV' | Out-String).Trim()
           Write-Host "fpc $reported at $Env:fpc"
           "FreePascal ``$reported`` ($Env:leg) at ``$Env:fpc``" |
