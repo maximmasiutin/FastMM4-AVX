@@ -18664,7 +18664,7 @@ begin
       {$IFNDEF AssumeMultiThreaded}
         if IsMultiThread then
       {$ENDIF}
-      ReleaseLockByte(@ExpectedMemoryLeaksListLocked);
+      ReleaseLockByte(ExpectedMemoryLeaksListLocked);
     end
     else
     begin
@@ -20689,92 +20689,6 @@ begin
 end;
 
 procedure LogReleaseStackUsage;
-
-  procedure NewLine;
-  begin
-    LMsgPtr^ := #13; Inc(LMsgPtr);
-    LMsgPtr^ := #10; Inc(LMsgPtr);
-  end;
-
-  procedure AppendMemorySize(ASize: NativeUInt);
-  begin
-    if ASize < 10*1024 then
-    begin
-      LMsgPtr := NativeUIntToStrBuf(Round(ASize/1024), LMsgPtr);
-      LMsgPtr^ := ' '; Inc(LMsgPtr);
-      LMsgPtr^ := 'K'; Inc(LMsgPtr);
-      LMsgPtr^ := 'B'; Inc(LMsgPtr);
-    end
-    else if ASize < 10*1024*1024 then
-    begin
-      LMsgPtr := NativeUIntToStrBuf(Round(ASize/1024), LMsgPtr);
-      LMsgPtr^ := ' '; Inc(LMsgPtr);
-      LMsgPtr^ := 'K'; Inc(LMsgPtr);
-      LMsgPtr^ := 'B'; Inc(LMsgPtr);
-    end
-    else if (ASize div 1024) < 10*1024*1024 then
-    begin
-      LMsgPtr := NativeUIntToStrBuf(Round(ASize/1024/1024), LMsgPtr);
-      LMsgPtr^ := ' '; Inc(LMsgPtr);
-      LMsgPtr^ := 'M'; Inc(LMsgPtr);
-      LMsgPtr^ := 'B'; Inc(LMsgPtr);
-    end
-    else
-    begin
-      LMsgPtr := NativeUIntToStrBuf(Round(ASize/1024/1024/1024), LMsgPtr);
-      LMsgPtr^ := ' '; Inc(LMsgPtr);
-      LMsgPtr^ := 'G'; Inc(LMsgPtr);
-      LMsgPtr^ := 'B'; Inc(LMsgPtr);
-    end;
-  end;
-
-  procedure AppendSlotInfo(ABlockSize: Integer);
-  var
-    LCount: Integer;
-    LSlot: Integer;
-    LTotal: NativeUInt;
-  begin
-    if ABlockSize > 0 then
-    begin
-      LMsgPtr := AppendStringToBuffer(ReleaseStackUsageSmallBlocksMsg1, LMsgPtr, Length(ReleaseStackUsageSmallBlocksMsg1));
-      LMsgPtr := NativeUIntToStrBuf(ABlockSize, LMsgPtr);
-      LMsgPtr := AppendStringToBuffer(ReleaseStackUsageSmallBlocksMsg2, LMsgPtr, Length(ReleaseStackUsageSmallBlocksMsg2));
-    end
-    else if ABlockSize = -1 then
-      LMsgPtr := AppendStringToBuffer(ReleaseStackUsageMediumBlocksMsg, LMsgPtr, Length(ReleaseStackUsageMediumBlocksMsg))
-    else
-      LMsgPtr := AppendStringToBuffer(ReleaseStackUsageLargeBlocksMsg, LMsgPtr, Length(ReleaseStackUsageLargeBlocksMsg));
-
-    LTotal := 0;
-    LCount := 0;
-    for LSlot := 0 to NumStacksPerBlock-1 do
-    begin
-      Inc(LTotal, LSlotSize[LSlot]);
-      Inc(LCount, LSlotCount[LSlot]);
-    end;
-
-    AppendMemorySize(LTotal);
-    LMsgPtr := AppendStringToBuffer(ReleaseStackUsageBuffers1Msg, LMsgPtr, Length(ReleaseStackUsageBuffers1Msg));
-    LMsgPtr := NativeUIntToStrBuf(LCount, LMsgPtr);
-    LMsgPtr := AppendStringToBuffer(ReleaseStackUsageBuffers2Msg, LMsgPtr, Length(ReleaseStackUsageBuffers2Msg));
-    for LSlot := 0 to NumStacksPerBlock-1 do
-    begin
-      AppendMemorySize(LSlotSize[LSlot]);
-      LMsgPtr^ := '/';
-      Inc(LMsgPtr);
-      LMsgPtr := NativeUIntToStrBuf(LSlotCount[LSlot], LMsgPtr);
-      if LSlot < (NumStacksPerBlock-1) then
-      begin
-        LMsgPtr^ := ' ';
-        Inc(LMsgPtr);
-      end;
-    end;
-    LMsgPtr^ := ']';
-    Inc(LMsgPtr);
-
-    NewLine;
-  end;
-
 var
   LCount: integer;
   LInd: Integer;
@@ -20787,13 +20701,111 @@ var
   LTotalLarge: NativeUInt;
   LTotalMedium: NativeUInt;
   LTotalSmall: NativeUInt;
+  LSmallBlocksLocked: Boolean;
   LMediumBlocksLocked: Boolean;
   LLargeBlocksLocked: Boolean;
+
+  {Characters left in LMessage, keeping one for the trailing #0}
+  function RemainingChars: Cardinal;
+  begin
+    Result := Cardinal(MaxLogMessageLength - 1) - Cardinal(NativeUInt(LMsgPtr) - NativeUInt(@LMessage[0]));
+  end;
+
+  procedure AppendChar(AChar: AnsiChar);
+  begin
+    if RemainingChars > 0 then
+    begin
+      LMsgPtr^ := AChar;
+      Inc(LMsgPtr);
+    end;
+  end;
+
+  procedure AppendText(const AText: PAnsiChar; ALengthChars: Cardinal);
+  begin
+    LMsgPtr := AppendStringToBuffer(AText, LMsgPtr, ALengthChars, RemainingChars);
+  end;
+
+  procedure AppendNumber(ANum: NativeUInt);
+  begin
+    LMsgPtr := NativeUIntToStrBuf(ANum, LMsgPtr, RemainingChars);
+  end;
+
+  procedure NewLine;
+  begin
+    AppendChar(#13);
+    AppendChar(#10);
+  end;
+
+  procedure AppendMemorySize(ASize: NativeUInt);
+  begin
+    if ASize < 10*1024*1024 then
+    begin
+      AppendNumber(Round(ASize/1024));
+      AppendText(' KB', 3);
+    end
+    else if (ASize div 1024) < 10*1024*1024 then
+    begin
+      AppendNumber(Round(ASize/1024/1024));
+      AppendText(' MB', 3);
+    end
+    else
+    begin
+      AppendNumber(Round(ASize/1024/1024/1024));
+      AppendText(' GB', 3);
+    end;
+  end;
+
+  procedure AppendSlotInfo(ABlockSize: Integer);
+  var
+    LSlotTotalCount: Integer;
+    LSlotIndex: Integer;
+    LSlotTotal: NativeUInt;
+  begin
+    if ABlockSize > 0 then
+    begin
+      AppendText(ReleaseStackUsageSmallBlocksMsg1, Length(ReleaseStackUsageSmallBlocksMsg1));
+      AppendNumber(NativeUInt(ABlockSize));
+      AppendText(ReleaseStackUsageSmallBlocksMsg2, Length(ReleaseStackUsageSmallBlocksMsg2));
+    end
+    else if ABlockSize = -1 then
+      AppendText(ReleaseStackUsageMediumBlocksMsg, Length(ReleaseStackUsageMediumBlocksMsg))
+    else
+      AppendText(ReleaseStackUsageLargeBlocksMsg, Length(ReleaseStackUsageLargeBlocksMsg));
+
+    LSlotTotal := 0;
+    LSlotTotalCount := 0;
+    for LSlotIndex := 0 to NumStacksPerBlock-1 do
+    begin
+      Inc(LSlotTotal, LSlotSize[LSlotIndex]);
+      Inc(LSlotTotalCount, LSlotCount[LSlotIndex]);
+    end;
+
+    AppendMemorySize(LSlotTotal);
+    AppendText(ReleaseStackUsageBuffers1Msg, Length(ReleaseStackUsageBuffers1Msg));
+    AppendNumber(NativeUInt(LSlotTotalCount));
+    AppendText(ReleaseStackUsageBuffers2Msg, Length(ReleaseStackUsageBuffers2Msg));
+    for LSlotIndex := 0 to NumStacksPerBlock-1 do
+    begin
+      AppendMemorySize(LSlotSize[LSlotIndex]);
+      AppendChar('/');
+      AppendNumber(NativeUInt(LSlotCount[LSlotIndex]));
+      if LSlotIndex < (NumStacksPerBlock-1) then
+        AppendChar(' ');
+    end;
+    AppendChar(']');
+
+    NewLine;
+  end;
+
 begin
-  LMsgPtr := AppendStringToBuffer(ReleaseStackUsageHeader, @LMessage[0], Length(ReleaseStackUsageHeader));
+  LMsgPtr := @LMessage[0];
+  AppendText(ReleaseStackUsageHeader, Length(ReleaseStackUsageHeader));
   NewLine;
   NewLine;
 
+  LSmallBlocksLocked := False;
+  LMediumBlocksLocked := False;
+  LLargeBlocksLocked := False;
 {$IFNDEF AssumeMultiThreaded}
   if IsMultiThread then
 {$ENDIF}
@@ -20816,12 +20828,12 @@ begin
     end;
     if LSmallBlocksLocked then
     begin
-      ReleaseLockByte(@SmallBlockTypes[LInd].SmallBlockTypeLocked);
+      ReleaseLockByte(SmallBlockTypes[LInd].SmallBlockTypeLocked);
     end;
     AppendSlotInfo(SmallBlockTypes[LInd].BlockSize);
   end;
 
-  LMsgPtr := AppendStringToBuffer(ReleaseStackUsageTotalSmallBlocksMsg, LMsgPtr, Length(ReleaseStackUsageTotalSmallBlocksMsg));
+  AppendText(ReleaseStackUsageTotalSmallBlocksMsg, Length(ReleaseStackUsageTotalSmallBlocksMsg));
   AppendMemorySize(LTotalSmall);
   NewLine;
 
@@ -20853,14 +20865,14 @@ begin
   end;
   AppendSlotInfo(-2);
 
-  LMsgPtr := AppendStringToBuffer(ReleaseStackUsageTotalMemoryMsg, LMsgPtr, Length(ReleaseStackUsageTotalMemoryMsg));
+  AppendText(ReleaseStackUsageTotalMemoryMsg, Length(ReleaseStackUsageTotalMemoryMsg));
   AppendMemorySize(LTotalSmall + LTotalMedium + LTotalLarge);
   NewLine;
 
-  {Trailing #0}
+  {Trailing #0; RemainingChars always keeps room for it}
   LMsgPtr^ := #0;
 
-    AppendEventLog(@LMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LMessage[0]));
+  AppendEventLog(@LMessage[0], NativeUInt(LMsgPtr) - NativeUInt(@LMessage[0]));
 end;
 {$ENDIF}
 {$ENDIF}
