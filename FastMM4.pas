@@ -1457,6 +1457,18 @@ interface
   {$ENDIF}
 {$ENDIF}
 
+{PurePascal is fully decided at this point, whether by the options file, the
+ command line, the Linux block or the test above, and nothing below defines it.
+ ASMVersion is cleared here as well as further down, because the blocks in
+ between derive FastGetMemNeedAssemblerCode, FastFreememNeedAssemberCode,
+ FastReallocMemNeedAssemberCode and Use32BITAsm from it. Clearing it only after
+ they had run left those symbols set, so a PurePascal build still compiled the
+ assembler allocator. Delphi on Linux escaped that only because its PIC block
+ clears ASMVersion early on its own.}
+{$IFDEF PurePascal}
+  {$undef ASMVersion}
+{$ENDIF}
+
 {$IFDEF DARWIN}
   {$define POSIX}
   {$define PIC}
