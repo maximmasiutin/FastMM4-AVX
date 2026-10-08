@@ -1441,6 +1441,22 @@ interface
   {$ENDIF}
 {$ENDIF}
 
+{Delphi's LLVM-based compilers, Windows ARM64EC among them, have no inline
+ assembler and say so by leaving ASSEMBLER undefined, so they need PurePascal
+ just as Delphi on Linux does above. The test is limited to XE2 and later
+ because the symbol is younger than the assembler: Delphi 4 leaves ASSEMBLER
+ undefined although it compiles every asm block in this unit, while Delphi 7
+ defines it. No LLVM-based Delphi is older than XE2. The original FastMM4 took
+ this change in its pull request 105 without the version limit, and that form
+ stops Delphi 4 from compiling the unit at all.}
+{$IFNDEF FPC}
+  {$IFDEF XE2AndUp}
+    {$IFNDEF ASSEMBLER}
+      {$define PurePascal}
+    {$ENDIF}
+  {$ENDIF}
+{$ENDIF}
+
 {$IFDEF DARWIN}
   {$define POSIX}
   {$define PIC}
@@ -1857,6 +1873,22 @@ of just one option: "Boolean short-circuit evaluation".}
   {$undef AsmVersion}
   {$undef AuxAsmRoutines}
   {$define DisablePauseAndSwitchToThread}
+{$ENDIF}
+
+{On an LLVM-based Delphi a plain store to the lock byte is not a release. The
+ optimizer may move earlier stores past it, and on ARM64 the hardware may make
+ it visible before them, so the case for the plain store made above
+ ReleaseLockByte, which rests on x86 store ordering, does not hold there.
+ InterlockedRelease writes the lock byte with an atomic exchange instead, through
+ the same InterlockedExchangeByte the PurePascal acquire path already calls, so
+ it brings in no routine the build did not need already. It is limited to
+ PurePascal because the assembler unlock paths refuse InterlockedRelease. The
+ original FastMM4 made the same change in its pull request 105 under the name
+ UseAtomicLockRelease.}
+{$IFDEF LLVM}
+  {$IFDEF PurePascal}
+    {$define InterlockedRelease}
+  {$ENDIF}
 {$ENDIF}
 
 {$IFDEF XE2AndUp}
