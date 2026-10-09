@@ -1975,6 +1975,8 @@ type
   PNativeUInt = ^Cardinal;
   IntPtr = Integer;
   UIntPtr = Cardinal;
+  {PBoolean is not declared by the System unit of Delphi 4.}
+  PBoolean = ^Boolean;
   {$ELSE}
   NativeUInt = PtrUInt;
   PNativeUInt = ^PtrUInt;
@@ -3048,8 +3050,12 @@ const
     {$ifend}
   {$ENDIF}
 
+{Lock contention logging and the release stack add fields that make
+ TSmallBlockType larger than the power-of-2 size assumed below.}
 {$IFNDEF LogLockContention}
+{$IFNDEF UseReleaseStack}
   {$define SmallBlockTypeRecSizeIsPowerOf2}
+{$ENDIF}
 {$ENDIF}
 
 {$IFNDEF SmallBlockTypeRecSizeIsPowerOf2}
@@ -3066,14 +3072,12 @@ const
   SmallBlockTypeRecSize = Byte(UnsignedBit shl SmallBlockTypeRecSizePowerOf2);
 {$ENDIF}
 
-{$IFNDEF UseReleaseStack}
-  {$IFDEF OperatorsInDefinesSupported}
-    {$if SmallBlockTypeRecSize <> SizeOf(TSmallBlockType)}
-      {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
-        {$Message Fatal 'Invalid SmallBlockTypeRecSizePowerOf2 constant or SizeOf(TSmallBlockType) is not a power of 2'}
-      {$ENDIF}
-    {$ifend}
-  {$ENDIF}
+{$IFDEF OperatorsInDefinesSupported}
+  {$if SmallBlockTypeRecSize <> SizeOf(TSmallBlockType)}
+    {$IFDEF SmallBlockTypeRecSizeIsPowerOf2}
+      {$Message Fatal 'Invalid SmallBlockTypeRecSizePowerOf2 constant or SizeOf(TSmallBlockType) is not a power of 2'}
+    {$ENDIF}
+  {$ifend}
 {$ENDIF}
 
 {$IFNDEF BCB6OrDelphi7AndUp}
@@ -3451,7 +3455,9 @@ var
 
 {$IFDEF 32BIT}
   {$IFNDEF LogLockContention}
+  {$IFNDEF UseReleaseStack}
     {$DEFINE AllocSize2SmallBlockTypesPrecomputedOffsets}
+  {$ENDIF}
   {$ENDIF}
 
   {$IFDEF ASMVersion}
