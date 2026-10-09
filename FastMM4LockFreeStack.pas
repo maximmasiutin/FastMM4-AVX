@@ -7,16 +7,16 @@ interface
 
 {$I FastMM4CompilerDefines.inc}
 
-{FreePascal declares NativeInt itself and cannot evaluate CompilerVersion, so
- the comparison is reachable only where it is valid.}
+{FreePascal declares NativeInt itself. Delphi 2009 and earlier lack NativeInt
+ or NativeUInt, or declare them broken.}
 {$IFNDEF FPC}
-{$IF CompilerVersion <= 20}
+{$IFNDEF Delphi2010AndUp}
 {$IFNDEF CPUX64}
 type
   NativeInt = integer;
   NativeUInt = cardinal;
 {$ENDIF}
-{$IFEND}
+{$ENDIF}
 {$ENDIF}
 
 type
@@ -84,6 +84,24 @@ implementation
 uses
   Windows;
 
+{SwitchToThread is looked up at run time rather than imported, because
+ Windows 95, 98, Me and NT 4 do not export it and a static import would stop
+ the executable from loading there; Sleep(0) stands in for it. FastMM4.pas
+ resolves it the same way in SwitchToThreadIfSupported.}
+type
+  TSwitchToThread = function: BOOL; stdcall;
+
+procedure YieldThread;
+var
+  LSwitchToThread: TSwitchToThread;
+begin
+  LSwitchToThread := TSwitchToThread(GetProcAddress(GetModuleHandle('kernel32.dll'), 'SwitchToThread'));
+  if Assigned(LSwitchToThread) then
+    LSwitchToThread
+  else
+    Sleep(0);
+end;
+
 function RoundUpTo(value: pointer; granularity: integer): pointer;
 begin
   Result := pointer((((NativeInt(value) - 1) div granularity) + 1) * granularity);
@@ -91,7 +109,11 @@ end;
 
 function GetCPUTimeStamp: int64;
 asm
+{$IFDEF Delphi4or5}
+  db $0F, $31
+{$ELSE}
   rdtsc
+{$ENDIF}
 {$IFDEF CPUX64}
   shl   rdx, 32
   or    rax, rdx
@@ -137,7 +159,11 @@ asm
   mov   ebx, newData
   mov   ecx, newReference
   mov   edi, destination
+{$IFDEF Delphi4or5}
+  db $F0, $0F, $C7, $0F         //lock cmpxchg8b qword ptr [edi]
+{$ELSE}
   lock cmpxchg8b qword ptr [edi]
+{$ENDIF}
   pop   ebx
   pop   edi
 {$ELSE CPUX64}
@@ -175,9 +201,9 @@ end;
 procedure TLFStack.Initialize(ANumElements, AElementSize: integer);
 const
   CASAlignment: integer = {$IFDEF CPUX64}16{$ELSE}8{$ENDIF}; //required alignment for the CAS function - 8 or 16, depending on the platform
-{$IF NOT Declared( HEAP_GENERATE_EXCEPTIONS )}
-  HEAP_GENERATE_EXCEPTIONS = $00000004;
-{$IFEND}
+  {Declared here rather than taken from the Windows unit, because Delphi 4
+   cannot parse the conditional expression that would test for it.}
+  CHeapGenerateExceptions = $00000004;
 var
   bufferElementSize : integer;
   currElement       : PLinkedData;
@@ -196,7 +222,7 @@ begin
   //calculate buffer element size, round up to next aligned value
   bufferElementSize := ((SizeOf(TLinkedData) + roundedElementSize) + SizeOf(pointer) - 1) AND NOT (SizeOf(pointer) - 1);
   //calculate DataBuffer
-  FDataBuffer := HeapAlloc(GetProcessHeap, HEAP_GENERATE_EXCEPTIONS, bufferElementSize * ANumElements + 2 * SizeOf(TReferencedPtr) + CASAlignment);
+  FDataBuffer := HeapAlloc(GetProcessHeap, CHeapGenerateExceptions, bufferElementSize * ANumElements + 2 * SizeOf(TReferencedPtr) + CASAlignment);
   dataBuffer := RoundUpTo(FDataBuffer, CASAlignment);
   if NativeInt(dataBuffer) AND (SizeOf(pointer) - 1) <> 0 then
     // TODO 1 raise exception - how?
@@ -271,7 +297,7 @@ begin
       obsTaskPopLoops := 1;
       obsTaskPushLoops := 1;
       for n := 1 to NumOfSamples do begin
-        SwitchToThread;
+        YieldThread;
         //Measure RemoveLink rutine delay
         TimeTestField[0, n] := GetCPUTimeStamp;
         currElement := PopLink(FRecycleChainP^);

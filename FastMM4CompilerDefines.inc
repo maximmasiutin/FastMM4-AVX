@@ -57,6 +57,9 @@
       {$define 64BIT}
       {$undef 32BIT}
     {$ifend}
+    {$if CompilerVersion >= 21}
+      {$define Delphi2010AndUp}
+    {$ifend}
     {$if CompilerVersion >= 23}
       {$define XE2AndUp}
     {$ifend}
