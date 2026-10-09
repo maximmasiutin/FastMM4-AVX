@@ -84,9 +84,23 @@ implementation
 uses
   Windows;
 
-{Declared here because the Windows unit of Delphi 4 and of FreePascal 3.2.2
- does not declare it.}
-function SwitchToThread: BOOL; stdcall; external 'kernel32.dll' name 'SwitchToThread';
+{SwitchToThread is looked up at run time rather than imported, because
+ Windows 95, 98, Me and NT 4 do not export it and a static import would stop
+ the executable from loading there; Sleep(0) stands in for it. FastMM4.pas
+ resolves it the same way in SwitchToThreadIfSupported.}
+type
+  TSwitchToThread = function: BOOL; stdcall;
+
+procedure YieldThread;
+var
+  LSwitchToThread: TSwitchToThread;
+begin
+  LSwitchToThread := TSwitchToThread(GetProcAddress(GetModuleHandle('kernel32.dll'), 'SwitchToThread'));
+  if Assigned(LSwitchToThread) then
+    LSwitchToThread
+  else
+    Sleep(0);
+end;
 
 function RoundUpTo(value: pointer; granularity: integer): pointer;
 begin
@@ -283,7 +297,7 @@ begin
       obsTaskPopLoops := 1;
       obsTaskPushLoops := 1;
       for n := 1 to NumOfSamples do begin
-        SwitchToThread;
+        YieldThread;
         //Measure RemoveLink rutine delay
         TimeTestField[0, n] := GetCPUTimeStamp;
         currElement := PopLink(FRecycleChainP^);
