@@ -31,6 +31,7 @@ on:
       - Tests/check_readme_mirror.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
+      - Tests/Simple/FullDebugModeTest.dpr
 
   pull_request:
     branches:
@@ -62,6 +63,7 @@ on:
       - Tests/check_readme_mirror.py
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
+      - Tests/Simple/FullDebugModeTest.dpr
 
   schedule:
     # 04:17 UTC on Sundays, which is what reaches the ten-second stress steps
@@ -945,6 +947,37 @@ jobs:
           & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-Criot', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O-', 'IntegerOverflowTest.dpr')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\IntegerOverflowTest.exe'
+
+      # FullDebugModeTest: the allocation checks, then the two corruption modes,
+      # each of which reads its report back and requires the current stack
+      # trace after the thread ID. Each mode corrupts the heap, so each is its
+      # own process.
+
+      - name: Compile and run FullDebugModeTest (64-bit FullDebugMode)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FullDebugModeTest.exe
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode64.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin64', '-Px86_64', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'FullDebugModeTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe' modify-after-free
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe' corrupt-footer
+
+      - name: Compile and run FullDebugModeTest (32-bit FullDebugMode)
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\FullDebugModeTest.exe
+          Copy-Item "$Env:GITHUB_WORKSPACE/FullDebugMode DLL/Precompiled/FastMM_FullDebugMode.dll" .
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dIgnoreMemoryAllocatedBefore', '-dFullDebugMode', '-dNoMessageBoxes', '-O4', 'FullDebugModeTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe' modify-after-free
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\FullDebugModeTest.exe' corrupt-footer
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit
