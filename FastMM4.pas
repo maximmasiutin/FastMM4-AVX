@@ -16936,7 +16936,12 @@ var
   L: Integer;
 begin
   LBufferLengthChars := ABufferLengthChars;
-  {Get the current call stack}
+  {Get the current call stack. The array is cleared first because the Win64
+   DLL's GetFrameBasedStackTrace is RtlCaptureStackBackTrace, which writes only
+   the frames it finds, and LogStackTrace reads entries up to the first zero;
+   with fewer than StackTraceDepth frames on the stack, the entries past the
+   last one would otherwise be whatever the stack held before this call.}
+  DebugFillMem(LCurrentStackTrace, SizeOf(LCurrentStackTrace), 0);
   GetStackTrace(@LCurrentStackTrace[0], StackTraceDepth, ASkipFrames);
   {Log the thread ID}
   Result := ABuffer;
