@@ -191,6 +191,12 @@ begin
 end;
 
 {$IFDEF EnableReleaseStackTestHooks}
+const
+  {A free is pushed onto a release stack only when its block type's
+   critical-section option is off.}
+  MediumFreeDeferred = {$IFDEF DontUseMediumBlocksLockedCriticalSection}True{$ELSE}False{$ENDIF};
+  LargeFreeDeferred = {$IFDEF DontUseLargeBlocksLockedCriticalSection}True{$ELSE}False{$ENDIF};
+
 var
   CleanupBlock: Pointer;
   CleanupGo, CleanupFreed, CleanupExit: THandle;
@@ -217,7 +223,7 @@ var
   LName, LHeldMessage: string;
   LThread: THandle;
   LThreadId: Cardinal;
-  LDeferred, LHeld: Boolean;
+  LDeferred, LHeld, LExpectDeferred: Boolean;
   LIndex, LFreesBefore, LFrees: Integer;
 begin
   if ALarge then
@@ -259,9 +265,26 @@ begin
     ReleaseStackTestUnlockMediumBlocks;
   WaitForSingleObject(CleanupFreed, INFINITE);
   try
-{$IFDEF DontUseMediumBlocksLockedCriticalSection}
-    {Without the critical-section options the free must be deferred; a free
-     that waited for the lock means the DontUse switches had no effect.}
+    {The two switches are independent, so the expectation follows the one for
+     the block type under test.}
+    if ALarge then
+      LExpectDeferred := LargeFreeDeferred
+    else
+      LExpectDeferred := MediumFreeDeferred;
+    if not LExpectDeferred then
+    begin
+      {With the critical-section option the free waits for the lock.}
+      if LDeferred then
+      begin
+        Report('cleanup ' + LName + ': the free returned while the lock was held');
+        Inc(Failures);
+      end
+      else
+        Report('cleanup ' + LName + ': the free waited for the lock');
+      Exit;
+    end;
+    {Without the critical-section option the free must be deferred; a free
+     that waited for the lock means the DontUse switch had no effect.}
     if not LDeferred then
     begin
       Report('cleanup ' + LName + ': the free waited for the lock instead of being deferred');
@@ -302,16 +325,6 @@ begin
       TerminateProcess(GetCurrentProcess, ExitLeak);
     end;
     Report('cleanup ' + LName + ': deferred, freed by the cleanup thread, lock released');
-{$ELSE}
-    {With the critical-section options the free waits for the lock.}
-    if LDeferred then
-    begin
-      Report('cleanup ' + LName + ': the free returned while the lock was held');
-      Inc(Failures);
-    end
-    else
-      Report('cleanup ' + LName + ': the free waited for the lock');
-{$ENDIF}
   finally
     SetEvent(CleanupExit);
     WaitForSingleObject(LThread, INFINITE);
