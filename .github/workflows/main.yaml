@@ -32,6 +32,7 @@ on:
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
       - Tests/Simple/FullDebugModeTest.dpr
+      - Tests/Simple/ReleaseStackTest.dpr
 
   pull_request:
     branches:
@@ -64,6 +65,7 @@ on:
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
       - Tests/Simple/FullDebugModeTest.dpr
+      - Tests/Simple/ReleaseStackTest.dpr
 
   schedule:
     # 04:17 UTC on Sundays, which is what reaches the ten-second stress steps
@@ -978,6 +980,30 @@ jobs:
           & '.\FullDebugModeTest.exe' modify-after-free
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\FullDebugModeTest.exe' corrupt-footer
+
+      # ReleaseStackTest: UseReleaseStack in the default critical-section
+      # builds, on the lock-byte path and on the EnterCriticalSection path.
+      # 32-bit only, because FastMM4LockFreeStack.pas does not assemble under
+      # 64-bit FreePascal. The test's own watchdog ends a hung run with exit
+      # code 3; the step timeout covers a watchdog that never fires.
+
+      - name: Compile and run ReleaseStackTest (32-bit UseReleaseStack)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-O4', 'ReleaseStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ReleaseStackTest.exe'
+
+      - name: Compile and run ReleaseStackTest (32-bit UseReleaseStack, critical sections)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dDisablePauseAndSwitchToThread', '-O4', 'ReleaseStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ReleaseStackTest.exe'
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit
