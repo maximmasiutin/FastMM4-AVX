@@ -9739,6 +9739,12 @@ var
 {$ENDIF}
 begin
   LPointer := APointer;
+{$IFDEF UseReleaseStack}
+  {LockLargeBlocks sets this flag only in the builds without
+   LargeBlocksLockedCriticalSection, and the test below also runs when the
+   lock was not taken, so start from False rather than from stack garbage.}
+  LDelayRelease := False;
+{$ENDIF}
 {$IFNDEF AssumeMultiThreaded}
   LLargeBlocksLocked := False;
 {$ENDIF}
@@ -12278,6 +12284,12 @@ var
   LMediumBlocksLocked: Boolean;
 begin
   LMediumBlocksLocked := False;
+{$IFDEF UseReleaseStack}
+  {LockMediumBlocks sets this flag only in the builds without
+   MediumBlocksLockedCriticalSection, so start from False rather than from
+   stack garbage.}
+  LDelayRelease := False;
+{$ENDIF}
 {$IFNDEF AssumeMultiThreaded}
   LWasMultiThread := False;
 {$ENDIF}

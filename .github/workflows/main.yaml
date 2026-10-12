@@ -32,6 +32,7 @@ on:
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
       - Tests/Simple/FullDebugModeTest.dpr
+      - Tests/Simple/ReleaseStackTest.dpr
 
   pull_request:
     branches:
@@ -64,6 +65,7 @@ on:
       - Tests/verify_guard_ordering.py
       - Tests/guard_order_fixtures/**
       - Tests/Simple/FullDebugModeTest.dpr
+      - Tests/Simple/ReleaseStackTest.dpr
 
   schedule:
     # 04:17 UTC on Sundays, which is what reaches the ten-second stress steps
@@ -978,6 +980,43 @@ jobs:
           & '.\FullDebugModeTest.exe' modify-after-free
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\FullDebugModeTest.exe' corrupt-footer
+
+      # ReleaseStackTest: UseReleaseStack in the default critical-section
+      # builds, on the lock-byte path and on the EnterCriticalSection path.
+      # 32-bit only, because FastMM4LockFreeStack.pas does not assemble under
+      # 64-bit FreePascal. The test's own watchdog ends a hung run with exit
+      # code 3; the step timeout covers a watchdog that never fires. The first
+      # step also runs the four simulated infrastructure failures, each of
+      # which must end with exit code 2, so a broken harness cannot pass. The
+      # explicit exit 0 is needed because the runner exits with the last
+      # native exit code, which is 2 after the loop.
+
+      - name: Compile and run ReleaseStackTest (32-bit UseReleaseStack)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-O4', 'ReleaseStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ReleaseStackTest.exe'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($fault in @('start-none', 'start-partial', 'wait-fail', 'watchdog-fail')) {
+            & '.\ReleaseStackTest.exe' $fault
+            if ($LASTEXITCODE -ne 2) {
+              Write-Output "ReleaseStackTest $fault returned $LASTEXITCODE, expected 2"
+              exit 1
+            }
+          }
+          exit 0
+
+      - name: Compile and run ReleaseStackTest (32-bit UseReleaseStack, critical sections)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dDisablePauseAndSwitchToThread', '-O4', 'ReleaseStackTest.dpr')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & '.\ReleaseStackTest.exe'
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit
