@@ -996,7 +996,7 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-O4', 'ReleaseStackTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dEnableReleaseStackTestHooks', '-O4', 'ReleaseStackTest.dpr')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\ReleaseStackTest.exe'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -1014,9 +1014,27 @@ jobs:
         run: |
           cd $Env:GITHUB_WORKSPACE/Tests/Simple
           Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
-          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dDisablePauseAndSwitchToThread', '-O4', 'ReleaseStackTest.dpr')
+          & '${{ env.fpc }}' @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dEnableReleaseStackTestHooks', '-dDisablePauseAndSwitchToThread', '-O4', 'ReleaseStackTest.dpr')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & '.\ReleaseStackTest.exe'
+
+      # Without the three critical-section options the release stacks are
+      # used, and a cleanup-thread free used to leave the medium lock held
+      # (and the large lock without AssumeMultiThreaded, which
+      # ForceSingleThreaded removes), so the next lock hung.
+      - name: Compile and run ReleaseStackTest (32-bit UseReleaseStack, no critical-section options)
+        timeout-minutes: 5
+        run: |
+          cd $Env:GITHUB_WORKSPACE/Tests/Simple
+          foreach ($extra in @('', '-dForceSingleThreaded')) {
+            Remove-Item -Force -ErrorAction Ignore .\ReleaseStackTest.exe
+            $opts = @('-B', '-Mdelphi', '-Twin32', '-Pi386', '-dUseReleaseStack', '-dNoMessageBoxes', '-dEnableReleaseStackTestHooks', '-dDontUseSmallBlocksLockedCriticalSection', '-dDontUseMediumBlocksLockedCriticalSection', '-dDontUseLargeBlocksLockedCriticalSection', '-O4')
+            if ($extra) { $opts += $extra }
+            & '${{ env.fpc }}' @($opts + 'ReleaseStackTest.dpr')
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            & '.\ReleaseStackTest.exe'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       # =========================================================================
       # Advanced Tests - Windows 32-bit
