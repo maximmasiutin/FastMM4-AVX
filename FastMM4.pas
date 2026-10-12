@@ -1306,15 +1306,15 @@ interface
 {$ENDIF}
 
 {$IFDEF DontUseSmallBlocksLockedCriticalSection}
-  {$undef UseSmallBlocksLockedCriticalSection}
+  {$undef SmallBlocksLockedCriticalSection}
 {$ENDIF}
 
 {$IFDEF DontUseMediumBlocksLockedCriticalSection}
-  {$undef UseMediumBlocksLockedCriticalSection}
+  {$undef MediumBlocksLockedCriticalSection}
 {$ENDIF}
 
 {$IFDEF DontUseLargeBlocksLockedCriticalSection}
-  {$undef UseLargeBlocksLockedCriticalSection}
+  {$undef LargeBlocksLockedCriticalSection}
 {$ENDIF}
 
 {$IFDEF DontUseSimplifiedInterlockedExchangeByte}
@@ -2196,6 +2196,24 @@ procedure FreeAllMemory;
 function FastGetHeapStatus: THeapStatus;
 {Returns statistics about the current state of the memory manager}
 procedure GetMemoryManagerState(var AMemoryManagerState: TMemoryManagerState);
+{$IFDEF UseReleaseStack}
+{$IFDEF EnableReleaseStackTestHooks}
+{Test-only access to the medium and large locks and to the cleanup thread's
+ progress, for Tests/Simple/ReleaseStackTest.dpr. Off by default; never
+ define EnableReleaseStackTestHooks in a production build.}
+procedure ReleaseStackTestLockMediumBlocks;
+procedure ReleaseStackTestUnlockMediumBlocks;
+procedure ReleaseStackTestLockLargeBlocks;
+procedure ReleaseStackTestUnlockLargeBlocks;
+{True when the lock byte reads as taken; meaningful only in builds without
+ the corresponding critical-section option.}
+function ReleaseStackTestMediumBlocksLocked: Boolean;
+function ReleaseStackTestLargeBlocksLocked: Boolean;
+{The number of medium or large frees the cleanup thread has completed.}
+function ReleaseStackTestMediumCleanupFrees: Integer;
+function ReleaseStackTestLargeCleanupFrees: Integer;
+{$ENDIF}
+{$ENDIF}
 {Returns a summary of the information returned by GetMemoryManagerState}
 function GetMemoryManagerUsageSummary: TMemoryManagerUsageSummary; overload;
 procedure GetMemoryManagerUsageSummary(var AMemoryManagerUsageSummary: TMemoryManagerUsageSummary); overload;
@@ -9747,6 +9765,11 @@ begin
 {$ENDIF}
 {$IFNDEF AssumeMultiThreaded}
   LLargeBlocksLocked := False;
+  {$IFDEF UseReleaseStack}
+  {A cleanup operation enters with the large blocks already locked by the
+   cleanup thread, so this call owns the lock and must release it.}
+  LLargeBlocksLocked := ACleanupOperation;
+  {$ENDIF}
 {$ENDIF}
 {$IFDEF ClearLargeBlocksBeforeReturningToOS}
   FillChar(LPointer^,
@@ -12289,6 +12312,9 @@ begin
    MediumBlocksLockedCriticalSection, so start from False rather than from
    stack garbage.}
   LDelayRelease := False;
+  {A cleanup operation enters with the medium blocks already locked by the
+   cleanup thread, so this call owns the lock and must release it.}
+  LMediumBlocksLocked := ACleanupOperation;
 {$ENDIF}
 {$IFNDEF AssumeMultiThreaded}
   LWasMultiThread := False;
@@ -22131,6 +22157,50 @@ begin
 end;
 
 {$IFDEF UseReleaseStack}
+{$IFDEF EnableReleaseStackTestHooks}
+var
+  ReleaseStackTestMediumFrees, ReleaseStackTestLargeFrees: Integer;
+
+procedure ReleaseStackTestLockMediumBlocks;
+begin
+  LockMediumBlocks;
+end;
+
+procedure ReleaseStackTestUnlockMediumBlocks;
+begin
+  UnlockMediumBlocks;
+end;
+
+procedure ReleaseStackTestLockLargeBlocks;
+begin
+  LockLargeBlocks;
+end;
+
+procedure ReleaseStackTestUnlockLargeBlocks;
+begin
+  UnlockLargeBlocks;
+end;
+
+function ReleaseStackTestMediumBlocksLocked: Boolean;
+begin
+  Result := MediumBlocksLocked = cLockByteLocked;
+end;
+
+function ReleaseStackTestLargeBlocksLocked: Boolean;
+begin
+  Result := LargeBlocksLocked = cLockByteLocked;
+end;
+
+function ReleaseStackTestMediumCleanupFrees: Integer;
+begin
+  Result := ReleaseStackTestMediumFrees;
+end;
+
+function ReleaseStackTestLargeCleanupFrees: Integer;
+begin
+  Result := ReleaseStackTestLargeFrees;
+end;
+{$ENDIF}
 procedure CleanupReleaseStacks;
 var
   LInd: Integer;
@@ -22174,7 +22244,12 @@ begin
         and (AcquireLockByte(MediumBlocksLocked)) then
       begin
         if MediumReleaseStack[LSlot].Pop(LMemBlock) then
-          FreeMediumBlock(LMemBlock, True)
+        begin
+          FreeMediumBlock(LMemBlock, True);
+          {$IFDEF EnableReleaseStackTestHooks}
+          InterlockedIncrement(ReleaseStackTestMediumFrees);
+          {$ENDIF}
+        end
         else
         begin
           UnlockMediumBlocks;
@@ -22184,7 +22259,12 @@ begin
         and (AcquireLockByte(LargeBlocksLocked)) then
       begin
         if LargeReleaseStack[LSlot].Pop(LMemBlock) then
-          FreeLargeBlock(LMemBlock, True)
+        begin
+          FreeLargeBlock(LMemBlock, True);
+          {$IFDEF EnableReleaseStackTestHooks}
+          InterlockedIncrement(ReleaseStackTestLargeFrees);
+          {$ENDIF}
+        end
         else
         begin
           UnlockLargeBlocks;

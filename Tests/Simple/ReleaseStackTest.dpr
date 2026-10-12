@@ -11,7 +11,10 @@ program ReleaseStackTest;
  lock stayed held.
 
  Build with UseReleaseStack and NoMessageBoxes; DisablePauseAndSwitchToThread
- selects the EnterCriticalSection path instead of the lock byte.
+ selects the EnterCriticalSection path instead of the lock byte. With
+ DontUseSmallBlocksLockedCriticalSection, DontUseMediumBlocksLockedCriticalSection
+ and DontUseLargeBlocksLockedCriticalSection the release stacks are used, and
+ the cleanup thread's frees must release the medium and large locks.
 
  Exit codes: 0 pass; 1 a block that FreeMem did not release; 2 the workload
  did not run (a worker did not start, the wait for the workers failed, the
@@ -30,6 +33,7 @@ const
   Iterations = 2000;
   ThreadRounds = 50;
   WatchdogMilliseconds = 120000;
+  DrainMilliseconds = 30000;
   ExitLeak = 1;
   ExitNotRun = 2;
   ExitHang = 3;
@@ -72,11 +76,21 @@ begin
   ALarge := LState.AllocatedLargeBlockCount;
 end;
 
+{In a build without the critical-section options a free that finds the lock
+ held is pushed onto a release stack, and the cleanup thread frees one block
+ per stack every 100 ms, so the counts are polled for up to DrainMilliseconds
+ before they are compared. A default build matches on the first read.}
 procedure CheckCounts(const APhase: string; ABaseMedium, ABaseLarge: Cardinal);
 var
-  LMedium, LLarge: Cardinal;
+  LMedium, LLarge, LStart: Cardinal;
 begin
-  GetCounts(LMedium, LLarge);
+  LStart := GetTickCount;
+  repeat
+    GetCounts(LMedium, LLarge);
+    if (LMedium = ABaseMedium) and (LLarge = ABaseLarge) then
+      Break;
+    Sleep(50);
+  until GetTickCount - LStart > DrainMilliseconds;
   Report(APhase + ': medium ' + CardinalToStr(LMedium) + ' (baseline '
     + CardinalToStr(ABaseMedium) + '), large ' + CardinalToStr(LLarge)
     + ' (baseline ' + CardinalToStr(ABaseLarge) + ')');
@@ -176,6 +190,152 @@ begin
   end;
 end;
 
+{$IFDEF EnableReleaseStackTestHooks}
+const
+  {A free is pushed onto a release stack only when its block type's
+   critical-section option is off.}
+  MediumFreeDeferred = {$IFDEF DontUseMediumBlocksLockedCriticalSection}True{$ELSE}False{$ENDIF};
+  LargeFreeDeferred = {$IFDEF DontUseLargeBlocksLockedCriticalSection}True{$ELSE}False{$ENDIF};
+
+var
+  CleanupBlock: Pointer;
+  CleanupGo, CleanupFreed, CleanupExit: THandle;
+
+function CleanupWorker(AParam: Pointer): {$IFDEF FPC}PtrInt{$ELSE}Integer{$ENDIF};
+begin
+  WaitForSingleObject(CleanupGo, INFINITE);
+  FreeMem(CleanupBlock);
+  SetEvent(CleanupFreed);
+  {Kept alive until the lock has been read, because a thread's exit may
+   take the lock that is under test.}
+  WaitForSingleObject(CleanupExit, INFINITE);
+  Result := 0;
+end;
+
+{Deterministic check of the cleanup thread's free. The main thread holds the
+ lock while a worker frees one block; in a build without the critical-section
+ option the free is pushed onto a release stack and returns at once. After the
+ lock is released the cleanup thread frees the block, and the lock must then
+ read as free. A lock left taken ends the process at once, because every later
+ medium or large allocation would hang on it.}
+procedure CheckCleanupFree(ALarge: Boolean);
+var
+  LName, LHeldMessage: string;
+  LThread: THandle;
+  LThreadId: Cardinal;
+  LDeferred, LHeld, LExpectDeferred: Boolean;
+  LIndex, LFreesBefore, LFrees: Integer;
+begin
+  if ALarge then
+    LName := 'large'
+  else
+    LName := 'medium';
+  {Built now, because with the lock held a later string allocation could
+   need it and hang before the failure is reported.}
+  LHeldMessage := 'ReleaseStackTest FAIL: cleanup ' + LName
+    + ': the cleanup thread left the lock held';
+  CleanupGo := CreateEvent(nil, True, False, nil);
+  CleanupFreed := CreateEvent(nil, True, False, nil);
+  CleanupExit := CreateEvent(nil, True, False, nil);
+  if ALarge then
+  begin
+    GetMem(CleanupBlock, 400000);
+    LFreesBefore := ReleaseStackTestLargeCleanupFrees;
+  end
+  else
+  begin
+    GetMem(CleanupBlock, 20000);
+    LFreesBefore := ReleaseStackTestMediumCleanupFrees;
+  end;
+  LThread := BeginThread(nil, 0, @CleanupWorker, nil, 0, LThreadId);
+  if LThread = 0 then
+  begin
+    Report('ReleaseStackTest NOT RUN: the cleanup worker did not start');
+    Halt(ExitNotRun);
+  end;
+  if ALarge then
+    ReleaseStackTestLockLargeBlocks
+  else
+    ReleaseStackTestLockMediumBlocks;
+  SetEvent(CleanupGo);
+  LDeferred := WaitForSingleObject(CleanupFreed, 1000) = WAIT_OBJECT_0;
+  if ALarge then
+    ReleaseStackTestUnlockLargeBlocks
+  else
+    ReleaseStackTestUnlockMediumBlocks;
+  WaitForSingleObject(CleanupFreed, INFINITE);
+  try
+    {The two switches are independent, so the expectation follows the one for
+     the block type under test.}
+    if ALarge then
+      LExpectDeferred := LargeFreeDeferred
+    else
+      LExpectDeferred := MediumFreeDeferred;
+    if not LExpectDeferred then
+    begin
+      {With the critical-section option the free waits for the lock.}
+      if LDeferred then
+      begin
+        Report('cleanup ' + LName + ': the free returned while the lock was held');
+        Inc(Failures);
+      end
+      else
+        Report('cleanup ' + LName + ': the free waited for the lock');
+      Exit;
+    end;
+    {Without the critical-section option the free must be deferred; a free
+     that waited for the lock means the DontUse switch had no effect.}
+    if not LDeferred then
+    begin
+      Report('cleanup ' + LName + ': the free waited for the lock instead of being deferred');
+      Inc(Failures);
+      Exit;
+    end;
+    LFrees := LFreesBefore;
+    for LIndex := 1 to 100 do
+    begin
+      if ALarge then
+        LFrees := ReleaseStackTestLargeCleanupFrees
+      else
+        LFrees := ReleaseStackTestMediumCleanupFrees;
+      if LFrees > LFreesBefore then
+        Break;
+      Sleep(50);
+    end;
+    if LFrees = LFreesBefore then
+    begin
+      Report('cleanup ' + LName + ': the cleanup thread did not free the block');
+      Inc(Failures);
+      Exit;
+    end;
+    {Read twice, 300 ms apart, with no allocator call in between: a lock that
+     reads as taken both times is held by nobody who will release it.}
+    if ALarge then
+      LHeld := ReleaseStackTestLargeBlocksLocked
+    else
+      LHeld := ReleaseStackTestMediumBlocksLocked;
+    Sleep(300);
+    if ALarge then
+      LHeld := LHeld and ReleaseStackTestLargeBlocksLocked
+    else
+      LHeld := LHeld and ReleaseStackTestMediumBlocksLocked;
+    if LHeld then
+    begin
+      Report(LHeldMessage);
+      TerminateProcess(GetCurrentProcess, ExitLeak);
+    end;
+    Report('cleanup ' + LName + ': deferred, freed by the cleanup thread, lock released');
+  finally
+    SetEvent(CleanupExit);
+    WaitForSingleObject(LThread, INFINITE);
+    CloseHandle(LThread);
+    CloseHandle(CleanupGo);
+    CloseHandle(CleanupFreed);
+    CloseHandle(CleanupExit);
+  end;
+end;
+{$ENDIF}
+
 var
   LIndex: Integer;
   LWatchdog: THandle;
@@ -225,6 +385,13 @@ begin
   for LIndex := 1 to ThreadRounds do
     RunThreads(False, False);
   CheckCounts('threads only', LBaseMedium, LBaseLarge);
+
+{$IFDEF EnableReleaseStackTestHooks}
+  {Large first: with AssumeMultiThreaded the large lock was released even
+   before the fix, so a held medium lock, which ends the run, comes last.}
+  CheckCleanupFree(True);
+  CheckCleanupFree(False);
+{$ENDIF}
 
   if Failures = 0 then
     Report('ReleaseStackTest PASS')
