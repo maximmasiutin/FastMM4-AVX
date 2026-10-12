@@ -31,6 +31,9 @@ program FullDebugModeTest;
 //   corrupt-footer      overwrites the footer of a freed block and expects
 //                       the allocator to report it, exit code 0 when it does
 //
+// Both named modes also read the report back and require the current stack
+// trace after the thread ID, which the reports had lacked since 2017.
+//
 // The two named modes deliberately corrupt the heap, so each one runs on its
 // own and the process stops as soon as the check is done. They also need the
 // default LogErrorsToFile setting, since they look for the event log file.
@@ -507,6 +510,76 @@ begin
   end;
 end;
 
+{Read the whole event log as the allocator wrote it, which is ANSI text}
+function ReadLogFile(const AFileName: string): AnsiString;
+var
+  LHandle: THandle;
+  LSize, LRead: Integer;
+begin
+  Result := '';
+  LHandle := THandle(FileOpen(AFileName, fmOpenRead or fmShareDenyNone));
+  if LHandle = THandle(-1) then
+    Exit;
+  try
+    LSize := FileSeek(LHandle, 0, 2);
+    if LSize <= 0 then
+      Exit;
+    FileSeek(LHandle, 0, 0);
+    SetLength(Result, LSize);
+    LRead := FileRead(LHandle, Result[1], LSize);
+    if LRead < 0 then
+      LRead := 0;
+    SetLength(Result, LRead);
+  finally
+    FileClose(LHandle);
+  end;
+end;
+
+{Does the block error report carry the current stack trace? The report names
+ the current thread, then appends CurrentStackTraceMsg and one line per return
+ address. LogCurrentThreadAndStackTrace compared its buffer pointers the wrong
+ way round from 2017 until this check was written, so every report ended at the
+ thread ID, and nothing noticed because no test read past that line.}
+function LogCarriesCurrentStackTrace(const ALogFileName: string): Boolean;
+var
+  LLog: AnsiString;
+  LThreadPos, LTracePos, I, LHexDigits: Integer;
+begin
+  Result := False;
+  LLog := ReadLogFile(ALogFileName);
+  LThreadPos := Pos(AnsiString(CurrentThreadIDMsg), LLog);
+  if LThreadPos = 0 then
+  begin
+    Say('  FAIL  the report does not name the current thread');
+    Exit;
+  end;
+  LTracePos := Pos(AnsiString(CurrentStackTraceMsg), LLog);
+  if (LTracePos = 0) or (LTracePos < LThreadPos) then
+  begin
+    Say('  FAIL  the report has no current stack trace after the thread ID');
+    Exit;
+  end;
+  {At least one return address has to follow the message: the first text after
+   the line break is a run of at least eight hexadecimal digits. The memory dump
+   that follows an empty trace starts with a word instead.}
+  I := LTracePos + Length(CurrentStackTraceMsg);
+  while (I <= Length(LLog)) and (LLog[I] in [#13, #10]) do
+    Inc(I);
+  LHexDigits := 0;
+  while (I <= Length(LLog)) and (LLog[I] in ['0'..'9', 'A'..'F', 'a'..'f']) do
+  begin
+    Inc(LHexDigits);
+    Inc(I);
+  end;
+  if LHexDigits < 8 then
+  begin
+    Say('  FAIL  the current stack trace lists no return address');
+    Exit;
+  end;
+  Say('  ok    the report carries the current stack trace');
+  Result := True;
+end;
+
 {Write into a block after freeing it and confirm that the allocator notices
  when the block is handed out again}
 function RunModifyAfterFreeCheck: Integer;
@@ -534,15 +607,17 @@ begin
   GetMem(Q, 128);
   if Q <> nil then
     FreeMem(Q);
-  if FileExists(LLog) then
-  begin
-    Say('  ok    the change was reported');
-    Result := TEST_PASSED;
-  end
-  else
+  if not FileExists(LLog) then
   begin
     Say('  FAIL  the change was not reported');
     Result := TEST_FAILED;
+  end
+  else if not LogCarriesCurrentStackTrace(LLog) then
+    Result := TEST_FAILED
+  else
+  begin
+    Say('  ok    the change was reported');
+    Result := TEST_PASSED;
   end;
 end;
 
@@ -574,15 +649,17 @@ begin
   GetMem(Q, CSize);
   if Q <> nil then
     FreeMem(Q);
-  if FileExists(LLog) then
-  begin
-    Say('  ok    the damaged footer was reported');
-    Result := TEST_PASSED;
-  end
-  else
+  if not FileExists(LLog) then
   begin
     Say('  FAIL  the damaged footer was not reported');
     Result := TEST_FAILED;
+  end
+  else if not LogCarriesCurrentStackTrace(LLog) then
+    Result := TEST_FAILED
+  else
+  begin
+    Say('  ok    the damaged footer was reported');
+    Result := TEST_PASSED;
   end;
 end;
 {$ENDIF}

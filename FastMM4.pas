@@ -16936,7 +16936,12 @@ var
   L: Integer;
 begin
   LBufferLengthChars := ABufferLengthChars;
-  {Get the current call stack}
+  {Get the current call stack. The array is cleared first because the Win64
+   DLL's GetFrameBasedStackTrace is RtlCaptureStackBackTrace, which writes only
+   the frames it finds, and LogStackTrace reads entries up to the first zero;
+   with fewer than StackTraceDepth frames on the stack, the entries past the
+   last one would otherwise be whatever the stack held before this call.}
+  DebugFillMem(LCurrentStackTrace, SizeOf(LCurrentStackTrace), 0);
   GetStackTrace(@LCurrentStackTrace[0], StackTraceDepth, ASkipFrames);
   {Log the thread ID}
   Result := ABuffer;
@@ -16950,18 +16955,23 @@ begin
       Dec(LBufferLengthChars, Length(CurrentThreadIDMsg));
       LInitialBufPtr := Result;
       LInitialLengthChars := LBufferLengthChars;
-      Result := NativeUIntToHexBuf(GetThreadID, Result, LInitialLengthChars-NativeUInt(LInitialBufPtr-Result));
-      {List the stack trace}
-      if LInitialBufPtr >= Result then
+      Result := NativeUIntToHexBuf(GetThreadID, Result, LInitialLengthChars);
+      {List the stack trace. The two tests below measure how far the writes
+       above advanced the buffer, so the pointer written to is the one that has
+       to be the larger of the pair. They used to be written the other way
+       round, LInitialBufPtr >= Result, which held only when the thread ID had
+       not been written at all, so every report produced since 2017 ended at
+       the thread ID and carried no current stack trace.}
+      if Result >= LInitialBufPtr then
       begin
-        LDiff := LInitialBufPtr-Result;
-        if LDiff <= LInitialLengthChars then
+        LDiff := NativeUInt(Result-LInitialBufPtr);
+        if LDiff < LInitialLengthChars then
         begin
           Result := AppendStringToBuffer(CurrentStackTraceMsg, Result, Length(CurrentStackTraceMsg), LInitialLengthChars-LDiff);
-          if LInitialBufPtr >= Result then
+          if Result >= LInitialBufPtr then
           begin
-            LDiff := LInitialBufPtr-Result;
-            if LDiff <= LInitialLengthChars then
+            LDiff := NativeUInt(Result-LInitialBufPtr);
+            if LDiff < LInitialLengthChars then
             begin
               Result := LogStackTrace(@LCurrentStackTrace[0], StackTraceDepth, Result);
             end;
